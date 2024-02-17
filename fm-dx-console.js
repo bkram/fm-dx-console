@@ -46,7 +46,7 @@ const title = blessed.text({
     top: 0,
     left: 0,
     width: '100%', // Set width to occupy the full width of the screen
-    content: `  fm-dx-console by Bkram | Server: ${websocketAddress}`, // Include the URL
+    content: `fm-dx-console by Bkram`,
     tags: true,
     style: {
         fg: 'white',
@@ -132,6 +132,22 @@ const help = blessed.box({
     hidden: true
 });
 
+// Create a title bar for the bottom
+const titleBottom = blessed.text({
+    bottom: 0,
+    left: 0,
+    width: '100%',
+    align: 'center',
+    content: `Connected to server on {bold}${websocketAddress}{/bold} press \`h\` for help`,
+    tags: true,
+    style: {
+        fg: 'white',
+        bg: 'blue',
+        bold: true
+    },
+});
+
+
 // Append title, clock, main box, help box, rt box, and cityDistanceStation box to the screen
 screen.append(title);
 screen.append(clock);
@@ -140,6 +156,7 @@ screen.append(stationBox);
 screen.append(rtBox);
 screen.append(userBox);
 screen.append(help);
+screen.append(titleBottom);
 
 // Function to update the main box content
 function updateTunerBox(content) {

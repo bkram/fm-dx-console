@@ -102,11 +102,12 @@ const rtBox = blessed.box({
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
 });
 
+// Create a userbox
 const userBox = blessed.box({
-    top: '70%', // Position it below the rtBox
+    top: '70%', // Set top position below the rtBox
     left: 0,
     width: '50%', // Occupy 100% of the screen width
-    height: '15%', // Occupy 25% of the screen height
+    height: '20%', // Occupy 15% of the screen height
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },

@@ -13,9 +13,27 @@ if (!argv.url) {
     process.exit(1);
 }
 
+// Declare websocketAudioAddress variable outside of the scope
+let websocketAudioAddress;
+
 // Extract websocket address from command line arguments
 const websocketAddress = argv.url;
-const websocketAudioAddress = argv.url.replace(/:8080$/, ':8081');
+
+// Check if the URL starts with 'ws://'
+if (websocketAddress.startsWith('ws://')) {
+    // Replace any port number with 8081
+    websocketAudioAddress = websocketAddress.replace(/:\d+$/, ':8081');
+} else if (websocketAddress.startsWith('wss://')) {
+    // Append "/stream/" to the URL for wss:// addresses
+    websocketAudioAddress = websocketAddress + 'stream/';
+} else {
+    console.log('URL does not start with ws:// or wss://. No modification needed.');
+    process.exit(1); // Exit with a non-zero status code to indicate an error
+}
+
+// // Extract websocket address from command line arguments
+// const websocketAddress = argv.url;
+// const websocketAudioAddress = argv.url.replace(/:8080$/, ':8081');
 
 // Start playback in a separate process and pass the WebSocket address as a command-line argument
 const playMP3FromWebSocket = require('./audiostream');
@@ -30,7 +48,7 @@ const title = blessed.text({
     top: 0,
     left: 0,
     width: '100%', // Set width to occupy the full width of the screen
-    content: `  fm-dx-webserver console - URL: ${websocketAddress}`, // Include the URL
+    content: `  fm-dx-console - URL: ${websocketAddress}`, // Include the URL
     tags: true,
     style: {
         fg: 'white',

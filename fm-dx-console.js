@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+//
 // (c) Bkram 2024 
 // Console client for https://github.com/NoobishSVK/fm-dx-webserver
 
@@ -31,10 +33,6 @@ if (websocketAddress.startsWith('ws://')) {
     process.exit(1); // Exit with a non-zero status code to indicate an error
 }
 
-// // Extract websocket address from command line arguments
-// const websocketAddress = argv.url;
-// const websocketAudioAddress = argv.url.replace(/:8080$/, ':8081');
-
 // Start playback in a separate process and pass the WebSocket address as a command-line argument
 const playMP3FromWebSocket = require('./audiostream');
 const player = playMP3FromWebSocket(websocketAudioAddress);
@@ -48,7 +46,7 @@ const title = blessed.text({
     top: 0,
     left: 0,
     width: '100%', // Set width to occupy the full width of the screen
-    content: `  fm-dx-console - URL: ${websocketAddress}`, // Include the URL
+    content: `fm-dx-console by Bkram`,
     tags: true,
     style: {
         fg: 'white',
@@ -75,76 +73,94 @@ const clock = blessed.text({
 const tunerBox = blessed.box({
     top: 1, // Leave space for the title
     left: 0,
-    width: '28%', // Occupy 80% of the screen width
-    height: '50%', // Reduce height to accommodate the additional view below
+    width: '50%', // Occupy 30% of the screen width
+    height: '40%', // Reduce height to accommodate the additional view below
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
 });
-
 
 // Create a box for City, Distance, and Station
 const stationBox = blessed.box({
     top: 1,
-    left: '26%', // Position it to the right of the main box
-    width: '40%', // Occupy 50% of the screen width
-    height: '50%', // Occupy 40% of the screen height
+    left: '50%', // Position it to the right of the tuner box
+    width: '50%', // Occupy 60% of the screen width
+    height: '40%', // Occupy 40% of the screen height
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
 });
-
-// Create a box to display help information
-const helpBox = blessed.box({
-    top: 1, // Leave space for the title
-    left: '60%', // Position it to the right of the main box
-    width: '40%', // Occupy 20% of the screen width
-    height: '50%', // Same height as the main box
-    content: '{center}{bold}Help{/bold}{/center}\n Press keys:\n \'q\' to decrease by 1000 kHz\n \'w\' to increase by 1000 kHz\n \'z\' to decrease by 10 kHz\n \'x\' to increase by 10 kHz\n \'a\' to decrease by 100 kHz\n \'s\' to increase 100 kHz\n \'e\' to quit',
-    tags: true,
-    border: { type: 'line' },
-    style: { fg: 'white', border: { fg: '#f0f0f0' } },
-});
-
 
 // Create a box for RT0 and RT1
 const rtBox = blessed.box({
-    top: '50%', // Position it below the main box
+    top: '45%', // Position it below the main box
     left: 0,
-    width: '100%', // Occupy 50% of the screen width
-    height: '25%', // Occupy 40% of the screen height
+    width: '100%', // Occupy 100% of the screen width
+    height: '25%', // Occupy 25% of the screen height
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
 });
 
-
+// Create a userbox
 const userBox = blessed.box({
-    top: '70%', // Position it below the main box
+    top: '70%', // Set top position below the rtBox
     left: 0,
-    width: '100%', // Occupy 50% of the screen width
-    height: '25%', // Occupy 40% of the screen height
+    width: '50%', // Occupy 100% of the screen width
+    height: '20%', // Occupy 15% of the screen height
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
+});
+
+// Create a help box
+const help = blessed.box({
+    top: 'center',
+    left: 'center',
+    width: '50%',
+    height: '50%',
+    border: 'line',
+    style: {
+        fg: 'white',
+        bg: 'black',
+        border: {
+            fg: '#f0f0f0'
+        }
+    },
+    content: `{center}{bold}Help{/bold}{/center}\n Press keys:\n 'q' to decrease by 1000 kHz\n 'w' to increase by 1000 kHz\n 'z' to decrease by 10 kHz\n 'x' to increase by 10 kHz\n 'a' to decrease by 100 kHz\n 's' to increase 100 kHz\n 'r' to refresh\n '.' to quit\n 't' to set frequency\n 'h' to toggle this help`,
+    tags: true,
+    hidden: true
+});
+
+// Create a title bar for the bottom
+const titleBottom = blessed.text({
+    bottom: 0,
+    left: 0,
+    width: '100%',
+    align: 'center',
+    content: `Connected to server on {bold}${websocketAddress}{/bold} press \`h\` for help`,
+    tags: true,
+    style: {
+        fg: 'white',
+        bg: 'blue',
+        bold: true
+    },
 });
 
 
 // Append title, clock, main box, help box, rt box, and cityDistanceStation box to the screen
 screen.append(title);
 screen.append(clock);
-screen.append(tunerBox
-);
+screen.append(tunerBox);
 screen.append(stationBox);
-screen.append(helpBox);
 screen.append(rtBox);
 screen.append(userBox);
-
+screen.append(help);
+screen.append(titleBottom);
 
 // Function to update the main box content
 function updateTunerBox(content) {
-    tunerBox
-        .setContent(content);
+    tunerBox.setContent(content);
     screen.render();
 }
 
@@ -156,16 +172,15 @@ function updateRTBox(rt0, rt1) {
 
 // Function to update the City, Distance, and Station box content
 function updateStationBox(city, distance, station, power, country, polarization, azimuth) {
-    stationBox.setContent(`{center}{bold}Station Data{/bold}{/center}\n Station: ${station}\n City: ${city}, ${country}\n Distance: ${distance} km\n Power: ${power} kW [${polarization}]\n Country: ${country}\n Azimuth: ${azimuth}`);
+    stationBox.setContent(`{center}{bold}Station Data{/bold}{/center}\n Station: ${station}\n Location: ${city}, ${country}\n Distance: ${distance} km\n Power: ${power} kW [${polarization}]\n Azimuth: ${azimuth}`);
     screen.render();
 }
 
-// Function to update the City, Distance, and Station box content
+// Function to update the User box content
 function updateUserBox(users) {
     userBox.setContent(`{center}{bold}Users{/bold}{/center}\n Users: ${users}`);
     screen.render();
 }
-
 
 // Update clock function
 function updateClock() {
@@ -247,11 +262,54 @@ screen.on('keypress', function (ch, key) {
             const newFreq = (jsonData.freq * 1000) + 10;
             ws.send(`T${newFreq}`);
         }
+    } else if (key.full === 'r') { // Refresh by setting the frequency again
+        if (jsonData && jsonData.freq) {
+            const newFreq = (jsonData.freq * 1000);
+            ws.send(`T${newFreq}`);
+        }
+    } else if (key.full === 't') { // Set frequency
+        screen.saveFocus();
+        // Create a dialog box to get the frequency from the user
+        const dialog = blessed.prompt({
+            top: 'center',
+            left: 'center',
+            width: '25%',
+            height: 'shrink',
+            border: 'line',
+            style: {
+                fg: 'white',
+                // bg: 'black',
+                border: {
+                    fg: '#f0f0f0'
+                }
+            },
+            label: ' Enter frequency in MHz: ',
+            tags: true
+        });
+
+        screen.append(dialog);
+        screen.render();
+
+        dialog.input('', '', function (err, value) {
+            if (!err) {
+                const newFreq = parseFloat(value) * 1000; // Convert MHz to kHz
+                ws.send(`T${newFreq}`);
+            }
+            dialog.destroy();
+            screen.restoreFocus();
+            screen.render();
+        });
+    } else if (key.full === 'h') { // Toggle help visibility
+        if (help.hidden) {
+            help.show();
+        } else {
+            help.hide();
+        }
     }
 });
 
 // Quit on Escape, q, or Control-C
-screen.key(['escape', 'e', 'C-c'], function () {
+screen.key(['escape', '.', 'C-c'], function () {
     process.exit(0);
 });
 

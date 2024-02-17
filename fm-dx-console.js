@@ -73,8 +73,8 @@ const clock = blessed.text({
 const tunerBox = blessed.box({
     top: 1, // Leave space for the title
     left: 0,
-    width: '30%', // Occupy 30% of the screen width
-    height: '50%', // Reduce height to accommodate the additional view below
+    width: '50%', // Occupy 30% of the screen width
+    height: '40%', // Reduce height to accommodate the additional view below
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
@@ -83,9 +83,9 @@ const tunerBox = blessed.box({
 // Create a box for City, Distance, and Station
 const stationBox = blessed.box({
     top: 1,
-    left: '30%', // Position it to the right of the tuner box
-    width: '60%', // Occupy 60% of the screen width
-    height: '50%', // Occupy 40% of the screen height
+    left: '50%', // Position it to the right of the tuner box
+    width: '50%', // Occupy 60% of the screen width
+    height: '40%', // Occupy 40% of the screen height
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
@@ -93,7 +93,7 @@ const stationBox = blessed.box({
 
 // Create a box for RT0 and RT1
 const rtBox = blessed.box({
-    top: '50%', // Position it below the main box
+    top: '45%', // Position it below the main box
     left: 0,
     width: '100%', // Occupy 100% of the screen width
     height: '25%', // Occupy 25% of the screen height
@@ -103,10 +103,10 @@ const rtBox = blessed.box({
 });
 
 const userBox = blessed.box({
-    top: '75%', // Position it below the rtBox
+    top: '70%', // Position it below the rtBox
     left: 0,
-    width: '100%', // Occupy 100% of the screen width
-    height: '25%', // Occupy 25% of the screen height
+    width: '50%', // Occupy 100% of the screen width
+    height: '15%', // Occupy 25% of the screen height
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
@@ -255,12 +255,12 @@ screen.on('keypress', function (ch, key) {
         const dialog = blessed.prompt({
             top: 'center',
             left: 'center',
-            width: '20%',
+            width: '25%',
             height: 'shrink',
             border: 'line',
             style: {
                 fg: 'white',
-                bg: 'black',
+                // bg: 'black',
                 border: {
                     fg: '#f0f0f0'
                 }

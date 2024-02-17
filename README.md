@@ -8,6 +8,12 @@ Only tested on Linux.
 
 ### Npm
 
+Npm modules required:
+
+- blessed
+- ws
+- minimist
+  
 ```bash
 npm install
 ```

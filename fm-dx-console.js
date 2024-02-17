@@ -158,6 +158,13 @@ screen.append(userBox);
 screen.append(help);
 screen.append(titleBottom);
 
+// Function to do some padding
+function padStringWithSpaces(text, totalLength) {
+    const spacesToAdd = totalLength - text.length;
+    if (spacesToAdd <= 0) return text; // No padding needed if text length is equal or greater than totalLength
+    return ' ' + text + ' '.repeat(spacesToAdd);
+}
+
 // Function to update the main box content
 function updateTunerBox(content) {
     tunerBox.setContent(content);
@@ -170,13 +177,20 @@ function updateRTBox(rt0, rt1) {
     screen.render();
 }
 
-// Function to update the City, Distance, and Station box content
+// Function to update the StationBox
 function updateStationBox(city, distance, station, power, country, polarization, azimuth) {
-    stationBox.setContent(`{center}{bold}Station Data{/bold}{/center}\n Station: ${station}\n Location: ${city}, ${country}\n Distance: ${distance} km\n Power: ${power} kW [${polarization}]\n Azimuth: ${azimuth}`);
+    const padLength = 10;
+    stationBox.setContent(
+        `{center}{bold}Station Data{/bold}{/center}\n` +
+        `${padStringWithSpaces("Station:", padLength)}${station}\n` +
+        `${padStringWithSpaces("Location:", padLength)}${city ? city + ", " + country : ""}\n` +
+        `${padStringWithSpaces("Distance:", padLength)}${distance ? distance + " km" : ""}\n` +
+        `${padStringWithSpaces("Power:", padLength)}${power} kW [${polarization}]\n` +
+        `${padStringWithSpaces("Azimuth:", padLength)}${azimuth}`);
     screen.render();
 }
 
-// Function to update the User box content
+// Function to update the userBox
 function updateUserBox(users) {
     userBox.setContent(`{center}{bold}Users{/bold}{/center}\n Users: ${users}`);
     screen.render();
@@ -209,13 +223,23 @@ ws.on('open', function () {
 ws.on('message', function (data) {
     try {
         jsonData = JSON.parse(data);
-        const content = `{center}{bold}Tuner{/bold}{/center}\n PS: ${jsonData.ps}\n PI: ${jsonData.pi}\n Frequency: ${jsonData.freq}\n Signal: ${jsonData.signal}\n Stereo: ${jsonData.st}\n `;
+        const padLength = 11;
+        const content =
+            `{center}{bold}Tuner{/bold}{/center}\n` +
+            `${padStringWithSpaces("Frequency:", padLength)}${jsonData.freq} Mhz\n` +
+            `${padStringWithSpaces("RDS PS:", padLength)}${jsonData.ps}\n` +
+            `${padStringWithSpaces("RDS PI:", padLength)}${jsonData.pi}\n` +
+            `${padStringWithSpaces("Signal:", padLength)}${jsonData.signal} dBf\n` +
+            `${padStringWithSpaces("Mode:", padLength)}${jsonData.st ? "Stereo" : "Mono"}\n`;
         updateTunerBox(content);
         if (jsonData && jsonData.txInfo) {
             updateStationBox(jsonData.txInfo.city, jsonData.txInfo.distance, jsonData.txInfo.station, jsonData.txInfo.erp, jsonData.txInfo.itu, jsonData.txInfo.pol, jsonData.txInfo.azimuth);
         }
         if (jsonData && jsonData.rt0 !== undefined && jsonData.rt1 !== undefined) {
             updateRTBox(jsonData.rt0, jsonData.rt1);
+        }
+        if (jsonData && jsonData.txInfo) {
+            updateStationBox(jsonData.txInfo.city, jsonData.txInfo.distance, jsonData.txInfo.station, jsonData.txInfo.erp, jsonData.txInfo.itu, jsonData.txInfo.pol, jsonData.txInfo.azimuth);
         }
         if (jsonData && jsonData.users !== undefined) {
             updateUserBox(jsonData.users);

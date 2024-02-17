@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+//
 // (c) Bkram 2024 
 // Console client for https://github.com/NoobishSVK/fm-dx-webserver
 
@@ -48,7 +50,7 @@ const title = blessed.text({
     top: 0,
     left: 0,
     width: '100%', // Set width to occupy the full width of the screen
-    content: `  fm-dx-console - URL: ${websocketAddress}`, // Include the URL
+    content: `  fm-dx-console by Bkram | Server: ${websocketAddress}`, // Include the URL
     tags: true,
     style: {
         fg: 'white',
@@ -82,7 +84,6 @@ const tunerBox = blessed.box({
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
 });
 
-
 // Create a box for City, Distance, and Station
 const stationBox = blessed.box({
     top: 1,
@@ -100,7 +101,7 @@ const helpBox = blessed.box({
     left: '60%', // Position it to the right of the main box
     width: '40%', // Occupy 20% of the screen width
     height: '50%', // Same height as the main box
-    content: '{center}{bold}Help{/bold}{/center}\n Press keys:\n \'q\' to decrease by 1000 kHz\n \'w\' to increase by 1000 kHz\n \'z\' to decrease by 10 kHz\n \'x\' to increase by 10 kHz\n \'a\' to decrease by 100 kHz\n \'s\' to increase 100 kHz\n \'e\' to quit',
+    content: '{center}{bold}Help{/bold}{/center}\n Press keys:\n \'q\' to decrease by 1000 kHz\n \'w\' to increase by 1000 kHz\n \'z\' to decrease by 10 kHz\n \'x\' to increase by 10 kHz\n \'a\' to decrease by 100 kHz\n \'s\' to increase 100 kHz\n \'r\' to refresh\n \'.\' to quit\n \'t\' to set frequency',
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
@@ -133,8 +134,7 @@ const userBox = blessed.box({
 // Append title, clock, main box, help box, rt box, and cityDistanceStation box to the screen
 screen.append(title);
 screen.append(clock);
-screen.append(tunerBox
-);
+screen.append(tunerBox);
 screen.append(stationBox);
 screen.append(helpBox);
 screen.append(rtBox);
@@ -143,8 +143,7 @@ screen.append(userBox);
 
 // Function to update the main box content
 function updateTunerBox(content) {
-    tunerBox
-        .setContent(content);
+    tunerBox.setContent(content);
     screen.render();
 }
 
@@ -156,7 +155,7 @@ function updateRTBox(rt0, rt1) {
 
 // Function to update the City, Distance, and Station box content
 function updateStationBox(city, distance, station, power, country, polarization, azimuth) {
-    stationBox.setContent(`{center}{bold}Station Data{/bold}{/center}\n Station: ${station}\n City: ${city}, ${country}\n Distance: ${distance} km\n Power: ${power} kW [${polarization}]\n Country: ${country}\n Azimuth: ${azimuth}`);
+    stationBox.setContent(`{center}{bold}Station Data{/bold}{/center}\n Station: ${station}\n Location: ${city}, ${country}\n Distance: ${distance} km\n Power: ${power} kW [${polarization}]\n Azimuth: ${azimuth}`);
     screen.render();
 }
 
@@ -247,11 +246,48 @@ screen.on('keypress', function (ch, key) {
             const newFreq = (jsonData.freq * 1000) + 10;
             ws.send(`T${newFreq}`);
         }
+    } else if (key.full === 'r') { // Refresh by setting the frequency again
+        if (jsonData && jsonData.freq) {
+            const newFreq = (jsonData.freq * 1000);
+            ws.send(`T${newFreq}`);
+        }
+    } else if (key.full === 't') { // Set frequency
+        screen.saveFocus();
+        // Create a dialog box to get the frequency from the user
+        const dialog = blessed.prompt({
+            top: 'center',
+            left: 'center',
+            width: '20%',
+            height: 'shrink',
+            border: 'line',
+            style: {
+                fg: 'white',
+                bg: 'black',
+                border: {
+                    fg: '#f0f0f0'
+                }
+            },
+            label: ' Enter frequency in MHz: ',
+            tags: true
+        });
+
+        screen.append(dialog);
+        screen.render();
+
+        dialog.input('', '', function (err, value) {
+            if (!err) {
+                const newFreq = parseFloat(value) * 1000; // Convert MHz to kHz
+                ws.send(`T${newFreq}`);
+            }
+            dialog.destroy();
+            screen.restoreFocus();
+            screen.render();
+        });
     }
 });
 
 // Quit on Escape, q, or Control-C
-screen.key(['escape', 'e', 'C-c'], function () {
+screen.key(['escape', '.', 'C-c'], function () {
     process.exit(0);
 });
 

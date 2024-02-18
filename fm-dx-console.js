@@ -33,10 +33,10 @@ if (websocketAddress.startsWith('ws://')) {
     process.exit(1); // Exit with a non-zero status code to indicate an error
 }
 
-// Start playback in a separate process and pass the WebSocket address as a command-line argument
+// Prepare for audio streaming
+let isPlaying = false; // Flag to track if audio is currently playing
 const playMP3FromWebSocket = require('./audiostream');
 const player = playMP3FromWebSocket(websocketAudioAddress);
-const playbackProcess = spawn('node', ['playback.js', websocketAudioAddress]);
 
 // Create a Blessed screen
 const screen = blessed.screen({ smartCSR: true });
@@ -146,8 +146,8 @@ const progressBar = blessed.progressbar({
 const help = blessed.box({
     top: 'center',
     left: 'center',
-    width: '50%',
-    height: '50%',
+    width: '60%',
+    height: '60%',
     border: 'line',
     style: {
         fg: 'white',
@@ -156,7 +156,20 @@ const help = blessed.box({
             fg: '#f0f0f0'
         }
     },
-    content: `{center}{bold}Help{/bold}{/center}\n Press keys:\n 'q' to decrease by 1000 kHz\n 'w' to increase by 1000 kHz\n 'z' to decrease by 10 kHz\n 'x' to increase by 10 kHz\n 'a' to decrease by 100 kHz\n 's' to increase 100 kHz\n 'r' to refresh\n '.' to quit\n 't' to set frequency\n 'h' to toggle this help`,
+    content: `{center}{bold}Help{/bold}{/center}
+Press keys:
+'q' to decrease by 1000 kHz
+'w' to increase by 1000 kHz
+'z' to decrease by 10 kHz
+'x' to increase by 10 kHz
+'a' to decrease by 100 kHz
+'s' to increase 100 kHz
+'r' to refresh
+'t' to set frequency
+'p' to play audio
+'.' to quit
+'h' to toggle this help
+`,
     tags: true,
     hidden: true
 });
@@ -374,6 +387,14 @@ screen.on('keypress', function (ch, key) {
             help.show();
         } else {
             help.hide();
+        }
+    } else if (key.full === 'p') { // Toggle playback
+        if (isPlaying) {
+            player.stop(); // Stop playback if currently playing
+            isPlaying = false;
+        } else {
+            player.play(); // Start playback if not playing
+            isPlaying = true;
         }
     }
 });

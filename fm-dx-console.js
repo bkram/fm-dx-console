@@ -4,7 +4,7 @@
 // Console client for https://github.com/NoobishSVK/fm-dx-webserver
 
 // Import necessary libraries
-const blessed = require('blessed'); // Library for creating terminal-based UI
+const blessed = require('reblessed'); // Library for creating terminal-based UI
 const { spawn } = require('child_process');
 const WebSocket = require('ws'); // WebSocket library for communication
 const argv = require('minimist')(process.argv.slice(2)); // Library for parsing command-line arguments
@@ -94,8 +94,8 @@ const stationBox = blessed.box({
 // Create a box for RT0 and RT1
 const rtBox = blessed.box({
     top: '45%', // Position it below the main box
-    left: 0,
-    width: '100%', // Occupy 100% of the screen width
+    left: 'center',
+    width: '99%', // Occupy 100% of the screen width
     height: '25%', // Occupy 25% of the screen height
     tags: true,
     border: { type: 'line' },
@@ -104,13 +104,42 @@ const rtBox = blessed.box({
 
 // Create a userbox
 const userBox = blessed.box({
-    top: '70%', // Set top position below the rtBox
+    top: '65%', // Set top position below the rtBox
+    left: "50%",
+    width: '50%', // Occupy 100% of the screen width
+    height: '20%', // Occupy 15% of the screen height
+    tags: true,
+    border: { type: 'line' },
+    style: { fg: 'white', border: { fg: '#f0f0f0' } },
+});
+
+// Create a signalbox
+const signalBox = blessed.box({
+    top: '65%', // Set top position below the rtBox
     left: 0,
     width: '50%', // Occupy 100% of the screen width
     height: '20%', // Occupy 15% of the screen height
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
+    content: "{center}{bold}Signal{/bold}{/center}"
+});
+
+// Create the signal meter `progress` bar
+const progressBar = blessed.progressbar({
+    parent: signalBox,
+    top: '75%',
+    left: 2,
+    width: '46%',
+    height: 1,
+    tags: true,
+    style: {
+        bar: {
+            bg: 'green' // Adjust color as needed
+        }
+    },
+    filled: 0, // Set initial filled amount (0 - 100)
+
 });
 
 // Create a help box
@@ -122,7 +151,7 @@ const help = blessed.box({
     border: 'line',
     style: {
         fg: 'white',
-        bg: 'black',
+        // bg: 'black',
         border: {
             fg: '#f0f0f0'
         }
@@ -154,7 +183,9 @@ screen.append(clock);
 screen.append(tunerBox);
 screen.append(stationBox);
 screen.append(rtBox);
+screen.append(signalBox);
 screen.append(userBox);
+screen.append(progressBar);
 screen.append(help);
 screen.append(titleBottom);
 
@@ -185,8 +216,8 @@ function updateStationBox(city, distance, station, power, country, polarization,
         `${padStringWithSpaces("Station:", padLength)}${station}\n` +
         `${padStringWithSpaces("Location:", padLength)}${city ? city + ", " + country : ""}\n` +
         `${padStringWithSpaces("Distance:", padLength)}${distance ? distance + " km" : ""}\n` +
-        `${padStringWithSpaces("Power:", padLength)}${power} kW [${polarization}]\n` +
-        `${padStringWithSpaces("Azimuth:", padLength)}${azimuth}`);
+        `${padStringWithSpaces("Power:", padLength)}${power ? power + " kW " + "[" + polarization + "]" : ""}\n` +
+        `${padStringWithSpaces("Azimuth:", padLength)}${azimuth ? azimuth + " °" : ""}`);
     screen.render();
 }
 
@@ -204,6 +235,19 @@ function updateClock() {
     const timeString = `${hours}:${minutes}`;
     clock.setContent(`{right}{bold}${timeString}{/bold}{/right}`);
     screen.render();
+}
+
+// Function to scale the progress bar value
+function scaleValue(value) {
+    // Ensure value is within range [0, 130]
+    value = Math.max(0, Math.min(130, value));
+    // Scale value to fit within range [0, 100]
+    return Math.floor((value / 130) * 100);
+}
+
+// Function to update the signal meter
+function updateSignal(signal) {
+    progressBar.filled = scaleValue(signal);
 }
 
 // Update clock every second
@@ -227,11 +271,13 @@ ws.on('message', function (data) {
         const content =
             `{center}{bold}Tuner{/bold}{/center}\n` +
             `${padStringWithSpaces("Frequency:", padLength)}${jsonData.freq} Mhz\n` +
-            `${padStringWithSpaces("RDS PS:", padLength)}${jsonData.ps}\n` +
-            `${padStringWithSpaces("RDS PI:", padLength)}${jsonData.pi}\n` +
             `${padStringWithSpaces("Signal:", padLength)}${jsonData.signal} dBf\n` +
-            `${padStringWithSpaces("Mode:", padLength)}${jsonData.st ? "Stereo" : "Mono"}\n`;
+            `${padStringWithSpaces("Mode:", padLength)}${jsonData.st ? "Stereo" : "Mono"}\n` +
+            `${padStringWithSpaces("RDS PS:", padLength)}${jsonData.ps}\n` +
+            `${padStringWithSpaces("RDS PI:", padLength)}${jsonData.pi}\n`;
+
         updateTunerBox(content);
+        updateSignal(jsonData.signal);
         if (jsonData && jsonData.txInfo) {
             updateStationBox(jsonData.txInfo.city, jsonData.txInfo.distance, jsonData.txInfo.station, jsonData.txInfo.erp, jsonData.txInfo.itu, jsonData.txInfo.pol, jsonData.txInfo.azimuth);
         }

@@ -1,5 +1,7 @@
 # fm-dx-console
 
+![Screenshot](images/screenshot.png "Screenshot")
+
 A highly experimental console client for [fm-dx-webserver](https://github.com/NoobishSVK/fm-dx-webserver)
 
 Only tested on Linux.

@@ -44,16 +44,17 @@ function playMP3FromWebSocket(websocketAddress) {
 
     // Function to stop playback and close WebSocket connection
     function stopPlayback() {
-        if (mpg123Process) {
-            // Terminate the mpg123 process if it exists
-            mpg123Process.stdin.end();
-        }
         if (ws) {
             ws.close(); // Close WebSocket connection if it exists
             ws = null; // Reset WebSocket instance
         }
-    }
 
+        if (mpg123Process) {
+            // Terminate the mpg123 process if it exists
+            mpg123Process.stdin.end();
+        }
+    }
+    
     // Return both the play and stop functions
     return { play: startPlayback, stop: stopPlayback };
 }

@@ -284,7 +284,7 @@ setInterval(updateClock, 1000);
 let jsonData = null;
 
 // WebSocket setup
-const ws = new WebSocket(websocketAddress);
+const ws = new WebSocket(websocketAddress + "text");
 
 // WebSocket event handlers
 ws.on('open', function () {

@@ -41,6 +41,18 @@ const player = playMP3FromWebSocket(websocketAudioAddress);
 // Create a Blessed screen
 const screen = blessed.screen({ smartCSR: true });
 
+// Function to check terminal dimensions
+function checkTerminalSize() {
+    const { cols, rows } = screen.program;
+    if (cols < 80 || rows < 24) {
+        console.error('Terminal size is smaller than 80x24. Exiting...');
+        process.exit(1);
+    }
+}
+
+// Check terminal size initially
+checkTerminalSize();
+
 // Create a title element
 const title = blessed.text({
     top: 0,
@@ -96,7 +108,7 @@ const rtBox = blessed.box({
     top: '45%', // Position it below the main box
     left: 'center',
     width: '99%', // Occupy 100% of the screen width
-    height: '25%', // Occupy 25% of the screen height
+    height: '22%', // Occupy 25% of the screen height
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
@@ -128,7 +140,7 @@ const signalBox = blessed.box({
 // Create the signal meter `progress` bar
 const progressBar = blessed.progressbar({
     parent: signalBox,
-    top: '75%',
+    top: '72%',
     left: 2,
     width: '46%',
     height: 1,
@@ -252,10 +264,11 @@ function updateClock() {
 
 // Function to scale the progress bar value
 function scaleValue(value) {
-    // Ensure value is within range [0, 130]
-    value = Math.max(0, Math.min(130, value));
+    const maxvalue = 100; //actual max tef is 130, but 100 seems to be a better option
+    // Ensure value is within range [0, maxvalue]
+    value = Math.max(0, Math.min(maxvalue, value));
     // Scale value to fit within range [0, 100]
-    return Math.floor((value / 130) * 100);
+    return Math.floor((value / maxvalue) * 100);
 }
 
 // Function to update the signal meter

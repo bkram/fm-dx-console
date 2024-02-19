@@ -15,30 +15,19 @@ if (!argv.url) {
     process.exit(1);
 }
 
-// Declare websocketAudioAddress variable outside of the scope
-let websocketAudioAddress;
+// Declare websocketAudio variable outside of the scope
+let websocketAudio;
+let websocketData;
 
 // Extract websocket address from command line arguments
 const websocketAddress = argv.url;
-
-// // Check if the URL starts with 'ws://'
-// if (websocketAddress.startsWith('ws://')) {
-//     // Replace any port number with 8081
-//     websocketAudioAddress = websocketAddress+ 'audio';
-// } else if (websocketAddress.startsWith('wss://')) {
-//     // Append "/stream/" to the URL for wss:// addresses
-//     websocketAudioAddress = websocketAddress + 'audio';
-// } else {
-//     console.log('URL does not start with ws:// or wss://. No modification needed.');
-//     process.exit(1); // Exit with a non-zero status code to indicate an error
-// }
-
-websocketAudioAddress = websocketAddress + '/audio';
+websocketAudio = websocketAddress + '/audio';
+websocketData = websocketAddress + '/text';
 
 // Prepare for audio streaming
 let isPlaying = false; // Flag to track if audio is currently playing
 const playMP3FromWebSocket = require('./audiostream');
-const player = playMP3FromWebSocket(websocketAudioAddress);
+const player = playMP3FromWebSocket(websocketAudio);
 
 // Create a Blessed screen
 const screen = blessed.screen({
@@ -286,7 +275,7 @@ setInterval(updateClock, 1000);
 let jsonData = null;
 
 // WebSocket setup
-const ws = new WebSocket(websocketAddress + "/text");
+const ws = new WebSocket(websocketData);
 
 // WebSocket event handlers
 ws.on('open', function () {

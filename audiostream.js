@@ -42,19 +42,37 @@ function playMP3FromWebSocket(websocketAddress) {
         }
     }
 
-    // Function to stop playback and close WebSocket connection
-    function stopPlayback() {
-        if (ws) {
-            ws.close(); // Close WebSocket connection if it exists
-            ws = null; // Reset WebSocket instance
+// Function to stop playback and close WebSocket connection
+async function stopPlayback() {
+    if (ws) {
+        // Close WebSocket connection if it exists
+        try {
+            ws.removeAllListeners('message');
+            await new Promise(resolve => {
+                ws.on('close', () => {
+                    resolve();
+                });
+                ws.close();
+            });
+        } catch (error) {
+            console.error("Error closing WebSocket connection:", error);
         }
-
-        if (mpg123Process) {
-            // Terminate the mpg123 process if it exists
-            mpg123Process.stdin.end();
-        }
+        ws = null; // Reset WebSocket instance
     }
-    
+
+    if (mpg123Process) {
+        if (!mpg123Process.killed) {
+            // Terminate the mpg123 process if it exists and is not already terminated
+            mpg123Process.stdin.end();
+            await new Promise(resolve => {
+                mpg123Process.on('close', () => {
+                    resolve();
+                });
+            });
+        }
+        mpg123Process = null; // Reset mpg123 process reference
+    }
+}
     // Return both the play and stop functions
     return { play: startPlayback, stop: stopPlayback };
 }

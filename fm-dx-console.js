@@ -39,7 +39,9 @@ const playMP3FromWebSocket = require('./audiostream');
 const player = playMP3FromWebSocket(websocketAudioAddress);
 
 // Create a Blessed screen
-const screen = blessed.screen({ smartCSR: true });
+const screen = blessed.screen({
+    smartCSR: true,
+});
 
 // Function to check terminal dimensions
 function checkTerminalSize() {
@@ -179,7 +181,7 @@ Press keys:
 'r' to refresh
 't' to set frequency
 'p' to play audio
-'.' to quit
+'Esc' to quit
 'h' to toggle this help
 `,
     tags: true,
@@ -200,7 +202,6 @@ const titleBottom = blessed.text({
         bold: true
     },
 });
-
 
 // Append title, clock, main box, help box, rt box, and cityDistanceStation box to the screen
 screen.append(title);
@@ -242,7 +243,7 @@ function updateStationBox(city, distance, station, power, country, polarization,
         `${padStringWithSpaces("Location:", padLength)}${city ? city + ", " + country : ""}\n` +
         `${padStringWithSpaces("Distance:", padLength)}${distance ? distance + " km" : ""}\n` +
         `${padStringWithSpaces("Power:", padLength)}${power ? power + " kW " + "[" + polarization + "]" : ""}\n` +
-        `${padStringWithSpaces("Azimuth:", padLength)}${azimuth ? azimuth + " °" : ""}`);
+        `${padStringWithSpaces("Azimuth:", padLength)}${azimuth ? azimuth + "°" : ""}`);
     screen.render();
 }
 
@@ -413,7 +414,7 @@ screen.on('keypress', function (ch, key) {
 });
 
 // Quit on Escape, q, or Control-C
-screen.key(['escape', '.', 'C-c'], function () {
+screen.key(['escape', 'C-c'], function () {
     process.exit(0);
 });
 

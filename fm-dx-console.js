@@ -21,17 +21,19 @@ let websocketAudioAddress;
 // Extract websocket address from command line arguments
 const websocketAddress = argv.url;
 
-// Check if the URL starts with 'ws://'
-if (websocketAddress.startsWith('ws://')) {
-    // Replace any port number with 8081
-    websocketAudioAddress = websocketAddress.replace(/:\d+$/, ':8081');
-} else if (websocketAddress.startsWith('wss://')) {
-    // Append "/stream/" to the URL for wss:// addresses
-    websocketAudioAddress = websocketAddress + 'stream/';
-} else {
-    console.log('URL does not start with ws:// or wss://. No modification needed.');
-    process.exit(1); // Exit with a non-zero status code to indicate an error
-}
+// // Check if the URL starts with 'ws://'
+// if (websocketAddress.startsWith('ws://')) {
+//     // Replace any port number with 8081
+//     websocketAudioAddress = websocketAddress+ 'audio';
+// } else if (websocketAddress.startsWith('wss://')) {
+//     // Append "/stream/" to the URL for wss:// addresses
+//     websocketAudioAddress = websocketAddress + 'audio';
+// } else {
+//     console.log('URL does not start with ws:// or wss://. No modification needed.');
+//     process.exit(1); // Exit with a non-zero status code to indicate an error
+// }
+
+websocketAudioAddress = websocketAddress + '/audio';
 
 // Prepare for audio streaming
 let isPlaying = false; // Flag to track if audio is currently playing
@@ -284,7 +286,7 @@ setInterval(updateClock, 1000);
 let jsonData = null;
 
 // WebSocket setup
-const ws = new WebSocket(websocketAddress + "text");
+const ws = new WebSocket(websocketAddress + "/text");
 
 // WebSocket event handlers
 ws.on('open', function () {

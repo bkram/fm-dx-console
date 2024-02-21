@@ -9,6 +9,17 @@ const { spawn } = require('child_process');
 const WebSocket = require('ws'); // WebSocket library for communication
 const argv = require('minimist')(process.argv.slice(2)); // Library for parsing command-line arguments
 
+const europe_programmes = [
+    "No PTY", "News", "Current Affairs", "Info",
+    "Sport", "Education", "Drama", "Culture", "Science", "Varied",
+    "Pop M", "Rock M", "Easy Listening", "Light Classical",
+    "Serious Classical", "Other Music", "Weather", "Finance",
+    "Children's Programmes", "Social Affairs", "Religion", "Phone-in",
+    "Travel", "Leisure", "Jazz Music", "Country Music", "National Music",
+    "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
+];
+
+
 // Check if required arguments are provided
 if (!argv.url) {
     console.error('Usage: node fm-dx-console.js --url <websocket_address>');
@@ -31,7 +42,7 @@ const player = playMP3FromWebSocket(websocketAudio);
 
 // Create a Blessed screen
 const screen = blessed.screen({
-    smartCSR: true,
+    smartCSR: false // Disable resizing
 });
 
 // Function to check terminal dimensions
@@ -50,8 +61,8 @@ checkTerminalSize();
 const title = blessed.text({
     top: 0,
     left: 0,
-    width: '100%', // Set width to occupy the full width of the screen
-    content: `fm-dx-console by Bkram`,
+    width: 80,
+    content: `{bold}fm-dx-console by Bkram{bold}                                        Press \`h\` for help`,
     tags: true,
     style: {
         fg: 'white',
@@ -60,59 +71,63 @@ const title = blessed.text({
     },
 });
 
-// Create a clock widget
-const clock = blessed.text({
-    top: 0,
-    right: 0,
-    width: '10%', // Set width to occupy 20% of the screen
-    align: 'right',
-    content: '{bold}00:00{/bold}', // Initial placeholder content
+const heightInRows = 9; // Adjust this value as needed
+const tunerWidth = 23;
+const rdsWidth = 16;
+
+// Create a box to display server connection
+const serverBox = blessed.box({
+    top: 1,
+    left: 0,
+    width: 80,
+    height: 4,
     tags: true,
-    style: {
-        fg: 'white',
-        bg: 'blue'
-    },
+    border: { type: 'line' },
+    style: { fg: 'white', border: { fg: '#f0f0f0' } },
+    content: `{center}{yellow-fg}{bold}Server{/bold}{/yellow-fg}\n` +
+        `Connected to ${websocketAddress}{/center}`
 });
 
 // Create a box to display main content
 const tunerBox = blessed.box({
-    top: 1, // Leave space for the title
+    top: 5,
     left: 0,
-    width: '50%', // Occupy 30% of the screen width
-    height: '40%', // Reduce height to accommodate the additional view below
+    width: tunerWidth,
+    height: heightInRows,
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
 });
 
-// Create a box for City, Distance, and Station
-const stationBox = blessed.box({
-    top: 1,
-    left: '50%', // Position it to the right of the tuner box
-    width: '50%', // Occupy 60% of the screen width
-    height: '40%', // Occupy 40% of the screen height
+// Create a box to display main content
+const rdsBox = blessed.box({
+    top: 5,
+    left: tunerWidth,
+    width: rdsWidth,
+    height: heightInRows,
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
 });
+
+// Create a box for City, Distance and Station
+const stationBox = blessed.box({
+    top: 5,
+    left: tunerWidth+ rdsWidth,
+    width: 80 - (tunerWidth+ rdsWidth),
+    height: heightInRows,
+    tags: true,
+    border: { type: 'line' },
+    style: { fg: 'white', border: { fg: '#f0f0f0' } },
+});
+
 
 // Create a box for RT0 and RT1
 const rtBox = blessed.box({
-    top: '45%', // Position it below the main box
-    left: 'center',
-    width: '99%', // Occupy 100% of the screen width
-    height: '22%', // Occupy 25% of the screen height
-    tags: true,
-    border: { type: 'line' },
-    style: { fg: 'white', border: { fg: '#f0f0f0' } },
-});
-
-// Create a userbox
-const userBox = blessed.box({
-    top: '65%', // Set top position below the rtBox
-    left: "50%",
-    width: '50%', // Occupy 100% of the screen width
-    height: '20%', // Occupy 15% of the screen height
+    top: 14,
+    left: 0,
+    width: 80,
+    height: 5,
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
@@ -120,91 +135,90 @@ const userBox = blessed.box({
 
 // Create a signalbox
 const signalBox = blessed.box({
-    top: '65%', // Set top position below the rtBox
+    top: 19,
     left: 0,
-    width: '50%', // Occupy 100% of the screen width
-    height: '20%', // Occupy 15% of the screen height
+    width: 40,
+    height: 5,
     tags: true,
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
-    content: "{center}{bold}Signal{/bold}{/center}"
+    content: "{center}{bold}{yellow-fg}Signal{/yellow-fg}{/bold}{/center}"
 });
+
 
 // Create the signal meter `progress` bar
 const progressBar = blessed.progressbar({
     parent: signalBox,
-    top: '72%',
+    top: 21,
     left: 2,
-    width: '46%',
+    width: 36,
     height: 1,
     tags: true,
     style: {
         bar: {
-            bg: 'green' // Adjust color as needed
+            bg: 'green'
         }
     },
-    filled: 0, // Set initial filled amount (0 - 100)
+    filled: 0,
+});
 
+// Create a userbox
+const userBox = blessed.box({
+    top: 19,
+    left: 40,
+    width: 40,
+    height: 5,
+    tags: true,
+    border: { type: 'line' },
+    style: { fg: 'white', border: { fg: '#f0f0f0' } },
 });
 
 // Create a help box
 const help = blessed.box({
     top: 'center',
     left: 'center',
-    width: '60%',
-    height: '60%',
+    width: '45%',
+    height: '70%',
     border: 'line',
     style: {
         fg: 'white',
-        // bg: 'black',
         border: {
             fg: '#f0f0f0'
         }
     },
-    content: `{center}{bold}Help{/bold}{/center}
-Press keys:
-'q' to decrease by 1000 kHz
-'w' to increase by 1000 kHz
-'z' to decrease by 10 kHz
-'x' to increase by 10 kHz
-'a' to decrease by 100 kHz
-'s' to increase 100 kHz
-'r' to refresh
-'t' to set frequency
-'p' to play audio
-'Esc' to quit
-'h' to toggle this help
-`,
+    content: `{center}{bold}{yellow-fg}Help{/yellow-fg}{/bold}{/center}
+    Press key to:
+    '1' to decrease by .001 Mhz
+    '2' to increase by .001 Mhz
+    'q' to decrease by .01 Mhz
+    'w' to increase by .01 Mhz
+    'a' to decrease by .1 Mhz
+    's' to increase by .1 Mhz
+    'z' to decrease by 1 Mhz
+    'x' to increase by 1 Mhz
+    'r' to refresh
+    't' to set frequency
+    'p' to play audio
+    '[' toggle iMS
+    ']' toggle EQ
+    'Esc' to quit
+    'h' to toggle this help`,
     tags: true,
     hidden: true
 });
 
-// Create a title bar for the bottom
-const titleBottom = blessed.text({
-    bottom: 0,
-    left: 0,
-    width: '100%',
-    align: 'center',
-    content: `Connected to server on {bold}${websocketAddress}{/bold} press \`h\` for help`,
-    tags: true,
-    style: {
-        fg: 'white',
-        bg: 'blue',
-        bold: true
-    },
-});
-
-// Append title, clock, main box, help box, rt box, and cityDistanceStation box to the screen
+// Append boxes
 screen.append(title);
-screen.append(clock);
+screen.append(serverBox);
 screen.append(tunerBox);
+screen.append(rdsBox);
 screen.append(stationBox);
 screen.append(rtBox);
 screen.append(signalBox);
 screen.append(userBox);
 screen.append(progressBar);
 screen.append(help);
-screen.append(titleBottom);
+
 
 // Function to do some padding
 function padStringWithSpaces(text, totalLength) {
@@ -219,9 +233,45 @@ function updateTunerBox(content) {
     screen.render();
 }
 
+// Function to update the StationBox
+function updateRdsBox(freq, ps, pi, tp, ta, ms, pty) {
+    const padLength = 4;
+    if (freq >= 75 && pi !== "?") {
+        let msshow;
+        if (ms === 0) {
+            msshow
+                = "{grey-fg}M{/grey-fg}S";
+        } else if (ms === -1) {
+            msshow
+                = "{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}";
+        } else {
+            msshow
+                = "M{grey-fg}S{/grey-fg}";
+        }
+        rdsBox.setContent(
+            `{center}{bold}{yellow-fg}RDS{/yellow-fg}{/bold}{/center}\n` +
+            `${padStringWithSpaces("PS:", padLength)}${ps.trimStart()}\n` +
+            `${padStringWithSpaces("PI:", padLength)}${pi}\n` +
+            `{center}{bold}Flags{/bold}\n` +
+            `${tp ? "TP" : "{grey-fg}TP{/grey-fg}"} ` +
+            `${ta ? "TA" : "{grey-fg}TA{/grey-fg}"} ` +
+            `${msshow
+            }\n` +
+            `${pty ? europe_programmes[pty] : ""}{/center}`
+        );
+    }
+    else {
+        rdsBox.setContent(
+            `{center}{bold}{yellow-fg}RDS{/yellow-fg}{/bold}{/center}\n`)
+    }
+    screen.render();
+}
+
 // Function to update the RT box content
 function updateRTBox(rt0, rt1) {
-    rtBox.setContent(`{center}{bold}Radiotext{/bold}{/center}\n{center}${rt0.trim()}{/center}\n{center}${rt1.trim()}{/center}`);
+    rtBox.setContent(`{center}{bold}{yellow-fg}RDS Radiotext{/yellow-fg}{/bold}{/center}\n` +
+        `{center}${rt0.trim()}{/center}\n` +
+        `{center}${rt1.trim()}{/center}`);
     screen.render();
 }
 
@@ -229,7 +279,7 @@ function updateRTBox(rt0, rt1) {
 function updateStationBox(city, distance, station, power, country, polarization, azimuth) {
     const padLength = 10;
     stationBox.setContent(
-        `{center}{bold}Station Data{/bold}{/center}\n` +
+        `{center}{bold}{yellow-fg}Station Info{/yellow-fg}{/bold}{/center}\n` +
         `${padStringWithSpaces("Station:", padLength)}${station}\n` +
         `${padStringWithSpaces("Location:", padLength)}${city ? city + ", " + country : ""}\n` +
         `${padStringWithSpaces("Distance:", padLength)}${distance ? distance + " km" : ""}\n` +
@@ -240,17 +290,8 @@ function updateStationBox(city, distance, station, power, country, polarization,
 
 // Function to update the userBox
 function updateUserBox(users) {
-    userBox.setContent(`{center}{bold}Users{/bold}{/center}\n Users: ${users}`);
-    screen.render();
-}
-
-// Update clock function
-function updateClock() {
-    const now = new Date();
-    const hours = ('0' + now.getHours()).slice(-2); // Get hours in 2-digit format
-    const minutes = ('0' + now.getMinutes()).slice(-2); // Get minutes in 2-digit format
-    const timeString = `${hours}:${minutes}`;
-    clock.setContent(`{right}{bold}${timeString}{/bold}{/right}`);
+    userBox.setContent(`{center}{bold}{yellow-fg}Users{/yellow-fg}{/bold}{/center}\n` +
+        `{center}Online users: ${users}{/center}`);
     screen.render();
 }
 
@@ -268,9 +309,6 @@ function updateSignal(signal) {
     progressBar.filled = scaleValue(signal);
 }
 
-// Update clock every second
-setInterval(updateClock, 1000);
-
 // Initialize JSON data variable
 let jsonData = null;
 
@@ -285,16 +323,16 @@ ws.on('open', function () {
 ws.on('message', function (data) {
     try {
         jsonData = JSON.parse(data);
-        const padLength = 11;
+        const padLength = 8;
         const content =
-            `{center}{bold}Tuner{/bold}{/center}\n` +
-            `${padStringWithSpaces("Frequency:", padLength)}${jsonData.freq} Mhz\n` +
-            `${padStringWithSpaces("Signal:", padLength)}${jsonData.signal} dBf\n` +
+            `{center}{bold}{yellow-fg}Tuner{/yellow-fg}{/bold}{/center}\n` +
+            `${padStringWithSpaces("Freq:", padLength)}${jsonData.freq} Mhz\n` +
+            `${padStringWithSpaces("Signal:", padLength)}${Math.round(jsonData.signal)} dBf\n` +
             `${padStringWithSpaces("Mode:", padLength)}${jsonData.st ? "Stereo" : "Mono"}\n` +
-            `${padStringWithSpaces("RDS PS:", padLength)}${jsonData.ps}\n` +
-            `${padStringWithSpaces("RDS PI:", padLength)}${jsonData.pi}\n`;
-
+            `${padStringWithSpaces("iMS:", padLength)}${jsonData.ims ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
+            `${padStringWithSpaces("EQ:", padLength)}${jsonData.eq ? "On" : "{grey-fg}Off{/grey-fg}"}\n`;
         updateTunerBox(content);
+        updateRdsBox(jsonData.freq, jsonData.ps, jsonData.pi, jsonData.tp, jsonData.ta, jsonData.ms, jsonData.pty)
         updateSignal(jsonData.signal);
         if (jsonData && jsonData.txInfo) {
             updateStationBox(jsonData.txInfo.city, jsonData.txInfo.distance, jsonData.txInfo.station, jsonData.txInfo.erp, jsonData.txInfo.itu, jsonData.txInfo.pol, jsonData.txInfo.azimuth);
@@ -330,24 +368,34 @@ screen.on('keypress', function (ch, key) {
             const newFreq = (jsonData.freq * 1000) - 100;
             ws.send(`T${newFreq}`);
         }
-    } else if (key.full === 'q') { // Decrease frequency by 1 MHz
-        if (jsonData && jsonData.freq) {
-            const newFreq = (jsonData.freq * 1000) - 1000;
-            ws.send(`T${newFreq}`);
-        }
-    } else if (key.full === 'w') { // Increase frequency by 1 MHz
+    } else if (key.full === 'x') { // Decrease frequency by 1 MHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) + 1000;
             ws.send(`T${newFreq}`);
         }
-    } else if (key.full === 'z') { // Decrease frequency by 0.01 MHz
+    } else if (key.full === 'z') { // Increase frequency by 1 MHz
+        if (jsonData && jsonData.freq) {
+            const newFreq = (jsonData.freq * 1000) - 1000;
+            ws.send(`T${newFreq}`);
+        }
+    } else if (key.full === 'q') { // Decrease frequency by 0.01 MHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) - 10;
             ws.send(`T${newFreq}`);
         }
-    } else if (key.full === 'x') { // Increase frequency by 0.01 MHz
+    } else if (key.full === 'w') { // Increase frequency by 0.01 MHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) + 10;
+            ws.send(`T${newFreq}`);
+        }
+    } else if (key.full === '1') { // Decrease frequency by 0.01 MHz
+        if (jsonData && jsonData.freq) {
+            const newFreq = (jsonData.freq * 1000) - 1;
+            ws.send(`T${newFreq}`);
+        }
+    } else if (key.full === '2') { // Increase frequency by 0.01 MHz
+        if (jsonData && jsonData.freq) {
+            const newFreq = (jsonData.freq * 1000) + 1;
             ws.send(`T${newFreq}`);
         }
     } else if (key.full === 'r') { // Refresh by setting the frequency again
@@ -401,6 +449,20 @@ screen.on('keypress', function (ch, key) {
             player.play(); // Start playback if not playing
             isPlaying = true;
         }
+    } else if (key.full === '[') { // toggle ims
+        if (jsonData.ims == 1) {
+            ws.send(`G${jsonData.eq}0`);
+        }
+        else {
+            ws.send(`G${jsonData.eq}1`);
+        }
+    } else if (key.full === ']') { // toggle eq
+        if (jsonData.eq == 1) {
+            ws.send(`G0${jsonData.ims}`);
+        }
+        else {
+            ws.send(`G1${jsonData.ims}`);
+        }
     }
 });
 
@@ -409,5 +471,3 @@ screen.key(['escape', 'C-c'], function () {
     process.exit(0);
 });
 
-// Update clock initially
-updateClock();

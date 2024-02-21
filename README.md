@@ -1,6 +1,6 @@
 # fm-dx-console
 
-A console client for [fm-dx-webserver](https://github.com/NoobishSVK/fm-dx-webserver).
+A console client for [fm-dx-webserver](https://github.com/NoobishSVK/fm-dx-webserver), which allows one to control the fm-dx-webserver and stream the audio.
 
 Requires [fm-dx-webserver](https://github.com/NoobishSVK/fm-dx-webserver) v1.0.8 or better.
 

@@ -9,6 +9,13 @@ const { spawn } = require('child_process');
 const WebSocket = require('ws'); // WebSocket library for communication
 const argv = require('minimist')(process.argv.slice(2)); // Library for parsing command-line arguments
 
+
+// Check if required arguments are provided
+if (!argv.url) {
+    console.error('Usage: node fm-dx-console.js --url <websocket_address>');
+    process.exit(1);
+}
+
 // Global constants
 const userAgent = 'Fm-dx-console/1.0';
 const europe_programmes = [
@@ -27,29 +34,6 @@ let websocketData;
 let isPlaying = false; // Flag to track if audio is currently playing
 let jsonData = null;
 
-// Check if required arguments are provided
-if (!argv.url) {
-    console.error('Usage: node fm-dx-console.js --url <websocket_address>');
-    process.exit(1);
-}
-
-// Function to format a WebSocket URL
-function formatWebSocketURL(url) {
-    // Remove trailing slash if it exists
-    if (url.endsWith('/')) {
-        url = url.slice(0, -1);
-    }
-
-    // Replace http:// with ws:// and https:// with wss://
-    if (url.startsWith("http://")) {
-        url = url.replace("http://", "ws://");
-    } else if (url.startsWith("https://")) {
-        url = url.replace("https://", "wss://");
-    }
-
-    return url;
-}
-
 // Extract websocket address from command line arguments
 const websocketAddress = formatWebSocketURL(argv.url);
 websocketAudio = websocketAddress + '/audio';
@@ -63,18 +47,9 @@ const player = playMP3FromWebSocket(websocketAudio, userAgent);
 const screen = blessed.screen({
     smartCSR: false // Disable resizing
 });
-
-// Function to check terminal dimensions
-function checkTerminalSize() {
-    const { cols, rows } = screen.program;
-    if (cols < 80 || rows < 24) {
-        console.error('Terminal size is smaller than 80x24. Exiting...');
-        process.exit(1);
-    }
-}
-
-// Check terminal size initially
-checkTerminalSize();
+const heightInRows = 9;
+const tunerWidth = 23;
+const rdsWidth = 16;
 
 // Create a title element
 const title = blessed.text({
@@ -90,9 +65,7 @@ const title = blessed.text({
     },
 });
 
-const heightInRows = 9; // Adjust this value as needed
-const tunerWidth = 23;
-const rdsWidth = 16;
+
 
 // Create a box to display server connection
 const serverBox = blessed.box({
@@ -226,18 +199,31 @@ const help = blessed.box({
     hidden: true
 });
 
-// Append boxes
-screen.append(title);
-screen.append(serverBox);
-screen.append(tunerBox);
-screen.append(rdsBox);
-screen.append(stationBox);
-screen.append(rtBox);
-screen.append(signalBox);
-screen.append(userBox);
-screen.append(progressBar);
-screen.append(help);
+// Function to format a WebSocket URL
+function formatWebSocketURL(url) {
+    // Remove trailing slash if it exists
+    if (url.endsWith('/')) {
+        url = url.slice(0, -1);
+    }
 
+    // Replace http:// with ws:// and https:// with wss://
+    if (url.startsWith("http://")) {
+        url = url.replace("http://", "ws://");
+    } else if (url.startsWith("https://")) {
+        url = url.replace("https://", "wss://");
+    }
+
+    return url;
+}
+
+// Function to check terminal dimensions
+function checkTerminalSize() {
+    const { cols, rows } = screen.program;
+    if (cols < 80 || rows < 24) {
+        console.error('Terminal size is smaller than 80x24. Exiting...');
+        process.exit(1);
+    }
+}
 
 // Function to do some padding
 function padStringWithSpaces(text, totalLength) {
@@ -479,6 +465,21 @@ screen.on('keypress', function (ch, key) {
         }
     }
 });
+
+// Check terminal size initially
+checkTerminalSize();
+
+// Append boxes
+screen.append(title);
+screen.append(serverBox);
+screen.append(tunerBox);
+screen.append(rdsBox);
+screen.append(stationBox);
+screen.append(rtBox);
+screen.append(signalBox);
+screen.append(userBox);
+screen.append(progressBar);
+screen.append(help);
 
 // Quit on Escape, q, or Control-C
 screen.key(['escape', 'C-c'], function () {

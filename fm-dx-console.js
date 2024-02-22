@@ -331,10 +331,10 @@ ws.on('message', function (data) {
         const content =
             `{center}{bold}{yellow-fg}Tuner{/yellow-fg}{/bold}{/center}\n` +
             `${padStringWithSpaces("Freq:", padLength)}${jsonData.freq} Mhz\n` +
-            `${padStringWithSpaces("Signal:", padLength)}${Math.round(jsonData.signal)} dBf\n` +
+            `${padStringWithSpaces("Signal:", padLength)}${jsonData.signal} dBf\n` +
             `${padStringWithSpaces("Mode:", padLength)}${jsonData.st ? "Stereo" : "Mono"}\n` +
             `${padStringWithSpaces("iMS:", padLength)}${jsonData.ims ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-            `${padStringWithSpaces("EQ:", padLength)}${jsonData.eq ? "On" : "{grey-fg}Off{/grey-fg}"}\n`+
+            `${padStringWithSpaces("EQ:", padLength)}${jsonData.eq ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
             `${padStringWithSpaces("Audio:", padLength)}${isPlaying ? "⏹" : "▶️"}`;
         updateTunerBox(content);
         updateRdsBox(jsonData.freq, jsonData.ps, jsonData.pi, jsonData.tp, jsonData.ta, jsonData.ms, jsonData.pty)

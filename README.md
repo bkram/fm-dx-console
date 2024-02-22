@@ -30,16 +30,16 @@ mpg123 needs to be installed, and accessible in your path.
 
 ## Starting
 
-### Webserver on (http) use ws://
+### Webserver address must be used
 
 ```bash
-node fm-dx-console.js --url ws://fm-dx-server:8080 
+node fm-dx-console.js --url http://fm-dx-server
 ```
 
-### Webserver on (https) use wss://
+or
 
 ```bash
-node fm-dx-console.js --url wss://fm-dx-server
+node fm-dx-console.js --url https://fm-dx-server
 ```
 
 ## Help

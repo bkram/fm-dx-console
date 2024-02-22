@@ -9,10 +9,14 @@ const { spawn } = require('child_process');
 const WebSocket = require('ws'); // WebSocket library for communication
 const argv = require('minimist')(process.argv.slice(2)); // Library for parsing command-line arguments
 
+let argUrl;
 // Check if required arguments are provided
 if (!argv.url) {
     console.error('Usage: node fm-dx-console.js --url <websocket_address>');
     process.exit(1);
+}
+else {
+    argUrl = argv.url;
 }
 
 // Global constants
@@ -40,6 +44,7 @@ websocketData = websocketAddress + '/text';
 
 // Prepare for audio streaming
 const playMP3FromWebSocket = require('./audiostream');
+const { url } = require('inspector');
 const player = playMP3FromWebSocket(websocketAudio, userAgent);
 
 // Create a Blessed screen
@@ -78,7 +83,7 @@ const serverBox = blessed.box({
     border: { type: 'line' },
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
     content: `{center}{yellow-fg}{bold}Server{/bold}{/yellow-fg}\n` +
-        `Connected to ${websocketAddress}{/center}`
+        `Connected to ${argUrl}{/center}`
 });
 
 // Create a box to display main content

@@ -8,7 +8,7 @@ const blessed = require('reblessed'); // Library for creating terminal-based UI
 const { spawn } = require('child_process');
 const WebSocket = require('ws'); // WebSocket library for communication
 const argv = require('minimist')(process.argv.slice(2)); // Library for parsing command-line arguments
-
+const userAgent = 'Fm-dx-console/1.0'
 const europe_programmes = [
     "No PTY", "News", "Current Affairs", "Info",
     "Sport", "Education", "Drama", "Culture", "Science", "Varied",
@@ -18,7 +18,6 @@ const europe_programmes = [
     "Travel", "Leisure", "Jazz Music", "Country Music", "National Music",
     "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
 ];
-
 
 // Check if required arguments are provided
 if (!argv.url) {
@@ -30,15 +29,32 @@ if (!argv.url) {
 let websocketAudio;
 let websocketData;
 
+// Function to format a WebSocket URL
+function formatWebSocketURL(url) {
+    // Remove trailing slash if it exists
+    if (url.endsWith('/')) {
+        url = url.slice(0, -1);
+    }
+
+    // Replace http:// with ws:// and https:// with wss://
+    if (url.startsWith("http://")) {
+        url = url.replace("http://", "ws://");
+    } else if (url.startsWith("https://")) {
+        url = url.replace("https://", "wss://");
+    }
+
+    return url;
+}
+
 // Extract websocket address from command line arguments
-const websocketAddress = argv.url;
+const websocketAddress = formatWebSocketURL(argv.url);
 websocketAudio = websocketAddress + '/audio';
 websocketData = websocketAddress + '/text';
 
 // Prepare for audio streaming
 let isPlaying = false; // Flag to track if audio is currently playing
 const playMP3FromWebSocket = require('./audiostream');
-const player = playMP3FromWebSocket(websocketAudio);
+const player = playMP3FromWebSocket(websocketAudio, userAgent);
 
 // Create a Blessed screen
 const screen = blessed.screen({
@@ -113,8 +129,8 @@ const rdsBox = blessed.box({
 // Create a box for City, Distance and Station
 const stationBox = blessed.box({
     top: 5,
-    left: tunerWidth+ rdsWidth,
-    width: 80 - (tunerWidth+ rdsWidth),
+    left: tunerWidth + rdsWidth,
+    width: 80 - (tunerWidth + rdsWidth),
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
@@ -175,10 +191,10 @@ const userBox = blessed.box({
 
 // Create a help box
 const help = blessed.box({
-    top: 'center',
-    left: 'center',
-    width: '45%',
-    height: '70%',
+    top: 4,
+    left: 20,
+    width: 40,
+    height: 20,
     border: 'line',
     style: {
         fg: 'white',
@@ -313,7 +329,8 @@ function updateSignal(signal) {
 let jsonData = null;
 
 // WebSocket setup
-const ws = new WebSocket(websocketData);
+const wsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (control)` } } : {};
+const ws = new WebSocket(websocketData, wsOptions);
 
 // WebSocket event handlers
 ws.on('open', function () {
@@ -407,25 +424,22 @@ screen.on('keypress', function (ch, key) {
         screen.saveFocus();
         // Create a dialog box to get the frequency from the user
         const dialog = blessed.prompt({
-            top: 'center',
-            left: 'center',
-            width: '25%',
+            top: 10,
+            left: 25,
+            width: 30,
             height: 'shrink',
             border: 'line',
             style: {
                 fg: 'white',
-                // bg: 'black',
                 border: {
                     fg: '#f0f0f0'
                 }
             },
             label: ' Enter frequency in MHz: ',
-            tags: true
+            tags: true,
         });
-
         screen.append(dialog);
         screen.render();
-
         dialog.input('', '', function (err, value) {
             if (!err) {
                 const newFreq = parseFloat(value) * 1000; // Convert MHz to kHz

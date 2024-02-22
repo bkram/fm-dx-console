@@ -4,75 +4,86 @@
 const WebSocket = require('ws');
 const { spawn } = require('child_process');
 
-// Function to handle WebSocket communication for playing MP3 audio
-function playMP3FromWebSocket(websocketAddress) {
-    let ws; // WebSocket instance
-    let mpg123Process; // Reference to the mpg123 child process
+/**
+ * Function to handle WebSocket communication for playing MP3 audio
+ * @param {string} websocketAddress - The address of the WebSocket server.
+ * @param {string} [userAgent] - Optional user agent string to be used in WebSocket connection headers.
+ * @returns {Object} Object with `play` and `stop` methods to control audio playback.
+ */
+function playMP3FromWebSocket(websocketAddress, userAgent) {
+    let ws;
+    let mpg123Process;
 
-    // Function to start playback
+    /**
+     * Starts the audio playback process.
+     */
     function startPlayback() {
-        // Create WebSocket instance if not already created or if it's closed
         if (!ws || ws.readyState === WebSocket.CLOSED) {
-            ws = new WebSocket(websocketAddress);
-            ws.binaryType = 'arraybuffer'; // Set binary type to arraybuffer
+            const wsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (audio)` } } : {};
+            ws = new WebSocket(websocketAddress, wsOptions);
+            ws.binaryType = 'arraybuffer';
 
-            // Event handler for WebSocket open event
+            // Send a message to indicate the type of data expected
             ws.on('open', function open() {
                 // WebSocket connection is established, send command to request MP3 audio data
                 ws.send(JSON.stringify({ type: 'fallback', data: 'mp3' }));
             });
 
-            // Event handler for WebSocket message event
+            // Handle incoming audio data
             ws.on('message', function incoming(data) {
                 if (data instanceof ArrayBuffer && mpg123Process) {
                     // If received data is ArrayBuffer (MP3 audio data) and mpg123 process exists,
                     // write it to mpg123 process
+
                     mpg123Process.stdin.write(Buffer.from(data));
                 }
             });
         }
 
-        // Spawn mpg123 process if it's not already running
+        // Spawn mpg123 process if not already running
         if (!mpg123Process) {
             mpg123Process = spawn('mpg123', ['-']);
             // Event handler for mpg123 process close event
             mpg123Process.on('close', () => {
-                mpg123Process = null; // Reset mpg123 process reference
+                mpg123Process = null;  // Reset mpg123 process reference
             });
         }
     }
 
-// Function to stop playback and close WebSocket connection
-async function stopPlayback() {
-    if (ws) {
-        // Close WebSocket connection if it exists
-        try {
-            ws.removeAllListeners('message');
-            await new Promise(resolve => {
-                ws.on('close', () => {
-                    resolve();
+    /**
+     * Stops the audio playback process.
+     */
+    async function stopPlayback() {
+        if (ws) {
+            // Close WebSocket connection if it exists
+            try {
+                ws.removeAllListeners('message');
+                await new Promise(resolve => {
+                    ws.on('close', () => {
+                        resolve();
+                    });
+                    ws.close();
                 });
-                ws.close();
-            });
-        } catch (error) {
-            console.error("Error closing WebSocket connection:", error);
+            } catch (error) {
+                console.error("Error closing WebSocket connection:", error);
+            }
+            ws = null; // Reset WebSocket instance
         }
-        ws = null; // Reset WebSocket instance
+
+        if (mpg123Process) {
+            if (!mpg123Process.killed) {
+                // Terminate the mpg123 process if it exists and is not already terminated
+                mpg123Process.stdin.end();
+                await new Promise(resolve => {
+                    mpg123Process.on('close', () => {
+                        resolve();
+                    });
+                });
+            }
+            mpg123Process = null;
+        }
     }
 
-    if (mpg123Process) {
-        if (!mpg123Process.killed) {
-            // Terminate the mpg123 process if it exists and is not already terminated
-            mpg123Process.stdin.end();
-            await new Promise(resolve => {
-                mpg123Process.on('close', () => {
-                    resolve();
-                });
-            });
-        }
-        mpg123Process = null; // Reset mpg123 process reference
-    }
-}
     // Return both the play and stop functions
     return { play: startPlayback, stop: stopPlayback };
 }

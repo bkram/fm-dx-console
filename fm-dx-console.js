@@ -8,7 +8,9 @@ const blessed = require('reblessed'); // Library for creating terminal-based UI
 const { spawn } = require('child_process');
 const WebSocket = require('ws'); // WebSocket library for communication
 const argv = require('minimist')(process.argv.slice(2)); // Library for parsing command-line arguments
-const userAgent = 'Fm-dx-console/1.0'
+
+// Global constants
+const userAgent = 'Fm-dx-console/1.0';
 const europe_programmes = [
     "No PTY", "News", "Current Affairs", "Info",
     "Sport", "Education", "Drama", "Culture", "Science", "Varied",
@@ -19,15 +21,17 @@ const europe_programmes = [
     "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
 ];
 
+// Global variables
+let websocketAudio;
+let websocketData;
+let isPlaying = false; // Flag to track if audio is currently playing
+let jsonData = null;
+
 // Check if required arguments are provided
 if (!argv.url) {
     console.error('Usage: node fm-dx-console.js --url <websocket_address>');
     process.exit(1);
 }
-
-// Declare websocketAudio variable outside of the scope
-let websocketAudio;
-let websocketData;
 
 // Function to format a WebSocket URL
 function formatWebSocketURL(url) {
@@ -52,7 +56,6 @@ websocketAudio = websocketAddress + '/audio';
 websocketData = websocketAddress + '/text';
 
 // Prepare for audio streaming
-let isPlaying = false; // Flag to track if audio is currently playing
 const playMP3FromWebSocket = require('./audiostream');
 const player = playMP3FromWebSocket(websocketAudio, userAgent);
 
@@ -325,9 +328,6 @@ function updateSignal(signal) {
     progressBar.filled = scaleValue(signal);
 }
 
-// Initialize JSON data variable
-let jsonData = null;
-
 // WebSocket setup
 const wsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (control)` } } : {};
 const ws = new WebSocket(websocketData, wsOptions);
@@ -484,4 +484,3 @@ screen.on('keypress', function (ch, key) {
 screen.key(['escape', 'C-c'], function () {
     process.exit(0);
 });
-

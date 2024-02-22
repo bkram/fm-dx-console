@@ -9,7 +9,6 @@ const { spawn } = require('child_process');
 const WebSocket = require('ws'); // WebSocket library for communication
 const argv = require('minimist')(process.argv.slice(2)); // Library for parsing command-line arguments
 
-
 // Check if required arguments are provided
 if (!argv.url) {
     console.error('Usage: node fm-dx-console.js --url <websocket_address>');
@@ -45,7 +44,9 @@ const player = playMP3FromWebSocket(websocketAudio, userAgent);
 
 // Create a Blessed screen
 const screen = blessed.screen({
-    smartCSR: false // Disable resizing
+    smartCSR: false, // Disable resizing
+    mouse: true, // Enable mouse support
+    fullUnicode: true // Support Unicode characters
 });
 const heightInRows = 9;
 const tunerWidth = 23;
@@ -333,7 +334,8 @@ ws.on('message', function (data) {
             `${padStringWithSpaces("Signal:", padLength)}${Math.round(jsonData.signal)} dBf\n` +
             `${padStringWithSpaces("Mode:", padLength)}${jsonData.st ? "Stereo" : "Mono"}\n` +
             `${padStringWithSpaces("iMS:", padLength)}${jsonData.ims ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-            `${padStringWithSpaces("EQ:", padLength)}${jsonData.eq ? "On" : "{grey-fg}Off{/grey-fg}"}\n`;
+            `${padStringWithSpaces("EQ:", padLength)}${jsonData.eq ? "On" : "{grey-fg}Off{/grey-fg}"}\n`+
+            `${padStringWithSpaces("Audio:", padLength)}${isPlaying ? "⏹" : "▶️"}`;
         updateTunerBox(content);
         updateRdsBox(jsonData.freq, jsonData.ps, jsonData.pi, jsonData.tp, jsonData.ta, jsonData.ms, jsonData.pty)
         updateSignal(jsonData.signal);

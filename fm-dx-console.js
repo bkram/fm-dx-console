@@ -71,8 +71,6 @@ const title = blessed.text({
     },
 });
 
-
-
 // Create a box to display server connection
 const serverBox = blessed.box({
     top: 1,
@@ -119,7 +117,6 @@ const stationBox = blessed.box({
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
 });
 
-
 // Create a box for RT0 and RT1
 const rtBox = blessed.box({
     top: 14,
@@ -142,7 +139,6 @@ const signalBox = blessed.box({
     style: { fg: 'white', border: { fg: '#f0f0f0' } },
     content: "{center}{bold}{yellow-fg}Signal{/yellow-fg}{/bold}{/center}"
 });
-
 
 // Create the signal meter `progress` bar
 const progressBar = blessed.progressbar({

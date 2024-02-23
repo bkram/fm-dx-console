@@ -130,3 +130,6 @@ dist
 .pnp.*
 .vscode/launch.json
 .vscode/settings.json
+
+# exclude test snippets
+tests/

@@ -20,7 +20,8 @@ else {
 }
 
 // Global constants
-const userAgent = 'Fm-dx-console/1.0';
+const version = '1.0'
+const userAgent = `Fm-dx-console/${version}`;
 const europe_programmes = [
     "No PTY", "News", "Current Affairs", "Info",
     "Sport", "Education", "Drama", "Culture", "Science", "Varied",
@@ -62,7 +63,7 @@ const title = blessed.text({
     top: 0,
     left: 0,
     width: 80,
-    content: `{bold}fm-dx-console by Bkram{bold}                                        Press \`h\` for help`,
+    content: ` {bold}fm-dx-console ${version} by Bkram{bold}                                  Press \`h\` for help`,
     tags: true,
     style: {
         fg: 'white',

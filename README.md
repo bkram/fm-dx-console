@@ -26,9 +26,9 @@ Install with npm.
 npm install
 ```
 
-### Mpg123
+### ffmpeg
 
-mpg123 needs to be installed, and accessible in your path.
+ffplay needs to be installed, and accessible in your path.
 
 ## Starting
 

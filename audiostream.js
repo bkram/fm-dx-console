@@ -7,10 +7,10 @@ const WebSocket = require('ws');
 const { spawn } = require('child_process');
 
 // Path to the log file
-const logFilePath = path.join(__dirname, 'stream.log');
+const logFilePath = path.join(__dirname, 'audiostream.log');
 
 // Create a writable stream to the log file
-const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
+const logStream = fs.createWriteStream(logFilePath, { flags: 'w' });
 
 /**
  * Function to handle WebSocket communication for playing MP3 audio
@@ -24,10 +24,10 @@ function playMP3FromWebSocket(websocketAddress, userAgent, bufferSize = 1024, de
     let ws;
     let ffplayProcess;
 
-    // Function to log messages if debug mode is enabled
+    // Function to log messages to the log file
     function debugLog(message) {
         if (debug) {
-            console.log(message);
+            logStream.write(message + '\n');
         }
     }
 
@@ -35,7 +35,7 @@ function playMP3FromWebSocket(websocketAddress, userAgent, bufferSize = 1024, de
      * Starts the audio playback process.
      */
     function startPlayback() {
-        debugLog("Playback started");
+        debugLog("\nPlayback started\n");
         if (!ws || ws.readyState === WebSocket.CLOSED) {
             const wsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (audio)` } } : {};
             ws = new WebSocket(websocketAddress, wsOptions);
@@ -68,12 +68,13 @@ function playMP3FromWebSocket(websocketAddress, userAgent, bufferSize = 1024, de
                 '-nodisp', // Disable video output
                 '-acodec', 'mp3', // Set the audio codec to MP3
                 '-probesize', '32', // remove latency
-                '-sync', 'ext' // remove latency
+                '-sync', 'ext', // remove latency
+                '-ar','48000' // prevent the smurfs from coming
             ];
 
             // Log the ffplay command if debug mode is enabled
             if (debug) {
-                debugLog("FFplay command: ffplay " + ffplayCommand.join(' '));
+                debugLog("FFplay command: ffplay " + ffplayCommand.join(' ') + "\n");
             }
 
             // Spawn ffplay process
@@ -95,7 +96,7 @@ function playMP3FromWebSocket(websocketAddress, userAgent, bufferSize = 1024, de
      * Stops the audio playback process.
      */
     async function stopPlayback() {
-        debugLog("Playback stopped");
+        debugLog("\nPlayback stopped\n");
         if (ws) {
             // Close WebSocket connection if it exists
             try {
@@ -107,7 +108,7 @@ function playMP3FromWebSocket(websocketAddress, userAgent, bufferSize = 1024, de
                     ws.close();
                 });
             } catch (error) {
-                console.error("Error closing WebSocket connection:", error);
+                logStream.write("Error closing WebSocket connection:" + error + '\n');
             }
             ws = null; // Reset WebSocket instance
         }

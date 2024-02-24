@@ -32,6 +32,7 @@ const userAgent = `Fm-dx-console/${version}`;
 const heightInRows = 8;
 const tunerWidth = 24;
 const rdsWidth = 17;
+const boxStyle = { border: { fg: 'green', bg: 'blue' }, bg: 'blue' }
 
 // Global variables
 let isPlaying = false;
@@ -68,7 +69,6 @@ const screen = blessed.screen({
     fullUnicode: false, // Support Unicode characters
     dockBorders: true,
     style: {
-        // Set background color to blue
         bg: 'blue'
     }
 
@@ -123,7 +123,7 @@ const serverBox = blessed.box({
     height: 5,
     tags: true,
     border: { type: 'line' },
-    style: { border: { fg: 'green', bg: 'blue' }, bg: 'blue' },
+    style: boxStyle,
     label: boxLabel('Connected to fm-dx webserver')
 });
 
@@ -139,7 +139,9 @@ const tunerBox = blessed.box({
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
-    style: { border: { fg: 'green', bg: 'blue' } }, label: boxLabel('Tuner')
+    style: boxStyle,
+    label: boxLabel('Tuner')
+
 });
 
 // Create a box to display main content
@@ -150,7 +152,7 @@ const rdsBox = blessed.box({
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
-    style: { border: { fg: 'green', bg: 'blue' } },
+    style: boxStyle,
     label: boxLabel('RDS')
 });
 
@@ -162,7 +164,7 @@ const stationBox = blessed.box({
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
-    style: { border: { fg: 'green', bg: 'blue' } },
+    style: boxStyle,
     label: boxLabel('Station Information')
 });
 
@@ -174,7 +176,7 @@ const rtBox = blessed.box({
     height: 4,
     tags: true,
     border: { type: 'line' },
-    style: { border: { fg: 'green', bg: 'blue' }, bg: 'blue' },
+    style: boxStyle,
     label: boxLabel("RDS Radiotext")
 });
 
@@ -186,7 +188,7 @@ const signalBox = blessed.box({
     height: 5,
     tags: true,
     border: { type: 'line' },
-    style: { border: { fg: 'green', bg: 'blue' }, bg: 'blue' },
+    style: boxStyle,
     label: boxLabel("Signal")
 });
 
@@ -200,7 +202,7 @@ const progressBar = blessed.progressbar({
     tags: true,
     style: {
         bar: {
-            bg: 'green'
+            bg: 'red'
         }
     },
     filled: 0,
@@ -214,7 +216,7 @@ const userBox = blessed.box({
     height: 5,
     tags: true,
     border: { type: 'line' },
-    style: { border: { fg: 'green', bg: 'blue' }, bg: 'blue' },
+    style: boxStyle,
     label: boxLabel("Users"),
 });
 
@@ -223,10 +225,10 @@ const help = blessed.box({
     top: 3,
     left: 20,
     width: 40,
-    height: 20,
+    height: 19,
     border: { type: 'line' },
-    style: { border: { fg: 'green', bg: 'blue' }, bg: 'blue' }, // Set bg color here
-    label: boxLabel('Tuner'), // Assuming boxLabel function provides some dynamic label
+    style: boxStyle,
+    label: boxLabel('Help'),
     content: `
     Press key to:
     '1' to decrease by .001 Mhz
@@ -293,8 +295,9 @@ function updateTunerBox(jsonData) {
         `${padStringWithSpaces("Mode:", 'green', padLength)}${jsonData.st ? "Stereo" : "Mono"}\n` +
         `${padStringWithSpaces("iMS:", 'green', padLength)}${jsonData.ims ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
         `${padStringWithSpaces("EQ:", 'green', padLength)}${jsonData.eq ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-        `${padStringWithSpaces("Audio:", 'blue', padLength)}${isPlaying ? "Playing" : "Stopped"}`);
+        `${padStringWithSpaces("Audio:", 'yellow', padLength)}${isPlaying ? "Playing" : "Stopped"}`);
 }
+
 
 function updateServerBox() {
     serverBox.setContent(
@@ -312,18 +315,18 @@ function updateRdsBox(jsonData) {
                 = "{grey-fg}M{/grey-fg}S";
         } else if (jsonData.ms === -1) {
             msshow
-                = "{grey-fg}M{/grey-fg}{grey-fg}s{/grey-fg}";
+                = "{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}";
         } else {
             msshow
-                = "M{grey-fg}s{/grey-fg}";
+                = "M{grey-fg}S{/grey-fg}";
         }
 
         rdsBox.setContent(
             `${padStringWithSpaces("PS:", 'green', padLength)}${jsonData.ps.trimStart()}\n` +
             `${padStringWithSpaces("PI:", 'green', padLength)}${jsonData.pi}\n` +
             `{center}{bold}Flags{/bold}\n` +
-            `${jsonData.tp ? "TP" : "{grey-fg}to{/grey-fg}"} ` +
-            `${jsonData.ta ? "TA" : "{grey-fg}ta{/grey-fg}"} ` +
+            `${jsonData.tp ? "TP" : "{grey-fg}TP{/grey-fg}"} ` +
+            `${jsonData.ta ? "TA" : "{grey-fg}TA{/grey-fg}"} ` +
             `${msshow}\n` +
             `${jsonData.pty ? europe_programmes[jsonData.pty] : ""}{/center}`
         );
@@ -454,22 +457,18 @@ screen.on('keypress', function (ch, key) {
         screen.saveFocus();
         // Create a dialog box to get the frequency from the user
         const dialog = blessed.prompt({
-            top: 10,
+            top: 8,
             left: 25,
             width: 30,
-            height: 'shrink',
+            height: 8,
             border: 'line',
-            style: {
-                fg: 'white',
-                border: {
-                    fg: '#f0f0f0'
-                }
-            },
-            label: ' Enter frequency in MHz: ',
+            style: boxStyle,
+            label: boxLabel('Direct Tuning'),
             tags: true,
         });
+
         screen.append(dialog);
-        dialog.input('', '', function (err, value) {
+        dialog.input('\n  Enter frequency in Mhz', '', function (err, value) {
             if (!err) {
                 const newFreq = parseFloat(value) * 1000; // Convert MHz to kHz
                 ws.send(`T${newFreq}`);

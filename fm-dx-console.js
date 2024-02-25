@@ -250,8 +250,8 @@ const help = blessed.box({
     'r' to refresh
     't' to set frequency
     'p' to play audio
-    '[' toggle iMS
-    ']' toggle EQ
+    '[' toggle TEF iMS | XDR-F1HD IF+
+    ']' toggle TEF EQ | XDR-F1HD RF+
     'Esc' to quit
     'h' to toggle this help`,
     tags: true,

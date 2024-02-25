@@ -67,9 +67,12 @@ function playMP3FromWebSocket(websocketAddress, userAgent, bufferSize = 1024, de
                 '-i', '-', // Input from pipe
                 '-nodisp', // Disable video output
                 '-acodec', 'mp3', // Set the audio codec to MP3
-                '-probesize', '32', // remove latency
-                '-sync', 'ext', // remove latency
-                '-ar','48000' // prevent the smurfs from coming
+                '-probesize', '32', // Set probe size to 32
+                '-sync', 'ext', // Use external clock for synchronization
+                '-ar', '48000', // Set audio sample rate to 48000 Hz
+                '-fflags', '+nobuffer+flush_packets', // Input demuxer flags
+                '-flags', 'low_delay', // Output codec flags
+                '-rtbufsize', '32' // Real-time buffer size
             ];
 
             // Log the ffplay command if debug mode is enabled

@@ -32,6 +32,7 @@ const userAgent = `Fm-dx-console/${version}`;
 const heightInRows = 8;
 const tunerWidth = 24;
 const rdsWidth = 17;
+const titleStyle = { fg: 'black', bg: 'green', bold: true }
 const boxStyle = { border: { fg: 'green', bg: 'blue' }, bg: 'blue' }
 
 // Global variables
@@ -108,11 +109,7 @@ const title = blessed.text({
     width: 80,
     content: ` fm-dx-console ${version} by Bkram                                  Press \`h\` for help`,
     tags: true,
-    style: {
-        fg: 'black',
-        bg: 'green',
-        bold: true
-    },
+    style: titleStyle,
 });
 
 // Create a box to display server connection
@@ -218,6 +215,17 @@ const statsBox = blessed.box({
     border: { type: 'line' },
     style: boxStyle,
     label: boxLabel("Statistics"),
+});
+
+// Create a bottom title `bar`
+const bottomBox = blessed.box({
+    top: 23,
+    left: 0,
+    width: 80,
+    height: 1,
+    tags: true,
+    style: titleStyle,
+    content: ' https://github.com/bkram/fm-dx-console'
 });
 
 // Create a help box
@@ -520,6 +528,7 @@ screen.append(rtBox);
 screen.append(signalBox);
 screen.append(statsBox);
 screen.append(progressBar);
+screen.append(bottomBox);
 screen.append(help);
 
 // Quit on Escape, q, or Control-C

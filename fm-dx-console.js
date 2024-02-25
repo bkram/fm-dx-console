@@ -208,8 +208,8 @@ const progressBar = blessed.progressbar({
     filled: 0,
 });
 
-// Create a userbox
-const userBox = blessed.box({
+// Create a statsBox
+const statsBox = blessed.box({
     top: 18,
     left: 38,
     width: 42,
@@ -217,7 +217,7 @@ const userBox = blessed.box({
     tags: true,
     border: { type: 'line' },
     style: boxStyle,
-    label: boxLabel("Users"),
+    label: boxLabel("Statistics"),
 });
 
 // Create a help box
@@ -294,10 +294,8 @@ function updateTunerBox(jsonData) {
         `${padStringWithSpaces("Signal:", 'green', padLength)}${jsonData.signal} dBf\n` +
         `${padStringWithSpaces("Mode:", 'green', padLength)}${jsonData.st ? "Stereo" : "Mono"}\n` +
         `${padStringWithSpaces("iMS:", 'green', padLength)}${jsonData.ims ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-        `${padStringWithSpaces("EQ:", 'green', padLength)}${jsonData.eq ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-        `${padStringWithSpaces("Audio:", 'yellow', padLength)}${isPlaying ? "Playing" : "Stopped"}`);
+        `${padStringWithSpaces("EQ:", 'green', padLength)}${jsonData.eq ? "On" : "{grey-fg}Off{/grey-fg}"}\n`);
 }
-
 
 function updateServerBox() {
     serverBox.setContent(
@@ -358,10 +356,11 @@ function updateStationBox(txInfo) {
     }
 }
 
-// Function to update the userBox
-function updateUserBox(jsonData) {
-    userBox.setContent(
-        `{center}Online users: ${jsonData.users}{/center}`);
+// Function to update the statsBox
+function updateStatsBox(jsonData) {
+    statsBox.setContent(
+        `{center}Online users: ${jsonData.users}\n` +
+        `Audio: ${isPlaying ? "Playing" : "Stopped"}{/center}`);
 }
 
 // Function to scale the progress bar value
@@ -395,7 +394,7 @@ ws.on('message', function (data) {
         updateSignal(jsonData.signal);
         updateStationBox(jsonData.txInfo);
         updateRTBox(jsonData);
-        updateUserBox(jsonData);
+        updateStatsBox(jsonData);
         screen.render();
     } catch (error) {
         debugLog('Error parsing JSON:', error);
@@ -519,7 +518,7 @@ screen.append(rdsBox);
 screen.append(stationBox);
 screen.append(rtBox);
 screen.append(signalBox);
-screen.append(userBox);
+screen.append(statsBox);
 screen.append(progressBar);
 screen.append(help);
 

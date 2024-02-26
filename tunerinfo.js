@@ -48,7 +48,7 @@ async function getTunerInfo(url) {
         // Extract the content of <p> tags with specific IDs
         let tunerName = $('#tuner-name').text().trim();
         let tunerDesc = $('#tuner-desc').text().trim();
-        
+
         // Define substrings to be removed
         const substrToRemove = ['**', '??'];
 
@@ -64,14 +64,13 @@ async function getTunerInfo(url) {
         tunerName = removeDoubleSpaces(tunerName);
         tunerDesc = removeDoubleSpaces(tunerDesc);
 
-        // Limit the length to 78 characters after removing substrings, non-Latin characters, and double spaces
-        tunerName = tunerName.slice(0, 78);
-        tunerDesc = tunerDesc.slice(0, 78);
-
         // Split on '\n' and take only the first part
         tunerName = tunerName.split('\\n')[0];
         tunerDesc = tunerDesc.split('\\n')[0];
 
+        // Limit the length to 78 characters after removing substrings, non-Latin characters, and double spaces
+        tunerName = tunerName.slice(0, 78);
+        tunerDesc = tunerDesc.slice(0, 78);
         return { tunerName, tunerDesc };
     } catch (error) {
         throw new Error('Failed to fetch content: ' + error.message);

@@ -136,4 +136,4 @@ tests/
 
 # exclude log files
 console.log
-audiostream.log
+3lasclient.log

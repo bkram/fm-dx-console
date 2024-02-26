@@ -15,7 +15,7 @@ const { url } = require('inspector');
 const path = require('path');
 const WebSocket = require('ws'); // WebSocket library for communication
 const getTunerInfo = require('./tunerinfo');
-const playAudio = require('./audiostream');
+const playAudio = require('./3lasclient');
 
 // Global constants
 const europe_programmes = [
@@ -36,7 +36,6 @@ const titleStyle = { fg: 'black', bg: 'green', bold: true }
 const boxStyle = { border: { fg: 'green', bg: 'blue' }, bg: 'blue' }
 
 // Global variables
-let isPlaying = false;
 let jsonData = null;
 let tunerDesc;
 let tunerName;
@@ -45,19 +44,28 @@ let websocketData;
 let argDebug = argv.debug;
 let argUrl;
 
+// Path to the log file
+const logFilePath = path.join(__dirname, 'console.log');
+const logStream = fs.createWriteStream(logFilePath, { flags: 'w' });
+
 // Check if required arguments are provided
 if (!argv.url) {
     console.error('Usage: node fm-dx-console.js --url <websocket_address> [--debug]');
     process.exit(1);
 }
 else {
-    argUrl = argv.url;
+    argUrl = argv.url.toLowerCase();
 }
 
-// Extract websocket address from command line arguments
-const websocketAddress = formatWebSocketURL(argv.url.toLowerCase());
-websocketAudio = websocketAddress + '/audio';
-websocketData = websocketAddress + '/text';
+if (isValidURL(argUrl)) {
+    // URL is valid, proceed with processing
+    websocketAddress = formatWebSocketURL(argv.url);
+    websocketAudio = `${websocketAddress}/audio`;
+    websocketData = `${websocketAddress}/text`;
+} else {
+    console.error("Invalid URL provided.");
+    process.exit(1)
+}
 
 // Prepare for audio streaming
 const player = playAudio(websocketAudio, userAgent, 2048, argv.debug);
@@ -75,10 +83,7 @@ const screen = blessed.screen({
 
 });
 
-// Path to the log file
-const logFilePath = path.join(__dirname, 'console.log');
-const logStream = fs.createWriteStream(logFilePath, { flags: 'w' });
-
+// debug logging to file
 function debugLog(...args) {
     if (argDebug) {
         const message = args.join(' '); // Join all arguments into a single string
@@ -92,8 +97,6 @@ async function tunerInfo() {
         const result = await getTunerInfo(argUrl);
         tunerName = result.tunerName;
         tunerDesc = result.tunerDesc;
-        debugLog('Tuner Name:', tunerName);
-        debugLog('Tuner Description:', tunerDesc);
     } catch (error) {
         debugLog(error.message);
     }
@@ -107,7 +110,7 @@ const title = blessed.text({
     top: 0,
     left: 0,
     width: 80,
-    content: ` fm-dx-console ${version} by Bkram                                  Press \`h\` for help`,
+    content: ` fm-dx-console ${version} by Bkram`,
     tags: true,
     style: titleStyle,
 });
@@ -217,19 +220,19 @@ const statsBox = blessed.box({
     label: boxLabel("Statistics"),
 });
 
-// Create a bottom title `bar`
-const bottomBox = blessed.box({
+// Create a     om title `bar`
+const omBox = blessed.box({
     top: 23,
     left: 0,
     width: 80,
     height: 1,
     tags: true,
     style: titleStyle,
-    content: ' https://github.com/bkram/fm-dx-console'
+    content: ' https://github.com/bkram/fm-dx-console                      Press \`h\` for help'
 });
 
 // Create a help box
-const help = blessed.box({
+const helpBox = blessed.box({
     top: 3,
     left: 20,
     width: 40,
@@ -257,6 +260,22 @@ const help = blessed.box({
     tags: true,
     hidden: true,
 });
+
+// Create a clock element
+const clockText = blessed.text({
+    content: '',
+    top: 0,
+    left: 80 - 9,
+    tags: true,
+    style: titleStyle,
+
+});
+
+// Function to check for http(s):
+function isValidURL(url) {
+    const pattern = /^(https?):\/\/.+/;
+    return pattern.test(url);
+}
 
 // Function to format a WebSocket URL
 function formatWebSocketURL(url) {
@@ -299,18 +318,24 @@ function updateTunerBox(jsonData) {
     const padLength = 8;
     tunerBox.setContent(
         `${padStringWithSpaces("Freq:", 'green', padLength)}${jsonData.freq} Mhz\n` +
-        `${padStringWithSpaces("Signal:", 'green', padLength)}${jsonData.signal} dBf\n` +
+        `${padStringWithSpaces("Signal:", 'green', padLength)}${parseFloat(jsonData.signal).toFixed(1)} dBf\n` +
         `${padStringWithSpaces("Mode:", 'green', padLength)}${jsonData.st ? "Stereo" : "Mono"}\n` +
         `${padStringWithSpaces("iMS:", 'green', padLength)}${jsonData.ims ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
         `${padStringWithSpaces("EQ:", 'green', padLength)}${jsonData.eq ? "On" : "{grey-fg}Off{/grey-fg}"}\n`);
 }
 
+// function to update the serverbox
 function updateServerBox() {
-    serverBox.setContent(
-        `{center}{yellow-fg}{bold}${tunerName}{/bold}{/yellow-fg}\n` +
-        `${tunerDesc}\n` +
-        `${argUrl}{/center}`);
+    if (typeof tunerName !== 'undefined' && tunerName.text !== '' &&
+        typeof tunerDesc !== 'undefined' && tunerDesc.text !== '' &&
+        serverBox.content === '') {
+        serverBox.setContent(
+            `{center}{yellow-fg}{bold}${tunerName}{/bold}{/yellow-fg}\n` +
+            `${tunerDesc}\n` +
+            `${argUrl}{/center}`);
+    }
 }
+
 // Function to update the StationBox
 function updateRdsBox(jsonData) {
     const padLength = 4;
@@ -368,7 +393,8 @@ function updateStationBox(txInfo) {
 function updateStatsBox(jsonData) {
     statsBox.setContent(
         `{center}Online users: ${jsonData.users}\n` +
-        `Audio: ${isPlaying ? "Playing" : "Stopped"}{/center}`);
+        `Server ping: NaN\n` +
+        `Audio: ${player.getStatus() ? "Playing" : "Stopped"}{/center}`);
 }
 
 // Function to scale the progress bar value
@@ -385,18 +411,36 @@ function updateSignal(signal) {
     progressBar.filled = scaleValue(signal);
 }
 
+// Function to update the clock content
+function updateClock(clockText) {
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    const seconds = now.getSeconds().toString().padStart(2, '0');
+    const timeStr = `${hours}:${minutes}:${seconds}`;
+    clockText.setContent(timeStr);
+}
+
+// Update the clock content every second
+setInterval(() => {
+    updateClock(clockText);
+    screen.render();
+}, 1000);
+
 // WebSocket setup
 const wsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (control)` } } : {};
 const ws = new WebSocket(websocketData, wsOptions);
 
 // WebSocket event handlers
 ws.on('open', function () {
-    // updateTunerBox('WebSocket connection established');
+    debugLog('WebSocket connection established');
 });
 ws.on('message', function (data) {
     try {
-        jsonData = JSON.parse(data);
+
         updateServerBox();
+
+        jsonData = JSON.parse(data);
         updateTunerBox(jsonData);
         updateRdsBox(jsonData);
         updateSignal(jsonData.signal);
@@ -412,6 +456,22 @@ ws.on('message', function (data) {
 ws.on('close', function () {
     debugLog('WebSocket connection closed');
 });
+
+// Check terminal size initially
+checkTerminalSize();
+
+// Append boxes
+screen.append(title);
+screen.append(serverBox);
+screen.append(tunerBox);
+screen.append(rdsBox);
+screen.append(stationBox);
+screen.append(rtBox);
+screen.append(signalBox);
+screen.append(statsBox);
+screen.append(progressBar);
+screen.append(helpBox);
+screen.append(clockText);
 
 // Listen for key events
 screen.on('keypress', function (ch, key) {
@@ -485,18 +545,16 @@ screen.on('keypress', function (ch, key) {
             screen.render();
         });
     } else if (key.full === 'h') { // Toggle help visibility
-        if (help.hidden) {
-            help.show();
+        if (helpBox.hidden) {
+            helpBox.show();
         } else {
-            help.hide();
+            helpBox.hide();
         }
     } else if (key.full === 'p') { // Toggle playback
-        if (isPlaying) {
+        if (player.getStatus()) {
             player.stop(); // Stop playback if currently playing
-            isPlaying = false;
         } else {
             player.play(); // Start playback if not playing
-            isPlaying = true;
         }
     } else if (key.full === '[') { // toggle ims
         if (jsonData.ims == 1) {
@@ -514,22 +572,6 @@ screen.on('keypress', function (ch, key) {
         }
     }
 });
-
-// Check terminal size initially
-checkTerminalSize();
-
-// Append boxes
-screen.append(title);
-screen.append(serverBox);
-screen.append(tunerBox);
-screen.append(rdsBox);
-screen.append(stationBox);
-screen.append(rtBox);
-screen.append(signalBox);
-screen.append(statsBox);
-screen.append(progressBar);
-screen.append(bottomBox);
-screen.append(help);
 
 // Quit on Escape, q, or Control-C
 screen.key(['escape', 'C-c'], function () {

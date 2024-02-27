@@ -14,7 +14,7 @@ const { spawn } = require('child_process');
 const { url } = require('inspector');
 const path = require('path');
 const WebSocket = require('ws'); // WebSocket library for communication
-const getTunerInfo = require('./tunerinfo');
+const { getTunerInfo, getPingTime } = require('./tunerinfo');
 const playAudio = require('./3lasclient');
 
 // Global constants
@@ -43,6 +43,8 @@ let websocketAudio;
 let websocketData;
 let argDebug = argv.debug;
 let argUrl;
+let pingTime = null;
+
 
 // Path to the log file
 const logFilePath = path.join(__dirname, 'console.log');
@@ -393,9 +395,9 @@ function updateStationBox(txInfo) {
 // Function to update the statsBox
 function updateStatsBox(jsonData) {
     statsBox.setContent(
-        `{center}Online users: ${jsonData.users}\n` +
-        `Server ping: NaN\n` +
-        `Audio: ${player.getStatus() ? "Playing" : "Stopped"}{/center}`);
+        `{center}Server users: ${jsonData.users}\n` +
+        `Server ping: ${pingTime !== null ? pingTime + ' ms' : ''}\n` +
+        `Local audio: ${player.getStatus() ? "Playing" : "Stopped"}{/center}`);
 }
 
 // Function to scale the progress bar value
@@ -427,6 +429,18 @@ setInterval(() => {
     updateClock(clockText);
     screen.render();
 }, 1000);
+
+// Get ping every 15 seconds
+async function doPing() {
+    try {
+        pingTime = await getPingTime(argUrl);
+        debugLog('Ping Time:', pingTime, 'ms');
+    } catch (error) {
+        debugLog('Ping Error:', error.message);
+    }
+}
+doPing();
+setInterval(doPing, 15000);
 
 // WebSocket setup
 const wsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (control)` } } : {};
@@ -579,3 +593,4 @@ screen.on('keypress', function (ch, key) {
 screen.key(['escape', 'C-c'], function () {
     process.exit(0);
 });
+

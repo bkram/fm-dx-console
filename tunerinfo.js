@@ -1,5 +1,6 @@
 // (c) Bkram 2024 
 // Console client for https://github.com/NoobishSVK/fm-dx-webserver
+
 const cheerio = require('cheerio');
 const axios = require('axios');
 
@@ -77,4 +78,18 @@ async function getTunerInfo(url) {
     }
 }
 
-module.exports = getTunerInfo;
+async function getPingTime(url) {
+    try {
+        const pingUrl = new URL((url));
+        pingUrl.pathname = 'ping';
+        const startTime = Date.now(); // Record start time
+        const response = await axios.get(pingUrl); // Asynchronous HTTP request using axios
+        const endTime = Date.now(); // Record end time
+        const pingTime = endTime - startTime; // Calculate time difference
+        return pingTime;
+    } catch (error) {
+        throw new Error('Failed to fetch ping: ' + error.message);
+    }
+}
+
+module.exports = { getTunerInfo, getPingTime };

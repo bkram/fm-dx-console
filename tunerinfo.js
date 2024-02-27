@@ -40,6 +40,12 @@ function removeDoubleSpaces(str) {
     return str.split(' ').filter(Boolean).join(' ');
 }
 
+/**
+ * Fetch tuner information from the provided URL.
+ * @param {string} url - The URL of the web server.
+ * @returns {Object} An object containing tuner name and description.
+ * @throws {Error} If fetching tuner information fails.
+ */
 async function getTunerInfo(url) {
     try {
         const response = await axios.get(url); // Asynchronous HTTP request using axios
@@ -78,12 +84,24 @@ async function getTunerInfo(url) {
     }
 }
 
+/**
+ * Fetch ping time from the provided URL.
+ * @param {string} url - The URL of the web server.
+ * @returns {number} The ping time in milliseconds.
+ * @throws {Error} If fetching ping time fails.
+ */
 async function getPingTime(url) {
     try {
-        const pingUrl = new URL((url));
-        pingUrl.pathname = 'ping';
+        const pingUrl = new URL(url);
+        pingUrl.pathname += '/ping'; // Append '/ping' to the existing path
         const startTime = Date.now(); // Record start time
-        const response = await axios.get(pingUrl); // Asynchronous HTTP request using axios
+        
+        // Custom headers
+        const headers = {
+            'Host': pingUrl.hostname, // Set Host header to match destination server
+        };
+
+        const response = await axios.get(pingUrl.toString(), { headers }); // Asynchronous HTTP request using axios
         const endTime = Date.now(); // Record end time
         const pingTime = endTime - startTime; // Calculate time difference
         return pingTime;

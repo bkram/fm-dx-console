@@ -220,8 +220,8 @@ const statsBox = blessed.box({
     label: boxLabel("Statistics"),
 });
 
-// Create a     om title `bar`
-const omBox = blessed.box({
+// Create a bottom title `bar`
+const bottomBox = blessed.box({
     top: 23,
     left: 0,
     width: 80,
@@ -230,6 +230,7 @@ const omBox = blessed.box({
     style: titleStyle,
     content: ' https://github.com/bkram/fm-dx-console                      Press \`h\` for help'
 });
+
 
 // Create a help box
 const helpBox = blessed.box({
@@ -471,6 +472,7 @@ screen.append(signalBox);
 screen.append(statsBox);
 screen.append(progressBar);
 screen.append(helpBox);
+screen.append(bottomBox);
 screen.append(clockText);
 
 // Listen for key events

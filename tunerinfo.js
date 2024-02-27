@@ -93,12 +93,12 @@ async function getTunerInfo(url) {
 async function getPingTime(url) {
     try {
         const pingUrl = new URL(url);
-        pingUrl.pathname += '/ping'; // Append '/ping' to the existing path
+        pingUrl.pathname += 'ping'; // Append '/ping' to the existing path
         const startTime = Date.now(); // Record start time
         
         // Custom headers
         const headers = {
-            'Host': pingUrl.hostname, // Set Host header to match destination server
+            // 'Host': pingUrl.hostname, // Set Host header to match destination server
         };
 
         const response = await axios.get(pingUrl.toString(), { headers }); // Asynchronous HTTP request using axios

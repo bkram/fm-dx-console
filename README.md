@@ -8,13 +8,7 @@ With this console client, you can conveniently tune the fm-dx-webserver and stre
 
 ## Screenshot
 
-### Linux
-
 ![Screenshot Linux](images/screenshot-Linux.png "Screenshot Linux")
-
-### Windows
-
-![Screenshot Windows](images/screenshot-Windows.png "Screenshot Windows")
 
 ## Requirements
 

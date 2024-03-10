@@ -27,7 +27,7 @@ const europe_programmes = [
     "Travel", "Leisure", "Jazz Music", "Country Music", "National Music",
     "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
 ];
-const version = '1.x'
+const version = '1.2'
 const userAgent = `Fm-dx-console/${version}`;
 const heightInRows = 8;
 const tunerWidth = 24;

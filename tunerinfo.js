@@ -54,7 +54,7 @@ async function getTunerInfo(url) {
 
         // Extract the content of <p> tags with specific IDs
         let tunerName = $('#tuner-name').text().trim();
-        let tunerDesc = $('#tuner-desc').text().trim();
+        let tunerDesc = $('#tuner-desc').first().text().trim();
 
         // Define substrings to be removed
         const substrToRemove = ['**', '??'];
@@ -72,8 +72,8 @@ async function getTunerInfo(url) {
         tunerDesc = removeDoubleSpaces(tunerDesc);
 
         // Split on '\n' and take only the first part
-        tunerName = tunerName.split('\\n')[0];
-        tunerDesc = tunerDesc.split('\\n')[0];
+        tunerName = tunerName.split('\n')[0];
+        tunerDesc = tunerDesc.split('\n')[0];
 
         // Limit the length to 78 characters after removing substrings, non-Latin characters, and double spaces
         tunerName = tunerName.slice(0, 78);
@@ -95,7 +95,7 @@ async function getPingTime(url) {
         const pingUrl = new URL(url);
         pingUrl.pathname += 'ping'; // Append '/ping' to the existing path
         const startTime = Date.now(); // Record start time
-        
+
         // Custom headers
         const headers = {
             // 'Host': pingUrl.hostname, // Set Host header to match destination server

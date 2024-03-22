@@ -6,15 +6,11 @@ To utilize this client, you'll need to provide the URL of the fm-dx-webserver. I
 
 With this console client, you can conveniently tune the fm-dx-webserver and stream audio effortlessly, all within the familiar environment of the command line.
 
+Tested on both Linux and Windows
+
 ## Screenshot
 
-### Linux
-
 ![Screenshot Linux](images/screenshot-Linux.png "Screenshot Linux")
-
-### Windows
-
-![Screenshot Windows](images/screenshot-Windows.png "Screenshot Windows")
 
 ## Requirements
 
@@ -35,13 +31,13 @@ ffplay needs to be installed, and accessible in your path.
 ### Webserver address must be used
 
 ```bash
-node fm-dx-console.js --url http://fm-dx-server
+node fm-dx-console.js --url http://fm-dx-server:[port]/
 ```
 
 or
 
 ```bash
-node fm-dx-console.js --url https://fm-dx-server
+node fm-dx-console.js --url https://fm-dx-server/
 ```
 
 ## Help
@@ -66,7 +62,3 @@ Press key to:
 'Esc' to quit
 'h' to toggle this help
 ```
-
-## Known issues
-
-- Getting the audio to run on Windows may require several attempts of pressing `P`. We'll explore potential solutions for this issue at a later stage.

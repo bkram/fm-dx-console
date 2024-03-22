@@ -133,3 +133,7 @@ dist
 
 # exclude test snippets
 tests/
+
+# exclude log files
+console.log
+3lasclient.log

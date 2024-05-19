@@ -1,6 +1,3 @@
-// (c) Bkram 2024 
-// Console client for https://github.com/NoobishSVK/fm-dx-webserver
-
 const fs = require('fs');
 const path = require('path');
 const WebSocket = require('ws');
@@ -34,8 +31,12 @@ function play3LAS(websocketAddress, userAgent, bufferSize = 1024, debug = false)
         }
     }
 
-    function startPlayback() {
-        debugLog("Playback started");
+    async function startPlayback() {
+        debugLog("Starting playback");
+
+        // Stop any existing playback before starting new playback
+        await stopPlayback();
+
         if (!ws || ws.readyState === WebSocket.CLOSED) {
             const wsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (audio)` } } : {};
             ws = new WebSocket(websocketAddress, wsOptions);
@@ -75,15 +76,18 @@ function play3LAS(websocketAddress, userAgent, bufferSize = 1024, debug = false)
 
             playProcess.on('close', () => {
                 playProcess = null;
+                // Ensure the flag is reset if process ends unexpectedly
+                isPlaying = false;
             });
         }
 
         // Set playback status to true when starting playback
         isPlaying = true;
+        debugLog("Playback started");
     }
 
     async function stopPlayback() {
-        if (debug) debugLog("Playback stopping");
+        if (debug) debugLog("Stopping playback");
         
         // Set playback status to false immediately when stopping playback
         isPlaying = false;
@@ -92,10 +96,14 @@ function play3LAS(websocketAddress, userAgent, bufferSize = 1024, debug = false)
             try {
                 ws.removeAllListeners('message');
                 await new Promise(resolve => {
-                    ws.on('close', () => {
+                    if (ws.readyState === WebSocket.CLOSED) {
                         resolve();
-                    });
-                    ws.close();
+                    } else {
+                        ws.on('close', () => {
+                            resolve();
+                        });
+                        ws.close();
+                    }
                 });
             } catch (error) {
                 logStream.write("Error closing WebSocket connection:" + error + '\n');

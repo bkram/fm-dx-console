@@ -19,12 +19,12 @@ function play3LAS(websocketAddress, userAgent, bufferSize = 1024, debug = false)
     let playProcess;
     let isPlaying = false; // Flag to track playback status
     const playCmd = 'ffplay';
+
     const playArgs = [
         '-autoexit', '-i', '-', '-nodisp', '-acodec', 'mp3',
-        '-probesize', '32', '-sync', 'ext', '-ar', '48000',
-        '-fflags', '+nobuffer+flush_packets', '-flags', 'low_delay',
-        '-rtbufsize', '32', '-nostats', '-loglevel', 'error'
+        '-ar', '48000',
     ];
+
     const logFilePath = path.join(__dirname, '3lasclient.log');
     const logStream = fs.createWriteStream(logFilePath, { flags: 'w' });
 
@@ -63,8 +63,6 @@ function play3LAS(websocketAddress, userAgent, bufferSize = 1024, debug = false)
         }
 
         if (!playProcess) {
-
-
             if (debug) {
                 debugLog("play command: ffplay " + playArgs.join(' ') + "\n");
             }
@@ -85,7 +83,11 @@ function play3LAS(websocketAddress, userAgent, bufferSize = 1024, debug = false)
     }
 
     async function stopPlayback() {
-        debugLog("Playback stopped");
+        if (debug) debugLog("Playback stopping");
+        
+        // Set playback status to false immediately when stopping playback
+        isPlaying = false;
+
         if (ws) {
             try {
                 ws.removeAllListeners('message');
@@ -115,8 +117,7 @@ function play3LAS(websocketAddress, userAgent, bufferSize = 1024, debug = false)
             playProcess = null;
         }
 
-        // Set playback status to false when stopping playback
-        isPlaying = false;
+        if (debug) debugLog("Playback stopped");
     }
 
     // Function to return playback status

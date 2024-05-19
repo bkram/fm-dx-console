@@ -27,7 +27,7 @@ const europe_programmes = [
     "Travel", "Leisure", "Jazz Music", "Country Music", "National Music",
     "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
 ];
-const version = '1.2'
+const version = '1.3'
 const userAgent = `Fm-dx-console/${version}`;
 const heightInRows = 8;
 const tunerWidth = 24;
@@ -52,7 +52,7 @@ const logStream = fs.createWriteStream(logFilePath, { flags: 'w' });
 
 // Check if required arguments are provided
 if (!argv.url) {
-    console.error('Usage: node fm-dx-console.js --url <websocket_address> [--debug]');
+    console.error('Usage: node fm-dx-console.js --url <fm-dx> [--debug]');
     process.exit(1);
 }
 else {
@@ -67,6 +67,25 @@ if (isValidURL(argUrl)) {
 } else {
     console.error("Invalid URL provided.");
     process.exit(1)
+}
+
+// hacky way for easier freq input
+function convertToFrequency(num) {
+    // Convert to string and replace ',' with '.' if present
+    num = parseFloat(num.toString().replace(',', '.'));
+
+    // If the number is greater than or equal to 100, divide it by 10 until it's less than 100
+    while (num >= 100) {
+        num /= 10;
+    }
+
+    // If the number is smaller than 76, multiply it by 10
+    if (num < 76) {
+        num *= 10;
+    }
+
+    // Round the result to one decimal place
+    return Math.round(num * 10) / 10;
 }
 
 // Prepare for audio streaming
@@ -549,11 +568,10 @@ screen.on('keypress', function (ch, key) {
             label: boxLabel('Direct Tuning'),
             tags: true,
         });
-
         screen.append(dialog);
         dialog.input('\n  Enter frequency in Mhz', '', function (err, value) {
             if (!err) {
-                const newFreq = parseFloat(value) * 1000; // Convert MHz to kHz
+                const newFreq = parseFloat(convertToFrequency(value)) * 1000; // Convert MHz to kHz
                 ws.send(`T${newFreq}`);
             }
             dialog.destroy();

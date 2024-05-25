@@ -510,17 +510,17 @@ screen.append(clockText);
 
 // Listen for key events
 screen.on('keypress', function (ch, key) {
-    if (key.full === 's') { // Decrease frequency by 100 kHz
+    if ((key.full === 's') || (key.full === 'right')) { //  Increase frequency by 100 kHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) + 100;
             ws.send(`T${newFreq}`);
         }
-    } else if (key.full === 'a') { // Increase frequency by 100 kHz
+    } else if ((key.full === 'a') || (key.full === 'left')) { // Decrease frequency by 100 kHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) - 100;
             ws.send(`T${newFreq}`);
         }
-    } else if (key.full === 'x') { // Decrease frequency by 1 MHz
+    } else if ((key.full === 'x')) { // Decrease frequency by 1 MHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) + 1000;
             ws.send(`T${newFreq}`);
@@ -530,12 +530,12 @@ screen.on('keypress', function (ch, key) {
             const newFreq = (jsonData.freq * 1000) - 1000;
             ws.send(`T${newFreq}`);
         }
-    } else if (key.full === 'q') { // Decrease frequency by 0.01 MHz
+    } else if ((key.full === 'q') || (key.full === 'down')) { // Decrease frequency by 0.01 MHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) - 10;
             ws.send(`T${newFreq}`);
         }
-    } else if (key.full === 'w') { // Increase frequency by 0.01 MHz
+    } else if ((key.full === 'w') || (key.full === 'up')) { // Increase frequency by 0.01 MHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) + 10;
             ws.send(`T${newFreq}`);
@@ -604,6 +604,10 @@ screen.on('keypress', function (ch, key) {
         else {
             ws.send(`G1${jsonData.ims}`);
         }
+    }
+    else {
+        //log
+        debugLog(key.full)
     }
 });
 

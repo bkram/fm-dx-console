@@ -78,7 +78,13 @@ async function getTunerInfo(url) {
         // Limit the length to 78 characters after removing substrings, non-Latin characters, and double spaces
         tunerName = tunerName.slice(0, 78);
         tunerDesc = tunerDesc.slice(0, 78);
-        return { tunerName, tunerDesc };
+
+        const antNames = [];
+        $('ul.options li').each((index, element) => {
+            antNames.push($(element).text());
+        });
+        
+        return { tunerName, tunerDesc, antNames };
     } catch (error) {
         throw new Error('Failed to fetch content: ' + error.message);
     }

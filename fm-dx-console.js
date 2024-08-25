@@ -69,22 +69,13 @@ if (isValidURL(argUrl)) {
     process.exit(1)
 }
 
-// hacky way for easier freq input
+
+// Function to convert number to frequency
 function convertToFrequency(num) {
-    // Convert to string and replace ',' with '.' if present
     num = parseFloat(num.toString().replace(',', '.'));
 
-    // If the number is greater than or equal to 100, divide it by 10 until it's less than 100
-    while (num >= 100) {
-        num /= 10;
-    }
-
-    // If the number is smaller than 76, multiply it by 10
-    if (num < 76) {
-        num *= 10;
-    }
-
-    // Round the result to one decimal place
+    while (num >= 100) num /= 10;
+    if (num < 76) num *= 10
     return Math.round(num * 10) / 10;
 }
 
@@ -118,6 +109,7 @@ async function tunerInfo() {
         const result = await getTunerInfo(argUrl);
         tunerName = result.tunerName;
         tunerDesc = result.tunerDesc;
+        antNames = result.antNames;
     } catch (error) {
         debugLog(error.message);
     }
@@ -343,7 +335,8 @@ function updateTunerBox(jsonData) {
         `${padStringWithSpaces("Signal:", 'green', padLength)}${parseFloat(jsonData.sig).toFixed(1)} dBf\n` +
         `${padStringWithSpaces("Mode:", 'green', padLength)}${jsonData.st ? "Stereo" : "Mono"}\n` +
         `${padStringWithSpaces("iMS:", 'green', padLength)}${jsonData.ims ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-        `${padStringWithSpaces("EQ:", 'green', padLength)}${jsonData.eq ? "On" : "{grey-fg}Off{/grey-fg}"}\n`);
+        `${padStringWithSpaces("EQ:", 'green', padLength)}${jsonData.eq ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
+        `${padStringWithSpaces("ANT:", 'green', padLength)}${antNames[jsonData.ant]}\n`);
 }
 
 // function to update the serverbox
@@ -604,9 +597,14 @@ screen.on('keypress', function (ch, key) {
         else {
             ws.send(`G1${jsonData.ims}`);
         }
+    } else if (key.full === 'y') { // toggle antenna
+        let newAnt = parseInt(jsonData.ant) + 1;
+        if (newAnt >= antNames.length) {
+            newAnt = 0;
+        }
+        ws.send(`Z${newAnt}`);
     }
     else {
-        //log
         debugLog(key.full)
     }
 });

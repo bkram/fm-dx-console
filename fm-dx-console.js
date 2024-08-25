@@ -109,7 +109,7 @@ async function tunerInfo() {
         const result = await getTunerInfo(argUrl);
         tunerName = result.tunerName;
         tunerDesc = result.tunerDesc;
-        antNames =  result.antNames;
+        antNames = result.antNames;
     } catch (error) {
         debugLog(error.message);
     }
@@ -597,9 +597,14 @@ screen.on('keypress', function (ch, key) {
         else {
             ws.send(`G1${jsonData.ims}`);
         }
+    } else if (key.full === 'y') { // toggle antenna
+        let newAnt = parseInt(jsonData.ant) + 1;
+        if (newAnt >= antNames.length) {
+            newAnt = 0;
+        }
+        ws.send(`Z${newAnt}`);
     }
     else {
-        //log
         debugLog(key.full)
     }
 });

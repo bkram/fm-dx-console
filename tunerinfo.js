@@ -80,10 +80,10 @@ async function getTunerInfo(url) {
         tunerDesc = tunerDesc.slice(0, 78);
 
         const antNames = [];
-        $('ul.options li').each((index, element) => {
-            antNames.push($(element).text());
+        $('#data-ant ul.options li').each((index, element) => {
+            antNames.push($(element).text().trim());
         });
-        
+
         return { tunerName, tunerDesc, antNames };
     } catch (error) {
         throw new Error('Failed to fetch content: ' + error.message);

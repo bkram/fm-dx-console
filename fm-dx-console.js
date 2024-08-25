@@ -607,10 +607,6 @@ screen.on('keypress', function (ch, key) {
     else {
         debugLog(key.full)
     }
-    else {
-        //log
-        debugLog(key.full)
-    }
 });
 
 // Quit on Escape, q, or Control-C

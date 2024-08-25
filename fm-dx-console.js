@@ -27,7 +27,7 @@ const europe_programmes = [
     "Travel", "Leisure", "Jazz Music", "Country Music", "National Music",
     "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
 ];
-const version = '1.2'
+const version = '1.3'
 const userAgent = `Fm-dx-console/${version}`;
 const heightInRows = 8;
 const tunerWidth = 24;
@@ -52,7 +52,7 @@ const logStream = fs.createWriteStream(logFilePath, { flags: 'w' });
 
 // Check if required arguments are provided
 if (!argv.url) {
-    console.error('Usage: node fm-dx-console.js --url <websocket_address> [--debug]');
+    console.error('Usage: node fm-dx-console.js --url <fm-dx> [--debug]');
     process.exit(1);
 }
 else {
@@ -67,6 +67,25 @@ if (isValidURL(argUrl)) {
 } else {
     console.error("Invalid URL provided.");
     process.exit(1)
+}
+
+// hacky way for easier freq input
+function convertToFrequency(num) {
+    // Convert to string and replace ',' with '.' if present
+    num = parseFloat(num.toString().replace(',', '.'));
+
+    // If the number is greater than or equal to 100, divide it by 10 until it's less than 100
+    while (num >= 100) {
+        num /= 10;
+    }
+
+    // If the number is smaller than 76, multiply it by 10
+    if (num < 76) {
+        num *= 10;
+    }
+
+    // Round the result to one decimal place
+    return Math.round(num * 10) / 10;
 }
 
 // Prepare for audio streaming
@@ -321,7 +340,7 @@ function updateTunerBox(jsonData) {
     const padLength = 8;
     tunerBox.setContent(
         `${padStringWithSpaces("Freq:", 'green', padLength)}${jsonData.freq} Mhz\n` +
-        `${padStringWithSpaces("Signal:", 'green', padLength)}${parseFloat(jsonData.signal).toFixed(1)} dBf\n` +
+        `${padStringWithSpaces("Signal:", 'green', padLength)}${parseFloat(jsonData.sig).toFixed(1)} dBf\n` +
         `${padStringWithSpaces("Mode:", 'green', padLength)}${jsonData.st ? "Stereo" : "Mono"}\n` +
         `${padStringWithSpaces("iMS:", 'green', padLength)}${jsonData.ims ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
         `${padStringWithSpaces("EQ:", 'green', padLength)}${jsonData.eq ? "On" : "{grey-fg}Off{/grey-fg}"}\n`);
@@ -380,13 +399,13 @@ function updateRTBox(jsonData) {
 // Function to update the StationBox
 function updateStationBox(txInfo) {
     const padLength = 10;
-    if (txInfo.station) {
+    if (txInfo.tx) {
         stationBox.setContent(
-            `${padStringWithSpaces("Name:", 'green', padLength)}${txInfo.station}\n` +
+            `${padStringWithSpaces("Name:", 'green', padLength)}${txInfo.tx}\n` +
             `${padStringWithSpaces("Location:", 'green', padLength)}${txInfo.city + ", " + txInfo.itu}\n` +
-            `${padStringWithSpaces("Distance:", 'green', padLength)}${txInfo.distance + " km"}\n` +
+            `${padStringWithSpaces("Distance:", 'green', padLength)}${txInfo.dist + " km"}\n` +
             `${padStringWithSpaces("Power:", 'green', padLength)}${txInfo.erp + " kW " + "[" + txInfo.pol + "]"}\n` +
-            `${padStringWithSpaces("Azimuth:", 'green', padLength)}${txInfo.azimuth + "°"}`);
+            `${padStringWithSpaces("Azimuth:", 'green', padLength)}${txInfo.azi + "°"}`);
     } else {
         stationBox.setContent("");
     }
@@ -458,7 +477,7 @@ ws.on('message', function (data) {
         jsonData = JSON.parse(data);
         updateTunerBox(jsonData);
         updateRdsBox(jsonData);
-        updateSignal(jsonData.signal);
+        updateSignal(jsonData.sig);
         updateStationBox(jsonData.txInfo);
         updateRTBox(jsonData);
         updateStatsBox(jsonData);
@@ -491,17 +510,17 @@ screen.append(clockText);
 
 // Listen for key events
 screen.on('keypress', function (ch, key) {
-    if (key.full === 's') { // Decrease frequency by 100 kHz
+    if ((key.full === 's') || (key.full === 'right')) { //  Increase frequency by 100 kHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) + 100;
             ws.send(`T${newFreq}`);
         }
-    } else if (key.full === 'a') { // Increase frequency by 100 kHz
+    } else if ((key.full === 'a') || (key.full === 'left')) { // Decrease frequency by 100 kHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) - 100;
             ws.send(`T${newFreq}`);
         }
-    } else if (key.full === 'x') { // Decrease frequency by 1 MHz
+    } else if ((key.full === 'x')) { // Decrease frequency by 1 MHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) + 1000;
             ws.send(`T${newFreq}`);
@@ -511,12 +530,12 @@ screen.on('keypress', function (ch, key) {
             const newFreq = (jsonData.freq * 1000) - 1000;
             ws.send(`T${newFreq}`);
         }
-    } else if (key.full === 'q') { // Decrease frequency by 0.01 MHz
+    } else if ((key.full === 'q') || (key.full === 'down')) { // Decrease frequency by 0.01 MHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) - 10;
             ws.send(`T${newFreq}`);
         }
-    } else if (key.full === 'w') { // Increase frequency by 0.01 MHz
+    } else if ((key.full === 'w') || (key.full === 'up')) { // Increase frequency by 0.01 MHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) + 10;
             ws.send(`T${newFreq}`);
@@ -549,11 +568,10 @@ screen.on('keypress', function (ch, key) {
             label: boxLabel('Direct Tuning'),
             tags: true,
         });
-
         screen.append(dialog);
         dialog.input('\n  Enter frequency in Mhz', '', function (err, value) {
             if (!err) {
-                const newFreq = parseFloat(value) * 1000; // Convert MHz to kHz
+                const newFreq = parseFloat(convertToFrequency(value)) * 1000; // Convert MHz to kHz
                 ws.send(`T${newFreq}`);
             }
             dialog.destroy();
@@ -586,6 +604,10 @@ screen.on('keypress', function (ch, key) {
         else {
             ws.send(`G1${jsonData.ims}`);
         }
+    }
+    else {
+        //log
+        debugLog(key.full)
     }
 });
 

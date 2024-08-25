@@ -69,13 +69,13 @@ if (isValidURL(argUrl)) {
     process.exit(1)
 }
 
+
 // Function to convert number to frequency
 function convertToFrequency(num) {
     num = parseFloat(num.toString().replace(',', '.'));
 
     while (num >= 100) num /= 10;
-    if (num < 76) num *= 10;
-
+    if (num < 76) num *= 10
     return Math.round(num * 10) / 10;
 }
 
@@ -605,6 +605,10 @@ screen.on('keypress', function (ch, key) {
         ws.send(`Z${newAnt}`);
     }
     else {
+        debugLog(key.full)
+    }
+    else {
+        //log
         debugLog(key.full)
     }
 });

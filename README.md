@@ -45,7 +45,6 @@ node fm-dx-console.js --url https://fm-dx-server/
 The following keys can be used to control the tuner.
 
 ```text
-Press key to:
 '1' to decrease by .001 Mhz
 '2' to increase by .001 Mhz
 'q' to decrease by .01 Mhz
@@ -56,9 +55,10 @@ Press key to:
 'x' to increase by 1 Mhz
 'r' to refresh
 't' to set frequency
+'y' switch antenna
 'p' to play audio
-'[' toggle iMS
-']' toggle EQ
+'[' toggle TEF iMS | XDR-F1HD IF+
+']' toggle TEF EQ | XDR-F1HD RF+
 'Esc' to quit
 'h' to toggle this help
 ```

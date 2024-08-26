@@ -266,6 +266,7 @@ const helpBox = blessed.box({
     'x' to increase by 1 Mhz
     'r' to refresh
     't' to set frequency
+    'y' switch antenna
     'p' to play audio
     '[' toggle TEF iMS | XDR-F1HD IF+
     ']' toggle TEF EQ | XDR-F1HD RF+

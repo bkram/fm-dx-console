@@ -56,7 +56,7 @@ if (!argv.url) {
     process.exit(1);
 }
 else {
-    argUrl = argv.url.toLowerCase().replace("#", "");
+    argUrl = argv.url.toLowerCase().replace("#", "").replace("?","");
 }
 
 if (isValidURL(argUrl)) {

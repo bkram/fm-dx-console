@@ -56,12 +56,12 @@ if (!argv.url) {
     process.exit(1);
 }
 else {
-    argUrl = argv.url.toLowerCase();
+    argUrl = argv.url.toLowerCase().replace("#", "");
 }
 
 if (isValidURL(argUrl)) {
     // URL is valid, proceed with processing
-    websocketAddress = formatWebSocketURL(argv.url);
+    websocketAddress = formatWebSocketURL(argUrl);
     websocketAudio = `${websocketAddress}/audio`;
     websocketData = `${websocketAddress}/text`;
 } else {

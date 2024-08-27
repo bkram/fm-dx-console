@@ -1,8 +1,19 @@
+// (c) Bkram 2024
+// Console client for https://github.com/NoobishSVK/fm-dx-webserver
+
 const fs = require('fs');
 const path = require('path');
 const WebSocket = require('ws');
 const { spawn } = require('child_process');
 
+/**
+ * Creates a client for playing audio streamed via WebSocket
+ * @param {string} websocketAddress The WebSocket server address.
+ * @param {string} userAgent The user agent string to be used in WebSocket headers.
+ * @param {number} bufferSize The buffer size for the WebSocket connection.
+ * @param {boolean} debug Enables debug mode if true.
+ * @returns {Object} Object with methods to control playback: play, stop, getStatus.
+ */
 function play3LAS(websocketAddress, userAgent, bufferSize = 1024, debug = false) {
     let ws;
     let playProcess;

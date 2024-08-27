@@ -37,12 +37,14 @@ async function getTunerInfo(url) {
                 .replace(/\.\s*$/, '');  // Remove any trailing period followed by optional spaces
         }
 
-        // Extract antenna names (if needed)
         const antNames = [];
         $('#data-ant ul.options li').each((index, element) => {
             antNames.push($(element).text().trim());
         });
 
+        if (antNames.length === 0) {
+            antNames.push('Default');
+        }
         return { tunerName, tunerDesc, antNames };
     } catch (error) {
         throw new Error('Failed to fetch content: ' + error.message);

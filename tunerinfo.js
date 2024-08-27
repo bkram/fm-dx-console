@@ -5,42 +5,6 @@ const cheerio = require('cheerio');
 const axios = require('axios');
 
 /**
- * Remove all occurrences of specified substrings from a string.
- * @param {string} str - The string to remove occurrences from.
- * @param {string[]} substrArray - An array of substrings to remove.
- * @returns {string} The string with all occurrences of the substrings removed.
- */
-function removeSubstr(str, substrArray) {
-    substrArray.forEach(substr => {
-        while (str.includes(substr)) {
-            str = str.replace(substr, '');
-        }
-    });
-    return str;
-}
-
-/**
- * Remove non-Latin characters from a string.
- * @param {string} str - The string to remove non-Latin characters from.
- * @returns {string} The string with only Latin characters.
- */
-function removeNonLatinCharacters(str) {
-    // Regular expression to match Latin characters
-    const latinRegex = /[^\u0000-\u007F]/g;
-    return str.replace(latinRegex, '');
-}
-
-/**
- * Remove all double spaces from a string without using regular expressions.
- * @param {string} str - The string to remove double spaces from.
- * @returns {string} The string with all double spaces replaced with a single space.
- */
-function removeDoubleSpaces(str) {
-    // Split the string by space, filter out empty elements (consecutive spaces), and join back with single space
-    return str.split(' ').filter(Boolean).join(' ');
-}
-
-/**
  * Fetch tuner information from the provided URL.
  * @param {string} url - The URL of the web server.
  * @returns {Object} An object containing tuner name and description.
@@ -52,33 +16,28 @@ async function getTunerInfo(url) {
         const html = response.data;
         const $ = cheerio.load(html);
 
-        // Extract the content of <p> tags with specific IDs
-        let tunerName = $('#tuner-name').text().trim();
-        let tunerDesc = $('#tuner-desc').first().text().trim();
+        // Extract and clean the og:title
+        const tunerName = $('meta[property="og:title"]').attr('content')
+            .replace('FM-DX WebServer ', '')  // Remove "FM-DX WebServer "
+            .replace('[', '')                 // Remove "["
+            .replace(']', '');                // Remove "]"
 
-        // Define substrings to be removed
-        const substrToRemove = ['**', '??'];
+        // Extract and clean the og:description
+        let tunerDesc = $('meta[property="og:description"]').attr('content')
+            .replace('Server description: ', '')  // Remove "Server description:"
+            .trim();  // Remove leading and trailing whitespace
 
-        // Remove all occurrences of specified substrings
-        tunerName = removeSubstr(tunerName, substrToRemove);
-        tunerDesc = removeSubstr(tunerDesc, substrToRemove);
+        // Add a space to the beginning of each line in the description
+        if (tunerDesc) {
+            tunerDesc = tunerDesc
+                .split(/\r?\n/)  // Split by either \n or \r\n (handles different OS newline formats)
+                .map(line => ' ' + line.trim())  // Add a space and remove extra whitespace at the beginning of each line
+                .slice(0, 3)  // Keep only the first 3 lines
+                .join('\n')  // Join the lines back with \n
+                .replace(/\.\s*$/, '');  // Remove any trailing period followed by optional spaces
+        }
 
-        // Remove non-Latin characters
-        tunerName = removeNonLatinCharacters(tunerName);
-        tunerDesc = removeNonLatinCharacters(tunerDesc);
-
-        // Remove all double spaces
-        tunerName = removeDoubleSpaces(tunerName);
-        tunerDesc = removeDoubleSpaces(tunerDesc);
-
-        // Split on '\n' and take only the first part
-        tunerName = tunerName.split('\n')[0];
-        tunerDesc = tunerDesc.split('\n')[0];
-
-        // Limit the length to 78 characters after removing substrings, non-Latin characters, and double spaces
-        tunerName = tunerName.slice(0, 78);
-        tunerDesc = tunerDesc.slice(0, 78);
-
+        // Extract antenna names (if needed)
         const antNames = [];
         $('#data-ant ul.options li').each((index, element) => {
             antNames.push($(element).text().trim());
@@ -102,10 +61,8 @@ async function getPingTime(url) {
         pingUrl.pathname += 'ping'; // Append '/ping' to the existing path
         const startTime = Date.now(); // Record start time
 
-        // Custom headers
-        const headers = {
-            // 'Host': pingUrl.hostname, // Set Host header to match destination server
-        };
+        // Custom headers (if needed)
+        const headers = {};
 
         const response = await axios.get(pingUrl.toString(), { headers }); // Asynchronous HTTP request using axios
         const endTime = Date.now(); // Record end time

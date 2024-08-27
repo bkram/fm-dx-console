@@ -1,0 +1,7 @@
+# FM-DX Console 1.4
+
+- Fixed a crash that occurred when closing the tuning window.
+- Added a ping every 5 seconds for a more realistic response time.
+- Implemented meta property tags for titles and descriptions.
+- Redesigned the server information box.
+- Moved the connected URL display to the bottom of the window.

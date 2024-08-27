@@ -5,3 +5,6 @@
 - Implemented meta property tags for titles and descriptions.
 - Redesigned the server information box.
 - Moved the connected URL display to the bottom of the window.
+- Add buffering on play
+- URL filtering to support URL from ctrl-fm-tuner.nl
+- Add default antenna name to prevent an antenna named 'undefined'

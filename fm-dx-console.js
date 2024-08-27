@@ -27,8 +27,8 @@ const europe_programmes = [
     "Travel", "Leisure", "Jazz Music", "Country Music", "National Music",
     "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
 ];
-const version = '1.3'
-const userAgent = `Fm-dx-console/${version}`;
+const version = '1.4'
+const userAgent = `fm-dx-console/${version}`;
 const heightInRows = 8;
 const tunerWidth = 24;
 const rdsWidth = 17;
@@ -56,12 +56,12 @@ if (!argv.url) {
     process.exit(1);
 }
 else {
-    argUrl = argv.url.toLowerCase();
+    argUrl = argv.url.toLowerCase().replace("#", "").replace("?", "");
 }
 
 if (isValidURL(argUrl)) {
     // URL is valid, proceed with processing
-    websocketAddress = formatWebSocketURL(argv.url);
+    websocketAddress = formatWebSocketURL(argUrl);
     websocketAudio = `${websocketAddress}/audio`;
     websocketData = `${websocketAddress}/text`;
 } else {
@@ -69,15 +69,37 @@ if (isValidURL(argUrl)) {
     process.exit(1)
 }
 
-
 // Function to convert number to frequency
 function convertToFrequency(num) {
+    // Check if the input is null, undefined, or cannot be converted to a number
+    if (num === null || num === undefined || isNaN(Number(num.toString().replace(',', '.')))) {
+        return null; // or any other default value like 0 or NaN
+    }
+
+    // Convert the input to a floating-point number
     num = parseFloat(num.toString().replace(',', '.'));
 
+    // Scale down if the number is too large
     while (num >= 100) num /= 10;
-    if (num < 76) num *= 10
+
+    // Scale up if the number is too small
+    if (num < 76) num *= 10;
+
+    // Round to one decimal place and return
     return Math.round(num * 10) / 10;
 }
+
+function genBottomText(variableString) {
+    const helpString = "Press `h` for help";
+    const totalWidth = 78;
+    const maxVariableLength = totalWidth - (helpString.length + 1);
+    const truncatedVariableString = variableString.length > maxVariableLength
+        ? variableString.substring(0, maxVariableLength)
+        : variableString;
+    const paddingLength = totalWidth - truncatedVariableString.length - helpString.length;
+    return ' ' + truncatedVariableString + ' '.repeat(paddingLength) + helpString + ' ';
+}
+
 
 // Prepare for audio streaming
 const player = playAudio(websocketAudio, userAgent, 2048, argv.debug);
@@ -137,7 +159,7 @@ const serverBox = blessed.box({
     tags: true,
     border: { type: 'line' },
     style: boxStyle,
-    label: boxLabel('Connected to fm-dx webserver')
+    label: boxLabel('Connected to:')
 });
 
 function boxLabel(label) {
@@ -241,7 +263,8 @@ const bottomBox = blessed.box({
     height: 1,
     tags: true,
     style: titleStyle,
-    content: ' https://github.com/bkram/fm-dx-console                      Press \`h\` for help'
+    // content: ' https://github.com/bkram/fm-dx-console                      Press \`h\` for help'
+    content: '                                                             Press \`h\` for help'
 });
 
 
@@ -266,7 +289,6 @@ const helpBox = blessed.box({
     'x' to increase by 1 Mhz
     'r' to refresh
     't' to set frequency
-    'y' switch antenna
     'p' to play audio
     '[' toggle TEF iMS | XDR-F1HD IF+
     ']' toggle TEF EQ | XDR-F1HD RF+
@@ -345,10 +367,9 @@ function updateServerBox() {
     if (typeof tunerName !== 'undefined' && tunerName.text !== '' &&
         typeof tunerDesc !== 'undefined' && tunerDesc.text !== '' &&
         serverBox.content === '') {
-        serverBox.setContent(
-            `{center}{yellow-fg}{bold}${tunerName}{/bold}{/yellow-fg}\n` +
-            `${tunerDesc}\n` +
-            `${argUrl}{/center}`);
+        serverBox.setContent(tunerDesc);
+        serverBox.setLabel(boxLabel(`Connected to: ${tunerName}`));
+        bottomBox.setContent(genBottomText(argUrl))
     }
 }
 
@@ -443,7 +464,7 @@ setInterval(() => {
     screen.render();
 }, 1000);
 
-// Get ping every 15 seconds
+// Get ping every 5 seconds
 async function doPing() {
     try {
         pingTime = await getPingTime(argUrl);
@@ -453,7 +474,7 @@ async function doPing() {
     }
 }
 doPing();
-setInterval(doPing, 15000);
+setInterval(doPing, 5000);
 
 // WebSocket setup
 const wsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (control)` } } : {};

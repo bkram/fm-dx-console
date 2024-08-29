@@ -1,4 +1,10 @@
-# FM-DX Console 1.4
+# Changelog
+
+## FM-DX Console 1.41
+
+- Fix display of iMS and EQ, when using fm-dx-webserver version 1.2.7
+
+## FM-DX Console 1.4
 
 - Fixed a crash that occurred when closing the tuning window.
 - Added a ping every 5 seconds for a more realistic response time.

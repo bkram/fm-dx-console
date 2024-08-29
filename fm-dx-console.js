@@ -357,8 +357,8 @@ function updateTunerBox(jsonData) {
         `${padStringWithSpaces("Freq:", 'green', padLength)}${jsonData.freq} Mhz\n` +
         `${padStringWithSpaces("Signal:", 'green', padLength)}${parseFloat(jsonData.sig).toFixed(1)} dBf\n` +
         `${padStringWithSpaces("Mode:", 'green', padLength)}${jsonData.st ? "Stereo" : "Mono"}\n` +
-        `${padStringWithSpaces("iMS:", 'green', padLength)}${jsonData.ims ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-        `${padStringWithSpaces("EQ:", 'green', padLength)}${jsonData.eq ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
+        `${padStringWithSpaces("iMS:", 'green', padLength)}${Number(jsonData.ims) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
+        `${padStringWithSpaces("EQ:", 'green', padLength)}${Number(jsonData.eq) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
         `${padStringWithSpaces("ANT:", 'green', padLength)}${antNames[jsonData.ant]}\n`);
 }
 

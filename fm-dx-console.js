@@ -267,33 +267,50 @@ const bottomBox = blessed.box({
 // Create a help box
 const helpBox = blessed.box({
     top: 3,
-    left: 20,
-    width: 40,
-    height: 19,
+    left: 10,
+    width: 60,
+    height: 18,
     border: { type: 'line' },
     style: boxStyle,
     label: boxLabel('Help'),
-    content: `
-        Press key to:
-        '1' to decrease by .001 Mhz
-        '2' to increase by .001 Mhz
-        'q' to decrease by .01 Mhz
-        'w' to increase by .01 Mhz
-        'a' to decrease by .1 Mhz
-        's' to increase by .1 Mhz
-        'z' to decrease by 1 Mhz
-        'x' to increase by 1 Mhz
-        'r' to refresh
-        't' to set frequency
-        'p' to play audio
-        '[' toggle TEF iMS | XDR-F1HD IF+
-        ']' toggle TEF EQ | XDR-F1HD RF+
-        'y' to toggle antenna
-        'Esc' to quit
-        'h' to toggle this help`,
+    content: generateHelpContent(),
     tags: true,
     hidden: true,
 });
+
+// Function to generate the help content
+function generateHelpContent() {
+    const leftCommands = [
+        "'1' decrease .001 MHz",
+        "'q' decrease .01 MHz",
+        "'a' decrease .1 MHz",
+        "'z' decrease 1 MHz",
+        "'r' refresh",
+        "'p' play audio",
+        "'[' toggle iMS",
+        "'y' toggle antenna",
+    ];
+
+    const rightCommands = [
+        "'2' increase .001 MHz",
+        "'w' increase .01 MHz",
+        "'s' increase .1 MHz",
+        "'x' increase 1 MHz",
+        "'t' set frequency",
+        "']' toggle EQ",
+        "'Esc' quit",
+        "'h' toggle help",
+    ];
+
+    let helpContent = '  Press key to:\n\n';
+    for (let i = 0; i < leftCommands.length; i++) {
+        const leftCmd = leftCommands[i];
+        const rightCmd = rightCommands[i] || '';
+        const leftPadded = leftCmd.padEnd(28);
+        helpContent += `  ${leftPadded}${rightCmd}\n`;
+    }
+    return helpContent;
+}
 
 // Create a clock element
 const clockText = blessed.text({
@@ -599,6 +616,7 @@ screen.on('keypress', function (ch, key) {
         } else {
             helpBox.hide();
         }
+        screen.render();
     } else if (key.full === 'p') { // Toggle playback
         if (player.getStatus()) {
             player.stop(); // Stop playback if currently playing

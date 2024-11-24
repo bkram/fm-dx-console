@@ -36,6 +36,7 @@ const boxStyle = { border: { fg: 'green', bg: 'blue' }, bg: 'blue' }
 
 // Global variables
 let jsonData = null;
+let previousJsonData = null; // For comparison
 let tunerDesc;
 let tunerName;
 let antNames = []; // Declare antNames globally
@@ -130,6 +131,9 @@ async function tunerInfo() {
         tunerName = result.tunerName;
         tunerDesc = result.tunerDesc;
         antNames = result.antNames;
+        // Update server box with tuner info
+        updateServerBox();
+        screen.render(); // Render after updating server info
     } catch (error) {
         debugLog(error.message);
     }
@@ -385,8 +389,7 @@ function updateTunerBox(jsonData) {
 // Function to update the server box
 function updateServerBox() {
     if (typeof tunerName !== 'undefined' && tunerName !== '' &&
-        typeof tunerDesc !== 'undefined' && tunerDesc !== '' &&
-        serverBox.content === '') {
+        typeof tunerDesc !== 'undefined' && tunerDesc !== '') {
         serverBox.setContent(tunerDesc);
         serverBox.setLabel(boxLabel(`Connected to: ${tunerName}`));
         bottomBox.setContent(genBottomText(argUrl))
@@ -462,23 +465,20 @@ function scaleValue(value) {
 
 // Function to update the signal meter
 function updateSignal(signal) {
-    progressBar.filled = scaleValue(signal);
+    progressBar.setProgress(scaleValue(signal));
 }
 
 // Function to update the clock content
 function updateClock(clockText) {
     const now = new Date();
-    const hours = now.getHours().toString().padStart(2, '0');
-    const minutes = now.getMinutes().toString().padStart(2, '0');
-    const seconds = now.getSeconds().toString().padStart(2, '0');
-    const timeStr = `${hours}:${minutes}:${seconds}`;
+    const timeStr = now.toLocaleTimeString([], { hour12: false });
     clockText.setContent(timeStr);
 }
 
 // Update the clock content every second
 setInterval(() => {
     updateClock(clockText);
-    screen.render();
+    // No need to call screen.render(); Blessed handles partial updates
 }, 1000);
 
 // Get ping every 5 seconds
@@ -486,6 +486,11 @@ async function doPing() {
     try {
         pingTime = await getPingTime(argUrl);
         debugLog('Ping Time:', pingTime, 'ms');
+        // Update statsBox if necessary
+        if (jsonData) {
+            updateStatsBox(jsonData);
+            screen.render(); // Render after updating stats
+        }
     } catch (error) {
         debugLog('Ping Error:', error.message);
     }
@@ -503,17 +508,24 @@ ws.on('open', function () {
 });
 ws.on('message', function (data) {
     try {
+        const newData = JSON.parse(data);
 
-        updateServerBox();
+        // Compare newData with previousJsonData
+        if (JSON.stringify(newData) !== JSON.stringify(previousJsonData)) {
+            jsonData = newData; // Update global jsonData
 
-        jsonData = JSON.parse(data);
-        updateTunerBox(jsonData);
-        updateRdsBox(jsonData);
-        updateSignal(jsonData.sig);
-        updateStationBox(jsonData.txInfo);
-        updateRTBox(jsonData);
-        updateStatsBox(jsonData);
-        screen.render();
+            updateTunerBox(jsonData);
+            updateRdsBox(jsonData);
+            updateSignal(jsonData.sig);
+            updateStationBox(jsonData.txInfo);
+            updateRTBox(jsonData);
+            updateStatsBox(jsonData);
+
+            screen.render(); // Only render if data has changed
+        }
+
+        previousJsonData = newData; // Update previous data
+
     } catch (error) {
         debugLog('Error parsing JSON:', error);
     }
@@ -539,6 +551,9 @@ screen.append(progressBar);
 screen.append(helpBox);
 screen.append(bottomBox);
 screen.append(clockText);
+
+// Initial render
+screen.render();
 
 // Listen for key events
 screen.on('keypress', function (ch, key) {
@@ -616,12 +631,17 @@ screen.on('keypress', function (ch, key) {
         } else {
             helpBox.hide();
         }
-        screen.render();
+        screen.render(); // Render after changing help box visibility
     } else if (key.full === 'p') { // Toggle playback
         if (player.getStatus()) {
             player.stop(); // Stop playback if currently playing
         } else {
             player.play(); // Start playback if not playing
+        }
+        // Update statsBox to reflect playback status
+        if (jsonData) {
+            updateStatsBox(jsonData);
+            screen.render();
         }
     } else if (key.full === '[') { // Toggle ims
         if (jsonData.ims == 1) {

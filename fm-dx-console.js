@@ -11,7 +11,6 @@ const argv = require('minimist')(process.argv.slice(2), { // Library for parsing
 const blessed = require('reblessed'); // Library for creating terminal-based UI
 const fs = require('fs');
 const { spawn } = require('child_process');
-const { url } = require('inspector');
 const path = require('path');
 const WebSocket = require('ws'); // WebSocket library for communication
 const { getTunerInfo, getPingTime } = require('./tunerinfo');
@@ -39,12 +38,12 @@ const boxStyle = { border: { fg: 'green', bg: 'blue' }, bg: 'blue' }
 let jsonData = null;
 let tunerDesc;
 let tunerName;
+let antNames = []; // Declare antNames globally
 let websocketAudio;
 let websocketData;
 let argDebug = argv.debug;
 let argUrl;
 let pingTime = null;
-
 
 // Path to the log file
 const logFilePath = path.join(__dirname, 'console.log');
@@ -61,7 +60,7 @@ else {
 
 if (isValidURL(argUrl)) {
     // URL is valid, proceed with processing
-    websocketAddress = formatWebSocketURL(argUrl);
+    let websocketAddress = formatWebSocketURL(argUrl);
     websocketAudio = `${websocketAddress}/audio`;
     websocketData = `${websocketAddress}/text`;
 } else {
@@ -100,7 +99,6 @@ function genBottomText(variableString) {
     return ' ' + truncatedVariableString + ' '.repeat(paddingLength) + helpString + ' ';
 }
 
-
 // Prepare for audio streaming
 const player = playAudio(websocketAudio, userAgent, 2048, argv.debug);
 
@@ -117,7 +115,7 @@ const screen = blessed.screen({
 
 });
 
-// debug logging to file
+// Debug logging to file
 function debugLog(...args) {
     if (argDebug) {
         const message = args.join(' '); // Join all arguments into a single string
@@ -125,7 +123,7 @@ function debugLog(...args) {
     }
 }
 
-// get tuner info from fm-dx-webserver
+// Get tuner info from fm-dx-webserver
 async function tunerInfo() {
     try {
         const result = await getTunerInfo(argUrl);
@@ -263,10 +261,8 @@ const bottomBox = blessed.box({
     height: 1,
     tags: true,
     style: titleStyle,
-    // content: ' https://github.com/bkram/fm-dx-console                      Press \`h\` for help'
-    content: '                                                             Press \`h\` for help'
+    content: '                                                             Press `h` for help'
 });
-
 
 // Create a help box
 const helpBox = blessed.box({
@@ -278,22 +274,23 @@ const helpBox = blessed.box({
     style: boxStyle,
     label: boxLabel('Help'),
     content: `
-    Press key to:
-    '1' to decrease by .001 Mhz
-    '2' to increase by .001 Mhz
-    'q' to decrease by .01 Mhz
-    'w' to increase by .01 Mhz
-    'a' to decrease by .1 Mhz
-    's' to increase by .1 Mhz
-    'z' to decrease by 1 Mhz
-    'x' to increase by 1 Mhz
-    'r' to refresh
-    't' to set frequency
-    'p' to play audio
-    '[' toggle TEF iMS | XDR-F1HD IF+
-    ']' toggle TEF EQ | XDR-F1HD RF+
-    'Esc' to quit
-    'h' to toggle this help`,
+        Press key to:
+        '1' to decrease by .001 Mhz
+        '2' to increase by .001 Mhz
+        'q' to decrease by .01 Mhz
+        'w' to increase by .01 Mhz
+        'a' to decrease by .1 Mhz
+        's' to increase by .1 Mhz
+        'z' to decrease by 1 Mhz
+        'x' to increase by 1 Mhz
+        'r' to refresh
+        't' to set frequency
+        'p' to play audio
+        '[' toggle TEF iMS | XDR-F1HD IF+
+        ']' toggle TEF EQ | XDR-F1HD RF+
+        'y' to toggle antenna
+        'Esc' to quit
+        'h' to toggle this help`,
     tags: true,
     hidden: true,
 });
@@ -308,10 +305,14 @@ const clockText = blessed.text({
 
 });
 
-// Function to check for http(s):
-function isValidURL(url) {
-    const pattern = /^(https?):\/\/.+/;
-    return pattern.test(url);
+// Function to check for valid URL
+function isValidURL(urlString) {
+    try {
+        new URL(urlString);
+        return true;
+    } catch (err) {
+        return false;
+    }
 }
 
 // Function to format a WebSocket URL
@@ -353,19 +354,21 @@ function padStringWithSpaces(text, color = 'green', totalLength) {
 // Function to update the main box content
 function updateTunerBox(jsonData) {
     const padLength = 8;
+    const signalValue = parseFloat(jsonData.sig);
+    const signalDisplay = isNaN(signalValue) ? 'N/A' : `${signalValue.toFixed(1)} dBf`;
     tunerBox.setContent(
         `${padStringWithSpaces("Freq:", 'green', padLength)}${jsonData.freq} Mhz\n` +
-        `${padStringWithSpaces("Signal:", 'green', padLength)}${parseFloat(jsonData.sig).toFixed(1)} dBf\n` +
+        `${padStringWithSpaces("Signal:", 'green', padLength)}${signalDisplay}\n` +
         `${padStringWithSpaces("Mode:", 'green', padLength)}${jsonData.st ? "Stereo" : "Mono"}\n` +
         `${padStringWithSpaces("iMS:", 'green', padLength)}${Number(jsonData.ims) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
         `${padStringWithSpaces("EQ:", 'green', padLength)}${Number(jsonData.eq) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
         `${padStringWithSpaces("ANT:", 'green', padLength)}${antNames[jsonData.ant]}\n`);
 }
 
-// function to update the serverbox
+// Function to update the server box
 function updateServerBox() {
-    if (typeof tunerName !== 'undefined' && tunerName.text !== '' &&
-        typeof tunerDesc !== 'undefined' && tunerDesc.text !== '' &&
+    if (typeof tunerName !== 'undefined' && tunerName !== '' &&
+        typeof tunerDesc !== 'undefined' && tunerDesc !== '' &&
         serverBox.content === '') {
         serverBox.setContent(tunerDesc);
         serverBox.setLabel(boxLabel(`Connected to: ${tunerName}`));
@@ -373,20 +376,17 @@ function updateServerBox() {
     }
 }
 
-// Function to update the StationBox
+// Function to update the RDS box content
 function updateRdsBox(jsonData) {
     const padLength = 4;
     if (jsonData.freq >= 75 && jsonData.pi !== "?") {
         let msshow;
         if (jsonData.ms === 0) {
-            msshow
-                = "{grey-fg}M{/grey-fg}S";
+            msshow = "{grey-fg}M{/grey-fg}S";
         } else if (jsonData.ms === -1) {
-            msshow
-                = "{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}";
+            msshow = "{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}";
         } else {
-            msshow
-                = "M{grey-fg}S{/grey-fg}";
+            msshow = "M{grey-fg}S{/grey-fg}";
         }
 
         rdsBox.setContent(
@@ -400,7 +400,7 @@ function updateRdsBox(jsonData) {
         );
     }
     else {
-        rdsBox.setContent()
+        rdsBox.setContent('');
     }
 }
 
@@ -414,7 +414,7 @@ function updateRTBox(jsonData) {
 // Function to update the StationBox
 function updateStationBox(txInfo) {
     const padLength = 10;
-    if (txInfo.tx) {
+    if (txInfo && txInfo.tx) {
         stationBox.setContent(
             `${padStringWithSpaces("Name:", 'green', padLength)}${txInfo.tx}\n` +
             `${padStringWithSpaces("Location:", 'green', padLength)}${txInfo.city + ", " + txInfo.itu}\n` +
@@ -436,7 +436,7 @@ function updateStatsBox(jsonData) {
 
 // Function to scale the progress bar value
 function scaleValue(value) {
-    const maxvalue = 100; // Actual max tef is 130, but 100 seems to be more practical value
+    const maxvalue = 130; // Set to actual max TEF value
     // Ensure value is within range [0, maxvalue]
     value = Math.max(0, Math.min(maxvalue, value));
     // Scale value to fit within range [0, 100]
@@ -525,7 +525,7 @@ screen.append(clockText);
 
 // Listen for key events
 screen.on('keypress', function (ch, key) {
-    if ((key.full === 's') || (key.full === 'right')) { //  Increase frequency by 100 kHz
+    if ((key.full === 's') || (key.full === 'right')) { // Increase frequency by 100 kHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) + 100;
             ws.send(`T${newFreq}`);
@@ -535,32 +535,32 @@ screen.on('keypress', function (ch, key) {
             const newFreq = (jsonData.freq * 1000) - 100;
             ws.send(`T${newFreq}`);
         }
-    } else if ((key.full === 'x')) { // Decrease frequency by 1 MHz
+    } else if ((key.full === 'x')) { // Increase frequency by 1 MHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) + 1000;
             ws.send(`T${newFreq}`);
         }
-    } else if (key.full === 'z') { // Increase frequency by 1 MHz
+    } else if (key.full === 'z') { // Decrease frequency by 1 MHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) - 1000;
             ws.send(`T${newFreq}`);
         }
-    } else if ((key.full === 'q') || (key.full === 'down')) { // Decrease frequency by 0.01 MHz
+    } else if ((key.full === 'q') || (key.full === 'down')) { // Decrease frequency by 10 kHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) - 10;
             ws.send(`T${newFreq}`);
         }
-    } else if ((key.full === 'w') || (key.full === 'up')) { // Increase frequency by 0.01 MHz
+    } else if ((key.full === 'w') || (key.full === 'up')) { // Increase frequency by 10 kHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) + 10;
             ws.send(`T${newFreq}`);
         }
-    } else if (key.full === '1') { // Decrease frequency by 0.01 MHz
+    } else if (key.full === '1') { // Decrease frequency by 1 kHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) - 1;
             ws.send(`T${newFreq}`);
         }
-    } else if (key.full === '2') { // Increase frequency by 0.01 MHz
+    } else if (key.full === '2') { // Increase frequency by 1 kHz
         if (jsonData && jsonData.freq) {
             const newFreq = (jsonData.freq * 1000) + 1;
             ws.send(`T${newFreq}`);
@@ -605,21 +605,21 @@ screen.on('keypress', function (ch, key) {
         } else {
             player.play(); // Start playback if not playing
         }
-    } else if (key.full === '[') { // toggle ims
+    } else if (key.full === '[') { // Toggle ims
         if (jsonData.ims == 1) {
             ws.send(`G${jsonData.eq}0`);
         }
         else {
             ws.send(`G${jsonData.eq}1`);
         }
-    } else if (key.full === ']') { // toggle eq
+    } else if (key.full === ']') { // Toggle eq
         if (jsonData.eq == 1) {
             ws.send(`G0${jsonData.ims}`);
         }
         else {
             ws.send(`G1${jsonData.ims}`);
         }
-    } else if (key.full === 'y') { // toggle antenna
+    } else if (key.full === 'y') { // Toggle antenna
         let newAnt = parseInt(jsonData.ant) + 1;
         if (newAnt >= antNames.length) {
             newAnt = 0;
@@ -631,8 +631,10 @@ screen.on('keypress', function (ch, key) {
     }
 });
 
-// Quit on Escape, q, or Control-C
+// Quit on Escape, C-c
 screen.key(['escape', 'C-c'], function () {
     process.exit(0);
 });
+
+// Check for errors
 

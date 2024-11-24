@@ -91,7 +91,7 @@ function convertToFrequency(num) {
 
 function genBottomText(variableString) {
     const helpString = "Press `h` for help";
-    const totalWidth = 78;
+    const totalWidth = screen.cols - 2; // Adjust based on terminal width
     const maxVariableLength = totalWidth - (helpString.length + 1);
     const truncatedVariableString = variableString.length > maxVariableLength
         ? variableString.substring(0, maxVariableLength)
@@ -105,15 +105,13 @@ const player = playAudio(websocketAudio, userAgent, 2048, argv.debug);
 
 // Create a Blessed screen
 const screen = blessed.screen({
-    smartCSR: true, // Disable resizing
-    fastCSR: false, // Disable resizing
+    smartCSR: true, // Enable smart cursor
     mouse: true, // Enable mouse support
     fullUnicode: false, // Support Unicode characters
     dockBorders: true,
     style: {
         bg: 'blue'
     }
-
 });
 
 // Debug logging to file
@@ -142,145 +140,51 @@ async function tunerInfo() {
 // Call to trigger async function tunerInfo
 tunerInfo();
 
-// Create a title element
-const title = blessed.text({
-    top: 0,
-    left: 0,
-    width: 80,
-    content: ` fm-dx-console ${version} by Bkram`,
-    tags: true,
-    style: titleStyle,
-});
-
-// Create a box to display server connection
-const serverBox = blessed.box({
-    top: 1,
-    left: 0,
-    width: 80,
-    height: 5,
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel('Connected to:')
-});
-
-function boxLabel(label) {
-    return `{white-fg}{blue-bg}{bold}${label}{/bold}{/blue-bg}{/white-fg}`;
+// Function to check for valid URL
+function isValidURL(urlString) {
+    try {
+        new URL(urlString);
+        return true;
+    } catch (err) {
+        return false;
+    }
 }
 
-// Create a box to display main content
-const tunerBox = blessed.box({
-    top: 6,
-    left: 0,
-    width: tunerWidth,
-    height: heightInRows,
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel('Tuner')
+// Function to format a WebSocket URL
+function formatWebSocketURL(url) {
+    // Remove trailing slash if it exists
+    if (url.endsWith('/')) {
+        url = url.slice(0, -1);
+    }
+    // Replace http:// with ws:// and https:// with wss://
+    if (url.startsWith("http://")) {
+        url = url.replace("http://", "ws://");
+    } else if (url.startsWith("https://")) {
+        url = url.replace("https://", "wss://");
+    }
+    return url;
+}
 
-});
+// Function to check terminal dimensions
+function checkTerminalSize() {
+    const { cols, rows } = screen;
+    if (cols < 80 || rows < 24) {
+        console.error('Terminal size must be at least 80x24. Please resize your terminal.');
+        process.exit(1);
+    }
+}
 
-// Create a box to display main content
-const rdsBox = blessed.box({
-    top: 6,
-    left: tunerWidth - 1,
-    width: rdsWidth,
-    height: heightInRows,
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel('RDS')
-});
+// Function to do some padding
+function padStringWithSpaces(text, color = 'green', totalLength) {
+    // Regular expression to match anything within { and }
+    const tagRegex = /\{(.*?)\}/g;
+    // Replace all occurrences of tags with an empty string to exclude them from padding length calculation
+    const strippedText = text.replace(tagRegex, '');
 
-// Create a box for City, Distance and Station
-const stationBox = blessed.box({
-    top: 6,
-    left: tunerWidth + rdsWidth - 2,
-    width: 80 - (tunerWidth + rdsWidth - 2),
-    height: heightInRows,
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel('Station Information')
-});
-
-// Create a box for RT0 and RT1
-const rtBox = blessed.box({
-    top: 14,
-    left: 0,
-    width: 80,
-    height: 4,
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel("RDS Radiotext")
-});
-
-// Create a signalbox
-const signalBox = blessed.box({
-    top: 18,
-    left: 0,
-    width: 40,
-    height: 5,
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel("Signal")
-});
-
-// Create the signal meter `progress` bar
-const progressBar = blessed.progressbar({
-    parent: signalBox,
-    top: 20,
-    left: 2,
-    width: 35,
-    height: 1,
-    tags: true,
-    style: {
-        bar: {
-            bg: 'red'
-        }
-    },
-    filled: 0,
-});
-
-// Create a statsBox
-const statsBox = blessed.box({
-    top: 18,
-    left: 38,
-    width: 42,
-    height: 5,
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel("Statistics"),
-});
-
-// Create a bottom title `bar`
-const bottomBox = blessed.box({
-    top: 23,
-    left: 0,
-    width: 80,
-    height: 1,
-    tags: true,
-    style: titleStyle,
-    content: '                                                             Press `h` for help'
-});
-
-// Create a help box
-const helpBox = blessed.box({
-    top: 3,
-    left: 10,
-    width: 60,
-    height: 18,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel('Help'),
-    content: generateHelpContent(),
-    tags: true,
-    hidden: true,
-});
+    const spacesToAdd = totalLength - strippedText.length;
+    if (spacesToAdd <= 0) return text; // No padding needed if text length is equal or greater than totalLength
+    return ' ' + `{${color}-fg}` + text + `{/${color}-fg}` + ' '.repeat(spacesToAdd);
+}
 
 // Function to generate the help content
 function generateHelpContent() {
@@ -316,60 +220,191 @@ function generateHelpContent() {
     return helpContent;
 }
 
-// Create a clock element
-const clockText = blessed.text({
-    content: '',
+// Create a title element with dynamic centering
+const title = blessed.text({
     top: 0,
-    left: 80 - 9,
+    left: 'center', // Center the title
+    width: 80,
+    content: ` fm-dx-console ${version} by Bkram`,
     tags: true,
     style: titleStyle,
-
+    align: 'center', // Center the text within the box
 });
 
-// Function to check for valid URL
-function isValidURL(urlString) {
-    try {
-        new URL(urlString);
-        return true;
-    } catch (err) {
-        return false;
-    }
+// Create a box to display server connection
+const serverBox = blessed.box({
+    top: 1,
+    left: 0,
+    width: 80,
+    height: 5,
+    tags: true,
+    border: { type: 'line' },
+    style: boxStyle,
+    label: boxLabel('Connected to:')
+});
+
+function boxLabel(label) {
+    return `{white-fg}{blue-bg}{bold}${label}{/bold}{/blue-bg}{/white-fg}`;
 }
 
-// Function to format a WebSocket URL
-function formatWebSocketURL(url) {
-    // Remove trailing slash if it exists
-    if (url.endsWith('/')) {
-        url = url.slice(0, -1);
-    }
-    // Replace http:// with ws:// and https:// with wss://
-    if (url.startsWith("http://")) {
-        url = url.replace("http://", "ws://");
-    } else if (url.startsWith("https://")) {
-        url = url.replace("https://", "wss://");
-    }
-    return url;
-}
+// Create a box to display main content
+const tunerBox = blessed.box({
+    top: 6,
+    left: 0,
+    width: tunerWidth,
+    height: heightInRows,
+    tags: true,
+    border: { type: 'line' },
+    style: boxStyle,
+    label: boxLabel('Tuner')
+});
 
-// Function to check terminal dimensions
-function checkTerminalSize() {
-    const { cols, rows } = screen.program;
-    if (cols < 80 || rows < 24) {
-        console.error('Terminal size is smaller than 80x24. Exiting...');
-        process.exit(1);
-    }
-}
+// Create a box to display RDS content
+const rdsBox = blessed.box({
+    top: 6,
+    left: tunerWidth - 1,
+    width: rdsWidth,
+    height: heightInRows,
+    tags: true,
+    border: { type: 'line' },
+    style: boxStyle,
+    label: boxLabel('RDS')
+});
 
-// Function to do some padding
-function padStringWithSpaces(text, color = 'green', totalLength) {
-    // Regular expression to match anything within { and }
-    const tagRegex = /\{(.*?)\}/g;
-    // Replace all occurrences of tags with an empty string to exclude them from padding length calculation
-    const strippedText = text.replace(tagRegex, '');
+// Create a box for Station Information
+const stationBox = blessed.box({
+    top: 6,
+    left: tunerWidth + rdsWidth - 2,
+    width: 80 - (tunerWidth + rdsWidth - 2),
+    height: heightInRows,
+    tags: true,
+    border: { type: 'line' },
+    style: boxStyle,
+    label: boxLabel('Station Information')
+});
 
-    const spacesToAdd = totalLength - strippedText.length;
-    if (spacesToAdd <= 0) return text; // No padding needed if text length is equal or greater than totalLength
-    return ' ' + `{${color}-fg}` + text + `{/${color}-fg}` + ' '.repeat(spacesToAdd);
+// Create a box for RT0 and RT1
+const rtBox = blessed.box({
+    top: 14,
+    left: 0,
+    width: 80,
+    height: 4,
+    tags: true,
+    border: { type: 'line' },
+    style: boxStyle,
+    label: boxLabel("RDS Radiotext")
+});
+
+// Create a signal box with dynamic width
+const signalBox = blessed.box({
+    top: 18,
+    left: 0,
+    width: '50%', // Half of parentBox width
+    height: 5,
+    tags: true,
+    border: { type: 'line' },
+    style: boxStyle,
+    label: boxLabel("Signal")
+});
+
+// Create the signal meter `progress` bar with default width
+const progressBar = blessed.progressbar({
+    parent: signalBox,
+    top: 1, // Adjusted to fit within the signalBox
+    left: 2,
+    width: 0, // Will be set after initial render
+    height: 1,
+    tags: true,
+    style: {
+        bar: {
+            bg: 'red'
+        }
+    },
+    filled: 0,
+});
+
+// Create a statsBox
+const statsBox = blessed.box({
+    top: 18,
+    left: '50%', // Start from the middle of the parentBox
+    width: '50%', // Take the remaining half
+    height: 5,
+    tags: true,
+    border: { type: 'line' },
+    style: boxStyle,
+    label: boxLabel("Statistics"),
+});
+
+// Create a bottom title `bar`
+const bottomBox = blessed.box({
+    bottom: 0, // Position at the bottom
+    left: 0,
+    width: '100%',
+    height: 1,
+    tags: true,
+    style: titleStyle,
+    content: genBottomText(argUrl)
+});
+
+// Create a help box
+const helpBox = blessed.box({
+    top: 'center',
+    left: 'center',
+    width: 60,
+    height: 18,
+    border: { type: 'line' },
+    style: boxStyle,
+    label: boxLabel('Help'),
+    content: generateHelpContent(),
+    tags: true,
+    hidden: true,
+});
+
+// Create a clock element positioned at the top-right corner
+const clockText = blessed.text({
+    top: 0,
+    right: 2, // Position 2 columns from the right edge
+    width: 10, // Adjust based on clock size
+    content: '',
+    tags: true,
+    style: titleStyle,
+    align: 'right',
+});
+
+// Create a parent box to center the UI
+const parentBox = blessed.box({
+    top: 'center',
+    left: 'center',
+    width: 80,
+    height: 24,
+    tags: true,
+    style: { bg: 'blue' },
+});
+
+// Append all main UI components to the parent box
+parentBox.append(title);
+parentBox.append(serverBox);
+parentBox.append(tunerBox);
+parentBox.append(rdsBox);
+parentBox.append(stationBox);
+parentBox.append(rtBox);
+parentBox.append(signalBox);
+parentBox.append(statsBox);
+parentBox.append(helpBox);
+parentBox.append(bottomBox);
+parentBox.append(clockText);
+
+// Append the parent box to the screen
+screen.append(parentBox);
+
+// **Initial render**
+screen.render();
+
+// **Set progressBar width after initial render**
+updateProgressBarWidth();
+
+function updateProgressBarWidth() {
+    progressBar.width = signalBox.width - 5; // Adjust for padding and borders
 }
 
 // Function to update the main box content
@@ -538,23 +573,6 @@ ws.on('close', function () {
 // Check terminal size initially
 checkTerminalSize();
 
-// Append boxes
-screen.append(title);
-screen.append(serverBox);
-screen.append(tunerBox);
-screen.append(rdsBox);
-screen.append(stationBox);
-screen.append(rtBox);
-screen.append(signalBox);
-screen.append(statsBox);
-screen.append(progressBar);
-screen.append(helpBox);
-screen.append(bottomBox);
-screen.append(clockText);
-
-// Initial render
-screen.render();
-
 // Listen for key events
 screen.on('keypress', function (ch, key) {
     if ((key.full === 's') || (key.full === 'right')) { // Increase frequency by 100 kHz
@@ -619,7 +637,11 @@ screen.on('keypress', function (ch, key) {
         dialog.input('\n  Enter frequency in Mhz', '', function (err, value) {
             if (!err) {
                 const newFreq = parseFloat(convertToFrequency(value)) * 1000; // Convert MHz to kHz
-                ws.send(`T${newFreq}`);
+                if (!isNaN(newFreq)) {
+                    ws.send(`T${newFreq}`);
+                } else {
+                    debugLog('Invalid frequency input.');
+                }
             }
             dialog.destroy();
             screen.restoreFocus();
@@ -674,5 +696,26 @@ screen.key(['escape', 'C-c'], function () {
     process.exit(0);
 });
 
-// Check for errors
+// Handle terminal resize events
+screen.on('resize', () => {
+    checkTerminalSize(); // Re-validate terminal size
 
+    // Reposition title and clock
+    title.left = 'center';
+    clockText.left = undefined; // Remove left if using right
+    clockText.right = 2;
+
+    // Update progressBar width
+    updateProgressBarWidth();
+
+    // Reposition help box if it's visible
+    if (!helpBox.hidden) {
+        helpBox.top = Math.floor((screen.rows - helpBox.height) / 2);
+        helpBox.left = Math.floor((screen.cols - helpBox.width) / 2);
+    }
+
+    // Update bottomBox content width
+    bottomBox.setContent(genBottomText(argUrl));
+
+    screen.render();
+});

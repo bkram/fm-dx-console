@@ -19,8 +19,8 @@ async function getTunerInfo(url) {
         // Extract and clean the og:title
         const tunerName = $('meta[property="og:title"]').attr('content')
             .replace('FM-DX WebServer ', '')  // Remove "FM-DX WebServer "
-            .replace('[', '')                 // Remove "["
-            .replace(']', '');                // Remove "]"
+            // .replace('[', ' ')                 // Remove "["
+            // .replace(']', ' ');                // Remove "]"
 
         // Extract and clean the og:description
         let tunerDesc = $('meta[property="og:description"]').attr('content')
@@ -29,12 +29,13 @@ async function getTunerInfo(url) {
 
         // Add a space to the beginning of each line in the description
         if (tunerDesc) {
-            tunerDesc = tunerDesc
-                .split(/\r?\n/)  // Split by either \n or \r\n (handles different OS newline formats)
-                .map(line => ' ' + line.trim())  // Add a space and remove extra whitespace at the beginning of each line
-                .slice(0, 3)  // Keep only the first 3 lines
-                .join('\n')  // Join the lines back with \n
-                .replace(/\.\s*$/, '');  // Remove any trailing period followed by optional spaces
+            tunerDesc = tunerDesc;
+            // tunerDesc = tunerDesc
+            //     .split(/\r?\n/)  // Split by either \n or \r\n (handles different OS newline formats)
+            //     .map(line => ' ' + line.trim())  // Add a space and remove extra whitespace at the beginning of each line
+            //     .slice(0, 10)  // Keep only the first 3 lines
+            //     .join('\n')  // Join the lines back with \n
+            //     .replace(/\.\s*$/, '');  // Remove any trailing period followed by optional spaces
         }
 
         const antNames = [];

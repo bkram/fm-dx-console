@@ -1,22 +1,25 @@
 #!/usr/bin/env node
 //
-// (c) Bkram 2024 
+// (c) Bkram 2024
 // Console client for https://github.com/NoobishSVK/fm-dx-webserver
 
+// -----------------------------
 // Imports
-const argv = require('minimist')(process.argv.slice(2), { // Library for parsing command-line arguments
-    string: ['url'], // Treat url as a string
-    boolean: ['debug'] // Treat debug as a boolean flag
+// -----------------------------
+const argv = require('minimist')(process.argv.slice(2), {
+    string: ['url'],
+    boolean: ['debug']
 });
-const blessed = require('reblessed'); // Library for creating terminal-based UI
+const blessed = require('blessed'); // Ensure you're using 'blessed'
 const fs = require('fs');
-const { spawn } = require('child_process');
 const path = require('path');
-const WebSocket = require('ws'); // WebSocket library for communication
+const WebSocket = require('ws');
 const { getTunerInfo, getPingTime } = require('./tunerinfo');
 const playAudio = require('./3lasclient');
 
-// Global constants
+// -----------------------------
+// Global Constants
+// -----------------------------
 const europe_programmes = [
     "No PTY", "News", "Current Affairs", "Info",
     "Sport", "Education", "Drama", "Culture", "Science", "Varied",
@@ -26,119 +29,48 @@ const europe_programmes = [
     "Travel", "Leisure", "Jazz Music", "Country Music", "National Music",
     "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
 ];
-const version = '1.41'
+const version = '1.41';
 const userAgent = `fm-dx-console/${version}`;
-const heightInRows = 8;
-const tunerWidth = 24;
-const rdsWidth = 17;
-const titleStyle = { fg: 'black', bg: 'green', bold: true }
-const boxStyle = { border: { fg: 'green', bg: 'blue' }, bg: 'blue' }
+const titleStyle = { fg: 'black', bg: 'green', bold: true };
+const boxStyle = { border: { fg: 'green', bg: 'blue' }, bg: 'blue' };
 
-// Global variables
+// -----------------------------
+// Global Variables
+// -----------------------------
 let jsonData = null;
-let previousJsonData = null; // For comparison
+let previousJsonData = null;
 let tunerDesc;
 let tunerName;
-let antNames = []; // Declare antNames globally
+let antNames = [];
 let websocketAudio;
 let websocketData;
 let argDebug = argv.debug;
 let argUrl;
 let pingTime = null;
 
-// Path to the log file
+// -----------------------------
+// Logging Setup
+// -----------------------------
 const logFilePath = path.join(__dirname, 'console.log');
 const logStream = fs.createWriteStream(logFilePath, { flags: 'w' });
 
-// Check if required arguments are provided
-if (!argv.url) {
-    console.error('Usage: node fm-dx-console.js --url <fm-dx> [--debug]');
-    process.exit(1);
-}
-else {
-    argUrl = argv.url.toLowerCase().replace("#", "").replace("?", "");
-}
-
-if (isValidURL(argUrl)) {
-    // URL is valid, proceed with processing
-    let websocketAddress = formatWebSocketURL(argUrl);
-    websocketAudio = `${websocketAddress}/audio`;
-    websocketData = `${websocketAddress}/text`;
-} else {
-    console.error("Invalid URL provided.");
-    process.exit(1)
-}
-
-// Function to convert number to frequency
-function convertToFrequency(num) {
-    // Check if the input is null, undefined, or cannot be converted to a number
-    if (num === null || num === undefined || isNaN(Number(num.toString().replace(',', '.')))) {
-        return null; // or any other default value like 0 or NaN
-    }
-
-    // Convert the input to a floating-point number
-    num = parseFloat(num.toString().replace(',', '.'));
-
-    // Scale down if the number is too large
-    while (num >= 100) num /= 10;
-
-    // Scale up if the number is too small
-    if (num < 76) num *= 10;
-
-    // Round to one decimal place and return
-    return Math.round(num * 10) / 10;
-}
-
-function genBottomText(variableString) {
-    const helpString = "Press `h` for help";
-    const totalWidth = screen.cols - 2; // Adjust based on terminal width
-    const maxVariableLength = totalWidth - (helpString.length + 1);
-    const truncatedVariableString = variableString.length > maxVariableLength
-        ? variableString.substring(0, maxVariableLength)
-        : variableString;
-    const paddingLength = totalWidth - truncatedVariableString.length - helpString.length;
-    return ' ' + truncatedVariableString + ' '.repeat(paddingLength) + helpString + ' ';
-}
-
-// Prepare for audio streaming
-const player = playAudio(websocketAudio, userAgent, 2048, argv.debug);
-
-// Create a Blessed screen
-const screen = blessed.screen({
-    smartCSR: true, // Enable smart cursor
-    mouse: true, // Enable mouse support
-    fullUnicode: false, // Support Unicode characters
-    dockBorders: true,
-    style: {
-        bg: 'blue'
-    }
-});
-
-// Debug logging to file
+// Function to log debug messages
 function debugLog(...args) {
     if (argDebug) {
-        const message = args.join(' '); // Join all arguments into a single string
+        const message = args.join(' ');
         logStream.write(message + '\n');
     }
 }
 
-// Get tuner info from fm-dx-webserver
-async function tunerInfo() {
-    try {
-        const result = await getTunerInfo(argUrl);
-        tunerName = result.tunerName;
-        tunerDesc = result.tunerDesc;
-        antNames = result.antNames;
-        // Update server box with tuner info
-        updateServerBox();
-        screen.render(); // Render after updating server info
-    } catch (error) {
-        debugLog(error.message);
-    }
+// -----------------------------
+// Argument Parsing and Validation
+// -----------------------------
+if (!argv.url) {
+    console.error('Usage: node fm-dx-console.js --url <fm-dx> [--debug]');
+    process.exit(1);
+} else {
+    argUrl = argv.url.toLowerCase().replace("#", "").replace("?", "");
 }
-
-// Call to trigger async function tunerInfo
-tunerInfo();
 
 // Function to check for valid URL
 function isValidURL(urlString) {
@@ -165,25 +97,52 @@ function formatWebSocketURL(url) {
     return url;
 }
 
-// Function to check terminal dimensions
-function checkTerminalSize() {
-    const { cols, rows } = screen;
-    if (cols < 80 || rows < 24) {
-        console.error('Terminal size must be at least 80x24. Please resize your terminal.');
-        process.exit(1);
-    }
+if (isValidURL(argUrl)) {
+    // URL is valid, proceed with processing
+    let websocketAddress = formatWebSocketURL(argUrl);
+    websocketAudio = `${websocketAddress}/audio`;
+    websocketData = `${websocketAddress}/text`;
+} else {
+    console.error("Invalid URL provided.");
+    process.exit(1);
 }
 
-// Function to do some padding
-function padStringWithSpaces(text, color = 'green', totalLength) {
-    // Regular expression to match anything within { and }
-    const tagRegex = /\{(.*?)\}/g;
-    // Replace all occurrences of tags with an empty string to exclude them from padding length calculation
-    const strippedText = text.replace(tagRegex, '');
+// Function to convert number to frequency
+function convertToFrequency(num) {
+    if (num === null || num === undefined || isNaN(Number(num.toString().replace(',', '.')))) {
+        return null;
+    }
+    num = parseFloat(num.toString().replace(',', '.'));
+    while (num >= 100) num /= 10;
+    if (num < 76) num *= 10;
+    return Math.round(num * 10) / 10;
+}
 
-    const spacesToAdd = totalLength - strippedText.length;
-    if (spacesToAdd <= 0) return text; // No padding needed if text length is equal or greater than totalLength
-    return ' ' + `{${color}-fg}` + text + `{/${color}-fg}` + ' '.repeat(spacesToAdd);
+// -----------------------------
+// UI Setup
+// -----------------------------
+
+// Create a Blessed screen
+const screen = blessed.screen({
+    smartCSR: true,
+    mouse: true,
+    fullUnicode: false,
+    dockBorders: true,
+    style: {
+        bg: 'blue'
+    }
+});
+
+// Function to generate bottom text
+function genBottomText(variableString) {
+    const helpString = "Press `h` for help";
+    const totalWidth = screen.cols - 2;
+    const maxVariableLength = totalWidth - (helpString.length + 1);
+    const truncatedVariableString = variableString.length > maxVariableLength
+        ? variableString.substring(0, maxVariableLength)
+        : variableString;
+    const paddingLength = totalWidth - truncatedVariableString.length - helpString.length;
+    return ' ' + truncatedVariableString + ' '.repeat(paddingLength) + helpString + ' ';
 }
 
 // Function to generate the help content
@@ -220,35 +179,83 @@ function generateHelpContent() {
     return helpContent;
 }
 
-// Create a title element with dynamic centering
-const title = blessed.text({
-    top: 0,
-    left: 'center', // Center the title
-    width: 80,
-    content: ` fm-dx-console ${version} by Bkram`,
-    tags: true,
-    style: titleStyle,
-    align: 'center', // Center the text within the box
-});
+// Function to pad strings with spaces and color
+function padStringWithSpaces(text, color = 'green', totalLength) {
+    const tagRegex = /\{(.*?)\}/g;
+    const strippedText = text.replace(tagRegex, '');
+    const spacesToAdd = totalLength - strippedText.length;
+    if (spacesToAdd <= 0) return text;
+    return ' ' + `{${color}-fg}` + text + `{/${color}-fg}` + ' '.repeat(spacesToAdd);
+}
 
-// Create a box to display server connection
-const serverBox = blessed.box({
-    top: 1,
-    left: 0,
-    width: 80,
-    height: 5,
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel('Connected to:')
-});
-
+// Function to create box labels with styling
 function boxLabel(label) {
     return `{white-fg}{blue-bg}{bold}${label}{/bold}{/blue-bg}{/white-fg}`;
 }
 
-// Create a box to display main content
+// Function to check terminal dimensions
+function checkTerminalSize() {
+    const { cols, rows } = screen;
+    if (cols < 80 || rows < 24) {
+        console.error('Terminal size must be at least 80x24. Please resize your terminal.');
+        process.exit(1);
+    }
+}
+
+// Create a parent box to fill the terminal and append to screen
+const parentBox = blessed.box({
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    tags: true,
+    style: { bg: 'blue' },
+});
+screen.append(parentBox);
+
+// Now, create child elements with `parent: parentBox`
+const title = blessed.box({
+    parent: parentBox,
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: 1,
+    content: ` fm-dx-console ${version} by Bkram `,
+    tags: true,
+    style: titleStyle,
+    align: 'center',
+});
+
+const clockText = blessed.text({
+    parent: parentBox,
+    top: 0,
+    right: 2,
+    width: 10,
+    content: '',
+    tags: true,
+    style: titleStyle,
+    align: 'right',
+});
+
+const serverBox = blessed.box({
+    parent: parentBox,
+    top: 1,
+    left: 0,
+    width: '100%',
+    height: 5,
+    tags: true,
+    border: { type: 'line' },
+    style: boxStyle,
+    label: boxLabel('Connected to:'),
+});
+
+// Create other boxes (tunerBox, rdsBox, etc.) with fixed sizes
+const tunerWidth = 24;
+const rdsWidth = 17;
+const heightInRows = 8;
+
 const tunerBox = blessed.box({
+    parent: parentBox,
     top: 6,
     left: 0,
     width: tunerWidth,
@@ -256,63 +263,66 @@ const tunerBox = blessed.box({
     tags: true,
     border: { type: 'line' },
     style: boxStyle,
-    label: boxLabel('Tuner')
+    label: boxLabel('Tuner'),
 });
 
-// Create a box to display RDS content
 const rdsBox = blessed.box({
+    parent: parentBox,
     top: 6,
-    left: tunerWidth - 1,
+    left: tunerWidth,
     width: rdsWidth,
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
     style: boxStyle,
-    label: boxLabel('RDS')
+    label: boxLabel('RDS'),
 });
 
-// Create a box for Station Information
 const stationBox = blessed.box({
+    parent: parentBox,
     top: 6,
-    left: tunerWidth + rdsWidth - 2,
-    width: 80 - (tunerWidth + rdsWidth - 2),
+    left: tunerWidth + rdsWidth,
+    width: `100%-${tunerWidth + rdsWidth}`, // Using string expression
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
     style: boxStyle,
-    label: boxLabel('Station Information')
+    label: boxLabel('Station Information'),
 });
 
 // Create a box for RT0 and RT1
 const rtBox = blessed.box({
-    top: 14,
+    parent: parentBox,
+    top: tunerBox.top + tunerBox.height,
     left: 0,
-    width: 80,
+    width: '100%',
     height: 4,
     tags: true,
     border: { type: 'line' },
     style: boxStyle,
-    label: boxLabel("RDS Radiotext")
+    label: boxLabel('RDS Radiotext'),
 });
 
-// Create a signal box with dynamic width
+// Create signalBox and statsBox
+const boxHeight = 5;
+
 const signalBox = blessed.box({
-    top: 18,
+    parent: parentBox,
+    top: rtBox.top + rtBox.height,
     left: 0,
-    width: '50%', // Half of parentBox width
-    height: 5,
+    width: '50%',
+    height: boxHeight,
     tags: true,
     border: { type: 'line' },
     style: boxStyle,
-    label: boxLabel("Signal")
+    label: boxLabel('Signal'),
 });
 
-// Create the signal meter `progress` bar with default width
 const progressBar = blessed.progressbar({
     parent: signalBox,
-    top: 1, // Adjusted to fit within the signalBox
+    top: 1,
     left: 2,
-    width: 0, // Will be set after initial render
+    width: '100%-5',
     height: 1,
     tags: true,
     style: {
@@ -323,31 +333,33 @@ const progressBar = blessed.progressbar({
     filled: 0,
 });
 
-// Create a statsBox
 const statsBox = blessed.box({
-    top: 18,
-    left: '50%', // Start from the middle of the parentBox
-    width: '50%', // Take the remaining half
-    height: 5,
+    parent: parentBox,
+    top: rtBox.top + rtBox.height,
+    left: '50%',
+    width: '50%',
+    height: boxHeight,
     tags: true,
     border: { type: 'line' },
     style: boxStyle,
-    label: boxLabel("Statistics"),
+    label: boxLabel('Statistics'),
 });
 
 // Create a bottom title `bar`
 const bottomBox = blessed.box({
-    bottom: 0, // Position at the bottom
+    parent: parentBox,
+    bottom: 0,
     left: 0,
     width: '100%',
     height: 1,
     tags: true,
     style: titleStyle,
-    content: genBottomText(argUrl)
+    content: genBottomText(argUrl),
 });
 
 // Create a help box
 const helpBox = blessed.box({
+    parent: parentBox,
     top: 'center',
     left: 'center',
     width: 60,
@@ -360,65 +372,138 @@ const helpBox = blessed.box({
     hidden: true,
 });
 
-// Create a clock element positioned at the top-right corner
-const clockText = blessed.text({
-    top: 0,
-    right: 2, // Position 2 columns from the right edge
-    width: 10, // Adjust based on clock size
-    content: '',
-    tags: true,
-    style: titleStyle,
-    align: 'right',
-});
+// Create an extra "Additional Connection Info" box (conditionally displayed)
+let extraInfoBox = null;
 
-// Create a parent box to center the UI
-const parentBox = blessed.box({
-    top: 'center',
-    left: 'center',
-    width: 80,
-    height: 24,
-    tags: true,
-    style: { bg: 'blue' },
-});
-
-// Append all main UI components to the parent box
-parentBox.append(title);
-parentBox.append(serverBox);
-parentBox.append(tunerBox);
-parentBox.append(rdsBox);
-parentBox.append(stationBox);
-parentBox.append(rtBox);
-parentBox.append(signalBox);
-parentBox.append(statsBox);
-parentBox.append(helpBox);
-parentBox.append(bottomBox);
-parentBox.append(clockText);
-
-// Append the parent box to the screen
-screen.append(parentBox);
-
-// **Initial render**
-screen.render();
-
-// **Set progressBar width after initial render**
-updateProgressBarWidth();
-
-function updateProgressBarWidth() {
-    progressBar.width = signalBox.width - 5; // Adjust for padding and borders
+// Function to create the extraInfoBox
+function createExtraInfoBox() {
+    if (!extraInfoBox) {
+        extraInfoBox = blessed.box({
+            parent: parentBox,
+            top: rtBox.top + rtBox.height + boxHeight,
+            left: 0,
+            width: '100%',
+            height: 3,
+            tags: true,
+            border: { type: 'line' },
+            style: boxStyle,
+            label: boxLabel('Additional Connection Info'),
+            content: 'Connected to: ' + (tunerName || 'N/A'),
+        });
+    } else {
+        extraInfoBox.show();
+        extraInfoBox.setContent('Connected to: ' + (tunerName || 'N/A'));
+    }
+    screen.render();
 }
 
-// Function to update the main box content
+// Function to remove/hide the extraInfoBox
+function removeExtraInfoBox() {
+    if (extraInfoBox) {
+        extraInfoBox.hide();
+        screen.render();
+    }
+}
+
+// Function to initialize the extraInfoBox based on terminal size
+function initializeExtraInfoBox() {
+    const { rows } = screen;
+    if (rows > 25) {
+        createExtraInfoBox();
+    } else {
+        removeExtraInfoBox();
+    }
+}
+
+// Initial check for terminal size and create/hide extraInfoBox accordingly
+initializeExtraInfoBox();
+
+// Initial render
+screen.render();
+
+// -----------------------------
+// Function Definitions
+// -----------------------------
+
+// Function to update the clock content
+function updateClock() {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString([], { hour12: false });
+    clockText.setContent(timeStr);
+}
+
+// Update the clock content every second
+setInterval(() => {
+    updateClock();
+    screen.render();
+}, 1000);
+
+// Function to update the progress bar width
+function updateProgressBarWidth() {
+    progressBar.width = signalBox.width - 5;
+}
+
+// Handle terminal resize events
+screen.on('resize', () => {
+    checkTerminalSize();
+
+    // Update widths and positions
+    parentBox.width = '100%';
+    parentBox.height = '100%';
+
+    title.width = '100%';
+    title.left = 0;
+
+    clockText.top = 0;
+    clockText.right = 2;
+
+    serverBox.width = '100%';
+    serverBox.left = 0;
+
+    bottomBox.width = '100%';
+    bottomBox.left = 0;
+    bottomBox.content = genBottomText(argUrl);
+
+    // Update stationBox width
+    stationBox.width = `100%-${tunerWidth + rdsWidth}`; // Using string expression
+
+    rtBox.width = '100%';
+
+    signalBox.width = '50%';
+    statsBox.width = '50%';
+    statsBox.left = '50%';
+
+    updateProgressBarWidth();
+
+    // Reposition help box using known dimensions
+    const helpBoxHeight = 18; // Height set during creation
+    const helpBoxWidth = 60;  // Width set during creation
+
+    if (helpBox) {
+        helpBox.top = Math.floor((screen.rows - helpBoxHeight) / 2);
+        helpBox.left = Math.floor((screen.cols - helpBoxWidth) / 2);
+    }
+
+    // Initialize or remove the extraInfoBox based on new terminal size
+    initializeExtraInfoBox();
+
+    screen.render();
+});
+
+// Function to update the main box content (Tuner Box)
 function updateTunerBox(jsonData) {
+    if (!tunerBox || !jsonData) return;
+
     const padLength = 8;
     const signalValue = parseFloat(jsonData.sig);
     const signalDisplay = isNaN(signalValue) ? 'N/A' : `${signalValue.toFixed(1)} dBf`;
     tunerBox.setContent(
-        `${padStringWithSpaces("Freq:", 'green', padLength)}${jsonData.freq} Mhz\n` +
+        `${padStringWithSpaces("Freq:", 'green', padLength)}${jsonData.freq} MHz\n` +
         `${padStringWithSpaces("Signal:", 'green', padLength)}${signalDisplay}\n` +
         `${padStringWithSpaces("Mode:", 'green', padLength)}${jsonData.st ? "Stereo" : "Mono"}\n` +
         `${padStringWithSpaces("iMS:", 'green', padLength)}${Number(jsonData.ims) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
         `${padStringWithSpaces("EQ:", 'green', padLength)}${Number(jsonData.eq) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-        `${padStringWithSpaces("ANT:", 'green', padLength)}${antNames[jsonData.ant]}\n`);
+        `${padStringWithSpaces("ANT:", 'green', padLength)}${antNames[jsonData.ant] || 'N/A'}\n`);
 }
 
 // Function to update the server box
@@ -427,12 +512,19 @@ function updateServerBox() {
         typeof tunerDesc !== 'undefined' && tunerDesc !== '') {
         serverBox.setContent(tunerDesc);
         serverBox.setLabel(boxLabel(`Connected to: ${tunerName}`));
-        bottomBox.setContent(genBottomText(argUrl))
+        bottomBox.setContent(genBottomText(argUrl));
+
+        // Update the extraInfoBox content if it's displayed
+        if (extraInfoBox && !extraInfoBox.hidden) {
+            extraInfoBox.setContent('Connected to: ' + (tunerName || 'N/A'));
+        }
     }
 }
 
 // Function to update the RDS box content
 function updateRdsBox(jsonData) {
+    if (!rdsBox || !jsonData) return;
+
     const padLength = 4;
     if (jsonData.freq >= 75 && jsonData.pi !== "?") {
         let msshow;
@@ -461,6 +553,8 @@ function updateRdsBox(jsonData) {
 
 // Function to update the RT box content
 function updateRTBox(jsonData) {
+    if (!rtBox || !jsonData) return;
+
     rtBox.setContent(
         `{center}${jsonData.rt0.trim()}{/center}\n` +
         `{center}${jsonData.rt1.trim()}{/center}`);
@@ -468,8 +562,10 @@ function updateRTBox(jsonData) {
 
 // Function to update the StationBox
 function updateStationBox(txInfo) {
+    if (!stationBox || !txInfo) return;
+
     const padLength = 10;
-    if (txInfo && txInfo.tx) {
+    if (txInfo.tx) {
         stationBox.setContent(
             `${padStringWithSpaces("Name:", 'green', padLength)}${txInfo.tx}\n` +
             `${padStringWithSpaces("Location:", 'green', padLength)}${txInfo.city + ", " + txInfo.itu}\n` +
@@ -483,6 +579,8 @@ function updateStationBox(txInfo) {
 
 // Function to update the statsBox
 function updateStatsBox(jsonData) {
+    if (!statsBox || !jsonData) return;
+
     statsBox.setContent(
         `{center}Server users: ${jsonData.users}\n` +
         `Server ping: ${pingTime !== null ? pingTime + ' ms' : ''}\n` +
@@ -492,39 +590,49 @@ function updateStatsBox(jsonData) {
 // Function to scale the progress bar value
 function scaleValue(value) {
     const maxvalue = 130; // Set to actual max TEF value
-    // Ensure value is within range [0, maxvalue]
     value = Math.max(0, Math.min(maxvalue, value));
-    // Scale value to fit within range [0, 100]
     return Math.floor((value / maxvalue) * 100);
 }
 
 // Function to update the signal meter
 function updateSignal(signal) {
+    if (!progressBar) return;
     progressBar.setProgress(scaleValue(signal));
 }
 
-// Function to update the clock content
-function updateClock(clockText) {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString([], { hour12: false });
-    clockText.setContent(timeStr);
+// -----------------------------
+// Audio Streaming Setup
+// -----------------------------
+const player = playAudio(websocketAudio, userAgent, 2048, argv.debug);
+
+// -----------------------------
+// Tuner Information Retrieval
+// -----------------------------
+async function tunerInfo() {
+    try {
+        const result = await getTunerInfo(argUrl);
+        tunerName = result.tunerName;
+        tunerDesc = result.tunerDesc;
+        antNames = result.antNames;
+        updateServerBox();
+        screen.render();
+    } catch (error) {
+        debugLog(error.message);
+    }
 }
 
-// Update the clock content every second
-setInterval(() => {
-    updateClock(clockText);
-    // No need to call screen.render(); Blessed handles partial updates
-}, 1000);
+tunerInfo();
 
-// Get ping every 5 seconds
+// -----------------------------
+// Ping Functionality
+// -----------------------------
 async function doPing() {
     try {
         pingTime = await getPingTime(argUrl);
         debugLog('Ping Time:', pingTime, 'ms');
-        // Update statsBox if necessary
         if (jsonData) {
             updateStatsBox(jsonData);
-            screen.render(); // Render after updating stats
+            screen.render();
         }
     } catch (error) {
         debugLog('Ping Error:', error.message);
@@ -533,7 +641,9 @@ async function doPing() {
 doPing();
 setInterval(doPing, 5000);
 
-// WebSocket setup
+// -----------------------------
+// WebSocket Setup and Event Handlers
+// -----------------------------
 const wsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (control)` } } : {};
 const ws = new WebSocket(websocketData, wsOptions);
 
@@ -545,9 +655,8 @@ ws.on('message', function (data) {
     try {
         const newData = JSON.parse(data);
 
-        // Compare newData with previousJsonData
         if (JSON.stringify(newData) !== JSON.stringify(previousJsonData)) {
-            jsonData = newData; // Update global jsonData
+            jsonData = newData;
 
             updateTunerBox(jsonData);
             updateRdsBox(jsonData);
@@ -556,10 +665,15 @@ ws.on('message', function (data) {
             updateRTBox(jsonData);
             updateStatsBox(jsonData);
 
-            screen.render(); // Only render if data has changed
+            // Update extraInfoBox if it's displayed
+            if (extraInfoBox && !extraInfoBox.hidden) {
+                extraInfoBox.setContent('Connected to: ' + (tunerName || 'N/A'));
+            }
+
+            screen.render();
         }
 
-        previousJsonData = newData; // Update previous data
+        previousJsonData = newData;
 
     } catch (error) {
         debugLog('Error parsing JSON:', error);
@@ -570,10 +684,9 @@ ws.on('close', function () {
     debugLog('WebSocket connection closed');
 });
 
-// Check terminal size initially
-checkTerminalSize();
-
-// Listen for key events
+// -----------------------------
+// Key Bindings and Event Handling
+// -----------------------------
 screen.on('keypress', function (ch, key) {
     if ((key.full === 's') || (key.full === 'right')) { // Increase frequency by 100 kHz
         if (jsonData && jsonData.freq) {
@@ -622,10 +735,10 @@ screen.on('keypress', function (ch, key) {
         }
     } else if (key.full === 't') { // Set frequency
         screen.saveFocus();
-        // Create a dialog box to get the frequency from the user
         const dialog = blessed.prompt({
-            top: 8,
-            left: 25,
+            parent: parentBox,
+            top: 'center',
+            left: 'center',
             width: 30,
             height: 8,
             border: 'line',
@@ -633,10 +746,9 @@ screen.on('keypress', function (ch, key) {
             label: boxLabel('Direct Tuning'),
             tags: true,
         });
-        screen.append(dialog);
-        dialog.input('\n  Enter frequency in Mhz', '', function (err, value) {
+        dialog.input('\n  Enter frequency in MHz', '', function (err, value) {
             if (!err) {
-                const newFreq = parseFloat(convertToFrequency(value)) * 1000; // Convert MHz to kHz
+                const newFreq = parseFloat(convertToFrequency(value)) * 1000;
                 if (!isNaN(newFreq)) {
                     ws.send(`T${newFreq}`);
                 } else {
@@ -653,26 +765,25 @@ screen.on('keypress', function (ch, key) {
         } else {
             helpBox.hide();
         }
-        screen.render(); // Render after changing help box visibility
+        screen.render();
     } else if (key.full === 'p') { // Toggle playback
         if (player.getStatus()) {
-            player.stop(); // Stop playback if currently playing
+            player.stop();
         } else {
-            player.play(); // Start playback if not playing
+            player.play();
         }
-        // Update statsBox to reflect playback status
         if (jsonData) {
             updateStatsBox(jsonData);
             screen.render();
         }
-    } else if (key.full === '[') { // Toggle ims
+    } else if (key.full === '[') { // Toggle iMS
         if (jsonData.ims == 1) {
             ws.send(`G${jsonData.eq}0`);
         }
         else {
             ws.send(`G${jsonData.eq}1`);
         }
-    } else if (key.full === ']') { // Toggle eq
+    } else if (key.full === ']') { // Toggle EQ
         if (jsonData.eq == 1) {
             ws.send(`G0${jsonData.ims}`);
         }
@@ -687,7 +798,7 @@ screen.on('keypress', function (ch, key) {
         ws.send(`Z${newAnt}`);
     }
     else {
-        debugLog(key.full)
+        debugLog(key.full);
     }
 });
 
@@ -696,26 +807,61 @@ screen.key(['escape', 'C-c'], function () {
     process.exit(0);
 });
 
-// Handle terminal resize events
-screen.on('resize', () => {
-    checkTerminalSize(); // Re-validate terminal size
+// -----------------------------
+// Additional Functions
+// -----------------------------
 
-    // Reposition title and clock
-    title.left = 'center';
-    clockText.left = undefined; // Remove left if using right
-    clockText.right = 2;
-
-    // Update progressBar width
-    updateProgressBarWidth();
-
-    // Reposition help box if it's visible
-    if (!helpBox.hidden) {
-        helpBox.top = Math.floor((screen.rows - helpBox.height) / 2);
-        helpBox.left = Math.floor((screen.cols - helpBox.width) / 2);
+// Function to create the extraInfoBox
+function createExtraInfoBox() {
+    if (!extraInfoBox) {
+        extraInfoBox = blessed.box({
+            parent: parentBox,
+            top: rtBox.top + rtBox.height + boxHeight,
+            left: 0,
+            width: '100%',
+            height: 3,
+            tags: true,
+            border: { type: 'line' },
+            style: boxStyle,
+            label: boxLabel('Additional Connection Info'),
+            content: 'Connected to: ' + (tunerName || 'N/A'),
+        });
+    } else {
+        extraInfoBox.show();
+        extraInfoBox.setContent('Connected to: ' + (tunerName || 'N/A'));
     }
-
-    // Update bottomBox content width
-    bottomBox.setContent(genBottomText(argUrl));
-
     screen.render();
-});
+}
+
+// Function to remove/hide the extraInfoBox
+function removeExtraInfoBox() {
+    if (extraInfoBox) {
+        extraInfoBox.hide();
+        screen.render();
+    }
+}
+
+// Function to initialize the extraInfoBox based on terminal size
+function initializeExtraInfoBox() {
+    const { rows } = screen;
+    if (rows > 25) {
+        createExtraInfoBox();
+    } else {
+        removeExtraInfoBox();
+    }
+}
+
+// Ensure extraInfoBox is updated when tuner info is updated
+function updateServerBox() {
+    if (typeof tunerName !== 'undefined' && tunerName !== '' &&
+        typeof tunerDesc !== 'undefined' && tunerDesc !== '') {
+        serverBox.setContent(tunerDesc);
+        serverBox.setLabel(boxLabel(`Connected to: ${tunerName}`));
+        bottomBox.setContent(genBottomText(argUrl));
+
+        // Update the extraInfoBox content if it's displayed
+        if (extraInfoBox && !extraInfoBox.hidden) {
+            extraInfoBox.setContent('Connected to: ' + (tunerName || 'N/A'));
+        }
+    }
+}

@@ -155,25 +155,8 @@ function genBottomText(variableString) {
     );
 }
 
-// Updated help content: explains arrow keys, removed references to 'a'/'s'
+// Help content
 function generateHelpContent() {
-    /*
-      We have four arrow keys plus a few letter keys left:
-       - left  => -0.1 MHz
-       - right => +0.1 MHz
-       - up    => +0.01 MHz
-       - down  => -0.01 MHz
-       - z     => -1 MHz
-       - x     => +1 MHz
-       - r     => refresh
-       - p     => toggle audio
-       - [     => toggle iMS
-       - ]     => toggle EQ
-       - y     => toggle antenna
-       - t     => direct frequency
-       - esc   => quit
-       - h     => help
-    */
     const leftCommands = [
         "'←'  decrease 0.1 MHz",
         "'↓'  decrease 0.01 MHz",
@@ -626,9 +609,33 @@ async function doPing() {
 doPing();
 setInterval(doPing, 5000);
 
-// WebSocket
+// -----------------------------
+// WebSocket Setup
+// -----------------------------
 const wsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (control)` } } : {};
 const ws = new WebSocket(websocketData, wsOptions);
+
+// -----------------------------
+// Command Throttling
+// -----------------------------
+const commandQueue = [];
+
+// Throttle interval in ms
+const THROTTLE_MS = 100;
+
+// This function enqueues commands instead of sending them immediately
+function enqueueCommand(cmd) {
+    commandQueue.push(cmd);
+}
+
+// Send up to one command every THROTTLE_MS
+setInterval(() => {
+    if (commandQueue.length > 0 && ws && ws.readyState === WebSocket.OPEN) {
+        const nextCmd = commandQueue.shift();
+        debugLog(`Sending command: ${nextCmd}`);
+        ws.send(nextCmd);
+    }
+}, THROTTLE_MS);
 
 ws.on('open', () => {
     debugLog('WebSocket connection established');
@@ -663,49 +670,48 @@ ws.on('close', () => {
     debugLog('WebSocket connection closed');
 });
 
+// -----------------------------
 // Key Bindings
+// -----------------------------
 //
-// Removed 'a' and 's'. Now arrow keys are used for freq stepping:
-//  left => -100 kHz, right => +100 kHz
-//  up => +10 kHz,    down => -10 kHz
-//
-// Also kept z/x, r, p, [, ], y, t, h, esc.
+// Replaced direct ws.send(...) with enqueueCommand(...),
+// so we don't exceed the 4 commands/sec limit.
 
 screen.on('keypress', (ch, key) => {
     if (key.full === 'right') {
         // Increase freq by 100 kHz
         if (jsonData && jsonData.freq) {
-            ws.send(`T${(jsonData.freq * 1000) + 100}`);
+            enqueueCommand(`T${(jsonData.freq * 1000) + 100}`);
         }
     } else if (key.full === 'left') {
         // Decrease freq by 100 kHz
         if (jsonData && jsonData.freq) {
-            ws.send(`T${(jsonData.freq * 1000) - 100}`);
+            enqueueCommand(`T${(jsonData.freq * 1000) - 100}`);
         }
     } else if (key.full === 'up') {
         // Increase freq by 10 kHz
         if (jsonData && jsonData.freq) {
-            ws.send(`T${(jsonData.freq * 1000) + 10}`);
+            enqueueCommand(`T${(jsonData.freq * 1000) + 10}`);
         }
     } else if (key.full === 'down') {
         // Decrease freq by 10 kHz
         if (jsonData && jsonData.freq) {
-            ws.send(`T${(jsonData.freq * 1000) - 10}`);
+            enqueueCommand(`T${(jsonData.freq * 1000) - 10}`);
         }
     } else if (key.full === 'x') {
         // Increase freq by 1 MHz
         if (jsonData && jsonData.freq) {
-            ws.send(`T${(jsonData.freq * 1000) + 1000}`);
+            enqueueCommand(`T${(jsonData.freq * 1000) + 1000}`);
         }
     } else if (key.full === 'z') {
         // Decrease freq by 1 MHz
         if (jsonData && jsonData.freq) {
-            ws.send(`T${(jsonData.freq * 1000) - 1000}`);
+            enqueueCommand(`T${(jsonData.freq * 1000) - 1000}`);
         }
     } else if (key.full === 'r') {
         // Refresh freq
         if (jsonData && jsonData.freq) {
-            ws.send(`T${(jsonData.freq * 1000)}`);
+            enqueueCommand(`T${(jsonData.freq * 1000)}`);
         }
     } else if (key.full === 't') {
         // Direct frequency input
@@ -725,7 +731,7 @@ screen.on('keypress', (ch, key) => {
             if (!err) {
                 const newFreq = parseFloat(convertToFrequency(value)) * 1000;
                 if (!isNaN(newFreq)) {
-                    ws.send(`T${newFreq}`);
+                    enqueueCommand(`T${newFreq}`);
                 } else {
                     debugLog('Invalid frequency input.');
                 }
@@ -756,16 +762,16 @@ screen.on('keypress', (ch, key) => {
     } else if (key.full === '[') {
         // Toggle iMS
         if (jsonData.ims == 1) {
-            ws.send(`G${jsonData.eq}0`);
+            enqueueCommand(`G${jsonData.eq}0`);
         } else {
-            ws.send(`G${jsonData.eq}1`);
+            enqueueCommand(`G${jsonData.eq}1`);
         }
     } else if (key.full === ']') {
         // Toggle EQ
         if (jsonData.eq == 1) {
-            ws.send(`G0${jsonData.ims}`);
+            enqueueCommand(`G0${jsonData.ims}`);
         } else {
-            ws.send(`G1${jsonData.ims}`);
+            enqueueCommand(`G1${jsonData.ims}`);
         }
     } else if (key.full === 'y') {
         // Toggle antenna
@@ -773,7 +779,7 @@ screen.on('keypress', (ch, key) => {
         if (newAnt >= antNames.length) {
             newAnt = 0;
         }
-        ws.send(`Z${newAnt}`);
+        enqueueCommand(`Z${newAnt}`);
     } else {
         debugLog(key.full);
     }

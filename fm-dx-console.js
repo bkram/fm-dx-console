@@ -29,7 +29,7 @@ const europe_programmes = [
     "Travel", "Leisure", "Jazz Music", "Country Music", "National Music",
     "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
 ];
-const version = '1.41';
+const version = '1.50';
 const userAgent = `fm-dx-console/${version}`;
 const titleStyle = { fg: 'black', bg: 'green', bold: true };
 const boxStyle = { border: { fg: 'green', bg: 'blue' }, bg: 'blue' };

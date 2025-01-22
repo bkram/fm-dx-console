@@ -36,7 +36,7 @@ const userAgent = `fm-dx-console/${version}`;
 const MIN_COLS = 80;
 const MIN_ROWS = 24;
 
-// Throttle interval in ms => 8 commands/sec
+// Throttle interval => 8 commands/sec
 const THROTTLE_MS = 125;
 
 // Style objects
@@ -144,12 +144,15 @@ const screen = blessed.screen({
 // -----------------------------
 const commandQueue = [];
 
-/** Enqueues commands instead of sending them immediately */
+/**
+ * Enqueues commands instead of sending them immediately.
+ * This helps throttle sending to 8 commands/sec
+ */
 function enqueueCommand(cmd) {
     commandQueue.push(cmd);
 }
 
-/** Every 250 ms, send up to one command if ws is open */
+/** Every 125 ms, send up to one command if ws is open */
 setInterval(() => {
     if (commandQueue.length > 0 && ws && ws.readyState === WebSocket.OPEN) {
         const nextCmd = commandQueue.shift();
@@ -160,7 +163,7 @@ setInterval(() => {
 
 // -----------------------------
 // Terminal Size Check
-// Instead of exiting, we show/hide the main UI
+// If too small, hide UI and show warning
 // -----------------------------
 function checkSizeAndToggleUI() {
     const { cols, rows } = screen;
@@ -181,6 +184,10 @@ function checkSizeAndToggleUI() {
 // -----------------------------
 // Helper UI Functions
 // -----------------------------
+/**
+ * Generates bottom bar text with left side = variableString,
+ * right side = "Press `h` for help"
+ */
 function genBottomText(variableString) {
     // Right-justify "Press `h` for help"
     const helpString = "Press `h` for help";
@@ -203,6 +210,7 @@ function genBottomText(variableString) {
     );
 }
 
+/** Creates the content of the help box */
 function generateHelpContent() {
     const leftCommands = [
         "'←'  decrease 0.1 MHz",
@@ -234,6 +242,10 @@ function generateHelpContent() {
     return helpContent;
 }
 
+/**
+ * Pads a string (with optional Blessed color tags)
+ * to a certain width with trailing spaces
+ */
 function padStringWithSpaces(text, color = 'green', totalLength) {
     const tagRegex = /\{(.*?)\}/g;
     const strippedText = text.replace(tagRegex, '');
@@ -242,6 +254,7 @@ function padStringWithSpaces(text, color = 'green', totalLength) {
     return ' ' + `{${color}-fg}` + text + `{/${color}-fg}` + ' '.repeat(spacesToAdd);
 }
 
+/** Returns a label string with bold, colored style */
 function boxLabel(label) {
     return `{white-fg}{blue-bg}{bold}${label}{/bold}{/blue-bg}{/white-fg}`;
 }
@@ -250,7 +263,7 @@ function boxLabel(label) {
 // UI Layout
 // -----------------------------
 
-// Main container
+// Main container for the entire UI
 const uiBox = blessed.box({
     parent: screen,
     top: 0,
@@ -261,7 +274,7 @@ const uiBox = blessed.box({
     style: { bg: 'blue' }
 });
 
-// Warning box for small terminals
+// Warning box if the terminal is too small
 const warningBox = blessed.box({
     parent: screen,
     width: 50,
@@ -276,9 +289,7 @@ const warningBox = blessed.box({
     content: ''
 });
 
-// -----------------------------
-// Single top bar with title + clock
-// -----------------------------
+// Single top bar with the title text + clock
 const titleBar = blessed.box({
     parent: uiBox,
     top: 0,
@@ -287,30 +298,28 @@ const titleBar = blessed.box({
     height: 1,
     tags: true,
     style: titleStyle,
-    content: '' // We'll fill this dynamically
+    content: ''
 });
 
+/**
+ * Updates the top bar, placing the version text on the left
+ * and the current time (plus trailing space) on the right.
+ */
 function updateTitleBar() {
-    // Left side text
     const leftText = ` fm-dx-console ${version} by Bkram `;
-    
-    // Current clock time
+    // Clock with a space at the end
     const now = new Date();
-    const clockStr = now.toLocaleTimeString([], { hour12: false });
-  
-    // We want a space after the clock
-    const clockWithSpace = clockStr + ' ';
-  
-    // Figure out how many spaces go between leftText and clockWithSpace
-    const totalWidth = screen.cols; // or screen.width if you prefer
-    let spacing = totalWidth - (leftText.length + clockWithSpace.length);
-    if (spacing < 1) spacing = 1; // ensure at least 1 space
-  
-    // Build the final line
-    titleBar.setContent(leftText + ' '.repeat(spacing) + clockWithSpace);
-  }
+    const clockStr = now.toLocaleTimeString([], { hour12: false }) + ' ';
 
-// Tuner, RDS, Station boxes
+    // Spacing so the clock is right-aligned
+    const totalWidth = screen.cols;
+    let spacing = totalWidth - (leftText.length + clockStr.length);
+    if (spacing < 1) spacing = 1;
+
+    titleBar.setContent(leftText + ' '.repeat(spacing) + clockStr);
+}
+
+// Tuner, RDS, Station sections
 const tunerWidth = 24;
 const rdsWidth = 17;
 const heightInRows = 8;
@@ -351,10 +360,10 @@ const stationBox = blessed.box({
     label: boxLabel('Station Information'),
 });
 
-// RDS Radiotext
+// RDS Radiotext box
 const rtBox = blessed.box({
     parent: uiBox,
-    top: tunerBox.top + tunerBox.height, // row 9
+    top: tunerBox.top + tunerBox.height, // 9
     left: 0,
     width: '100%',
     height: 4,
@@ -364,7 +373,7 @@ const rtBox = blessed.box({
     label: boxLabel('RDS Radiotext')
 });
 
-// Signal + Stats
+// Signal + Stats boxes
 const boxHeight = 5;
 
 const signalBox = blessed.box({
@@ -404,10 +413,10 @@ const statsBox = blessed.box({
     label: boxLabel('Statistics'),
 });
 
-// Server Info near bottom
+// Server Info near the bottom
 const serverBox = blessed.box({
     parent: uiBox,
-    top: signalBox.top + signalBox.height, // 18
+    top: signalBox.top + signalBox.height, // row 18
     left: 0,
     width: '100%',
     bottom: 1,  // remain 1 line above bottom bar
@@ -423,7 +432,7 @@ const serverBox = blessed.box({
     }
 });
 
-// Bottom bar
+// Bottom bar with "Press `h` for help" on the right
 const bottomBox = blessed.box({
     parent: uiBox,
     bottom: 0,
@@ -435,7 +444,7 @@ const bottomBox = blessed.box({
     content: genBottomText(argUrl)
 });
 
-// Help box
+// Help box in the center
 const helpBox = blessed.box({
     parent: uiBox,
     top: 'center',
@@ -453,21 +462,34 @@ const helpBox = blessed.box({
 // Render once
 screen.render();
 
-// Clock + Title Bar update every second
+// Update the title bar every second (for the clock)
 setInterval(() => {
     updateTitleBar();
     screen.render();
 }, 1000);
 
-// On resize, re-check sizing and re-calc spacing
+/**
+ * Adjust the progress bar width after a resize
+ */
 function updateProgressBarWidth() {
     progressBar.width = signalBox.width - 5;
 }
 
+/**
+ * On terminal resize, we re-check if UI is too small,
+ * recalc the bottom bar, recalc the title bar, etc.
+ */
 screen.on('resize', () => {
     updateProgressBarWidth();
     checkSizeAndToggleUI();
-    updateTitleBar(); // recalc spacing for the clock
+
+    // Recompute the bottom bar text to keep "Press `h` for help" right-aligned
+    bottomBox.setContent(genBottomText(argUrl));
+
+    // Recompute the top bar clock spacing
+    updateTitleBar(); 
+
+    screen.render();
 });
 
 // -----------------------------
@@ -560,20 +582,21 @@ function updateSignal(signal) {
     progressBar.setProgress(scaleValue(signal));
 }
 
-// Update Server Box
-// If screen is very small, just show tunerName.
-// If bigger, also show tunerDesc.
+/**
+ * Update the Server Box
+ * - If terminal is too small, show just tunerName
+ * - Otherwise, show tunerName + blank line + tunerDesc
+ */
 function updateServerBox() {
     if (!serverBox) return;
     if (!tunerName && !tunerDesc) {
         serverBox.setContent('');
         return;
     }
-    // Minimal version
     if (screen.rows <= 25) {
         serverBox.setContent(tunerName);
     } else {
-        // Larger terminal => show name + blank line + desc
+        // Add a leading space for aesthetics
         serverBox.setContent(` ${tunerName}\n\n${tunerDesc}`);
     }
 }
@@ -711,6 +734,7 @@ screen.on('keypress', (ch, key) => {
             screen.render();
         });
     } else if (key.full === 'h') {
+        // Toggle the help box
         helpBox.hidden = !helpBox.hidden;
         screen.render();
     } else if (key.full === 'p') {
@@ -758,5 +782,5 @@ screen.on('keypress', (ch, key) => {
 // Final Initialization
 // -----------------------------
 checkSizeAndToggleUI();
-updateTitleBar();     // do initial top bar update
-updateServerBox();    // fill server info if tuner info is already loaded
+updateTitleBar();     // Initial top bar update
+updateServerBox();    // Fill server info if tuner info is already loaded

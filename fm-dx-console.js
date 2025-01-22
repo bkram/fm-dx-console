@@ -72,7 +72,6 @@ if (!argv.url) {
     argUrl = argv.url.toLowerCase().replace("#", "").replace("?", "");
 }
 
-// Function to check for valid URL
 function isValidURL(urlString) {
     try {
         new URL(urlString);
@@ -82,13 +81,10 @@ function isValidURL(urlString) {
     }
 }
 
-// Function to format a WebSocket URL
 function formatWebSocketURL(url) {
-    // Remove trailing slash if it exists
     if (url.endsWith('/')) {
         url = url.slice(0, -1);
     }
-    // Replace http:// with ws:// and https:// with wss://
     if (url.startsWith("http://")) {
         url = url.replace("http://", "ws://");
     } else if (url.startsWith("https://")) {
@@ -98,7 +94,6 @@ function formatWebSocketURL(url) {
 }
 
 if (isValidURL(argUrl)) {
-    // URL is valid, proceed with processing
     let websocketAddress = formatWebSocketURL(argUrl);
     websocketAudio = `${websocketAddress}/audio`;
     websocketData = `${websocketAddress}/text`;
@@ -107,22 +102,27 @@ if (isValidURL(argUrl)) {
     process.exit(1);
 }
 
-// Function to convert number to frequency
 function convertToFrequency(num) {
-    if (num === null || num === undefined || isNaN(Number(num.toString().replace(',', '.')))) {
+    if (
+        num === null ||
+        num === undefined ||
+        isNaN(Number(num.toString().replace(',', '.')))
+    ) {
         return null;
     }
     num = parseFloat(num.toString().replace(',', '.'));
-    while (num >= 100) num /= 10;
-    if (num < 76) num *= 10;
+    while (num >= 100) {
+        num /= 10;
+    }
+    if (num < 76) {
+        num *= 10;
+    }
     return Math.round(num * 10) / 10;
 }
 
 // -----------------------------
 // UI Setup
 // -----------------------------
-
-// Create a Blessed screen
 const screen = blessed.screen({
     smartCSR: true,
     mouse: true,
@@ -133,53 +133,77 @@ const screen = blessed.screen({
     }
 });
 
-// Function to generate bottom text
 function genBottomText(variableString) {
     const helpString = "Press `h` for help";
     const totalWidth = screen.cols - 2;
     const maxVariableLength = totalWidth - (helpString.length + 1);
-    const truncatedVariableString = variableString.length > maxVariableLength
-        ? variableString.substring(0, maxVariableLength)
-        : variableString;
-    const paddingLength = totalWidth - truncatedVariableString.length - helpString.length;
-    return ' ' + truncatedVariableString + ' '.repeat(paddingLength) + helpString + ' ';
+
+    const truncatedVariableString =
+        variableString.length > maxVariableLength
+            ? variableString.substring(0, maxVariableLength)
+            : variableString;
+
+    const paddingLength =
+        totalWidth - truncatedVariableString.length - helpString.length;
+
+    return (
+        ' ' +
+        truncatedVariableString +
+        ' '.repeat(Math.max(0, paddingLength)) +
+        helpString +
+        ' '
+    );
 }
 
-// Function to generate the help content
+// Updated help content: explains arrow keys, removed references to 'a'/'s'
 function generateHelpContent() {
+    /*
+      We have four arrow keys plus a few letter keys left:
+       - left  => -0.1 MHz
+       - right => +0.1 MHz
+       - up    => +0.01 MHz
+       - down  => -0.01 MHz
+       - z     => -1 MHz
+       - x     => +1 MHz
+       - r     => refresh
+       - p     => toggle audio
+       - [     => toggle iMS
+       - ]     => toggle EQ
+       - y     => toggle antenna
+       - t     => direct frequency
+       - esc   => quit
+       - h     => help
+    */
     const leftCommands = [
-        "'1' decrease .001 MHz",
-        "'q' decrease .01 MHz",
-        "'a' decrease .1 MHz",
-        "'z' decrease 1 MHz",
-        "'r' refresh",
-        "'p' play audio",
-        "'[' toggle iMS",
-        "'y' toggle antenna",
+        "'←'  decrease 0.1 MHz",
+        "'↓'  decrease 0.01 MHz",
+        "'z'  decrease 1 MHz",
+        "'r'  refresh",
+        "'p'  play audio",
+        "'['  toggle iMS",
+        "'y'  toggle antenna",
     ];
 
     const rightCommands = [
-        "'2' increase .001 MHz",
-        "'w' increase .01 MHz",
-        "'s' increase .1 MHz",
-        "'x' increase 1 MHz",
-        "'t' set frequency",
-        "']' toggle EQ",
-        "'Esc' quit",
-        "'h' toggle help",
+        "'→'  increase 0.1 MHz",
+        "'↑'  increase 0.01 MHz",
+        "'x'  increase 1 MHz",
+        "'t'  set frequency",
+        "']'  toggle EQ",
+        "'Esc'  quit",
+        "'h'  toggle help",
     ];
 
     let helpContent = '  Press key to:\n\n';
     for (let i = 0; i < leftCommands.length; i++) {
         const leftCmd = leftCommands[i];
         const rightCmd = rightCommands[i] || '';
-        const leftPadded = leftCmd.padEnd(28);
-        helpContent += `  ${leftPadded}${rightCmd}\n`;
+        const leftPadded = leftCmd.padEnd(27);
+        helpContent += `  ${leftPadded}  ${rightCmd}\n`;
     }
     return helpContent;
 }
 
-// Function to pad strings with spaces and color
 function padStringWithSpaces(text, color = 'green', totalLength) {
     const tagRegex = /\{(.*?)\}/g;
     const strippedText = text.replace(tagRegex, '');
@@ -188,12 +212,10 @@ function padStringWithSpaces(text, color = 'green', totalLength) {
     return ' ' + `{${color}-fg}` + text + `{/${color}-fg}` + ' '.repeat(spacesToAdd);
 }
 
-// Function to create box labels with styling
 function boxLabel(label) {
     return `{white-fg}{blue-bg}{bold}${label}{/bold}{/blue-bg}{/white-fg}`;
 }
 
-// Function to check terminal dimensions
 function checkTerminalSize() {
     const { cols, rows } = screen;
     if (cols < 80 || rows < 24) {
@@ -201,8 +223,9 @@ function checkTerminalSize() {
         process.exit(1);
     }
 }
+checkTerminalSize();
 
-// Create a parent box to fill the terminal and append to screen
+// Parent box
 const parentBox = blessed.box({
     top: 0,
     left: 0,
@@ -213,7 +236,6 @@ const parentBox = blessed.box({
 });
 screen.append(parentBox);
 
-// Now, create child elements with `parent: parentBox`
 const title = blessed.box({
     parent: parentBox,
     top: 0,
@@ -249,7 +271,7 @@ const serverBox = blessed.box({
     label: boxLabel('Connected to:'),
 });
 
-// Create other boxes (tunerBox, rdsBox, etc.) with fixed sizes
+// Tuner, RDS, Station Info
 const tunerWidth = 24;
 const rdsWidth = 17;
 const heightInRows = 8;
@@ -282,7 +304,7 @@ const stationBox = blessed.box({
     parent: parentBox,
     top: 6,
     left: tunerWidth + rdsWidth,
-    width: `100%-${tunerWidth + rdsWidth}`, // Using string expression
+    width: `100%-${tunerWidth + rdsWidth}`,
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
@@ -290,7 +312,7 @@ const stationBox = blessed.box({
     label: boxLabel('Station Information'),
 });
 
-// Create a box for RT0 and RT1
+// RT Box
 const rtBox = blessed.box({
     parent: parentBox,
     top: tunerBox.top + tunerBox.height,
@@ -303,7 +325,7 @@ const rtBox = blessed.box({
     label: boxLabel('RDS Radiotext'),
 });
 
-// Create signalBox and statsBox
+// Signal/Stats boxes
 const boxHeight = 5;
 
 const signalBox = blessed.box({
@@ -345,7 +367,7 @@ const statsBox = blessed.box({
     label: boxLabel('Statistics'),
 });
 
-// Create a bottom title `bar`
+// Bottom bar
 const bottomBox = blessed.box({
     parent: parentBox,
     bottom: 0,
@@ -357,7 +379,7 @@ const bottomBox = blessed.box({
     content: genBottomText(argUrl),
 });
 
-// Create a help box
+// Help box
 const helpBox = blessed.box({
     parent: parentBox,
     top: 'center',
@@ -372,10 +394,8 @@ const helpBox = blessed.box({
     hidden: true,
 });
 
-// Create an extra "Additional Connection Info" box (conditionally displayed)
+// Extra info box
 let extraInfoBox = null;
-
-// Function to create the extraInfoBox
 function createExtraInfoBox() {
     if (!extraInfoBox) {
         extraInfoBox = blessed.box({
@@ -397,7 +417,6 @@ function createExtraInfoBox() {
     screen.render();
 }
 
-// Function to remove/hide the extraInfoBox
 function removeExtraInfoBox() {
     if (extraInfoBox) {
         extraInfoBox.hide();
@@ -405,7 +424,6 @@ function removeExtraInfoBox() {
     }
 }
 
-// Function to initialize the extraInfoBox based on terminal size
 function initializeExtraInfoBox() {
     const { rows } = screen;
     if (rows > 25) {
@@ -414,40 +432,28 @@ function initializeExtraInfoBox() {
         removeExtraInfoBox();
     }
 }
-
-// Initial check for terminal size and create/hide extraInfoBox accordingly
 initializeExtraInfoBox();
-
-// Initial render
 screen.render();
 
-// -----------------------------
-// Function Definitions
-// -----------------------------
-
-// Function to update the clock content
+// Clock
 function updateClock() {
     const now = new Date();
     const timeStr = now.toLocaleTimeString([], { hour12: false });
     clockText.setContent(timeStr);
 }
-
-// Update the clock content every second
 setInterval(() => {
     updateClock();
     screen.render();
 }, 1000);
 
-// Function to update the progress bar width
+// Resize
 function updateProgressBarWidth() {
     progressBar.width = signalBox.width - 5;
 }
 
-// Handle terminal resize events
 screen.on('resize', () => {
     checkTerminalSize();
 
-    // Update widths and positions
     parentBox.width = '100%';
     parentBox.height = '100%';
 
@@ -464,8 +470,7 @@ screen.on('resize', () => {
     bottomBox.left = 0;
     bottomBox.content = genBottomText(argUrl);
 
-    // Update stationBox width
-    stationBox.width = `100%-${tunerWidth + rdsWidth}`; // Using string expression
+    stationBox.width = `100%-${tunerWidth + rdsWidth}`;
 
     rtBox.width = '100%';
 
@@ -475,95 +480,83 @@ screen.on('resize', () => {
 
     updateProgressBarWidth();
 
-    // Reposition help box using known dimensions
-    const helpBoxHeight = 18; // Height set during creation
-    const helpBoxWidth = 60;  // Width set during creation
+    const helpBoxHeight = 18;
+    const helpBoxWidth = 60;
+    helpBox.top = Math.floor((screen.rows - helpBoxHeight) / 2);
+    helpBox.left = Math.floor((screen.cols - helpBoxWidth) / 2);
 
-    if (helpBox) {
-        helpBox.top = Math.floor((screen.rows - helpBoxHeight) / 2);
-        helpBox.left = Math.floor((screen.cols - helpBoxWidth) / 2);
-    }
-
-    // Initialize or remove the extraInfoBox based on new terminal size
     initializeExtraInfoBox();
-
     screen.render();
 });
 
-// Function to update the main box content (Tuner Box)
-function updateTunerBox(jsonData) {
-    if (!tunerBox || !jsonData) return;
+// UI updates
+function updateTunerBox(data) {
+    if (!tunerBox || !data) return;
 
     const padLength = 8;
-    const signalValue = parseFloat(jsonData.sig);
+    const signalValue = parseFloat(data.sig);
     const signalDisplay = isNaN(signalValue) ? 'N/A' : `${signalValue.toFixed(1)} dBf`;
+
     tunerBox.setContent(
-        `${padStringWithSpaces("Freq:", 'green', padLength)}${jsonData.freq} MHz\n` +
+        `${padStringWithSpaces("Freq:", 'green', padLength)}${data.freq} MHz\n` +
         `${padStringWithSpaces("Signal:", 'green', padLength)}${signalDisplay}\n` +
-        `${padStringWithSpaces("Mode:", 'green', padLength)}${jsonData.st ? "Stereo" : "Mono"}\n` +
-        `${padStringWithSpaces("iMS:", 'green', padLength)}${Number(jsonData.ims) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-        `${padStringWithSpaces("EQ:", 'green', padLength)}${Number(jsonData.eq) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-        `${padStringWithSpaces("ANT:", 'green', padLength)}${antNames[jsonData.ant] || 'N/A'}\n`);
+        `${padStringWithSpaces("Mode:", 'green', padLength)}${data.st ? "Stereo" : "Mono"}\n` +
+        `${padStringWithSpaces("iMS:", 'green', padLength)}${Number(data.ims) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
+        `${padStringWithSpaces("EQ:", 'green', padLength)}${Number(data.eq) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
+        `${padStringWithSpaces("ANT:", 'green', padLength)}${antNames[data.ant] || 'N/A'}\n`
+    );
 }
 
-// Function to update the server box
 function updateServerBox() {
-    if (typeof tunerName !== 'undefined' && tunerName !== '' &&
-        typeof tunerDesc !== 'undefined' && tunerDesc !== '') {
+    if (tunerName && tunerDesc) {
         serverBox.setContent(tunerDesc);
         serverBox.setLabel(boxLabel(`Connected to: ${tunerName}`));
         bottomBox.setContent(genBottomText(argUrl));
 
-        // Update the extraInfoBox content if it's displayed
         if (extraInfoBox && !extraInfoBox.hidden) {
             extraInfoBox.setContent('Connected to: ' + (tunerName || 'N/A'));
         }
     }
 }
 
-// Function to update the RDS box content
-function updateRdsBox(jsonData) {
-    if (!rdsBox || !jsonData) return;
+function updateRdsBox(data) {
+    if (!rdsBox || !data) return;
 
     const padLength = 4;
-    if (jsonData.freq >= 75 && jsonData.pi !== "?") {
+    if (data.freq >= 75 && data.pi !== "?") {
         let msshow;
-        if (jsonData.ms === 0) {
+        if (data.ms === 0) {
             msshow = "{grey-fg}M{/grey-fg}S";
-        } else if (jsonData.ms === -1) {
+        } else if (data.ms === -1) {
             msshow = "{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}";
         } else {
             msshow = "M{grey-fg}S{/grey-fg}";
         }
 
         rdsBox.setContent(
-            `${padStringWithSpaces("PS:", 'green', padLength)}${jsonData.ps.trimStart()}\n` +
-            `${padStringWithSpaces("PI:", 'green', padLength)}${jsonData.pi}\n` +
+            `${padStringWithSpaces("PS:", 'green', padLength)}${data.ps.trimStart()}\n` +
+            `${padStringWithSpaces("PI:", 'green', padLength)}${data.pi}\n` +
             `{center}{bold}Flags{/bold}\n` +
-            `${jsonData.tp ? "TP" : "{grey-fg}TP{/grey-fg}"} ` +
-            `${jsonData.ta ? "TA" : "{grey-fg}TA{/grey-fg}"} ` +
+            `${data.tp ? "TP" : "{grey-fg}TP{/grey-fg}"} ` +
+            `${data.ta ? "TA" : "{grey-fg}TA{/grey-fg}"} ` +
             `${msshow}\n` +
-            `${jsonData.pty ? europe_programmes[jsonData.pty] : ""}{/center}`
+            `${data.pty ? europe_programmes[data.pty] : ""}{/center}`
         );
-    }
-    else {
+    } else {
         rdsBox.setContent('');
     }
 }
 
-// Function to update the RT box content
-function updateRTBox(jsonData) {
-    if (!rtBox || !jsonData) return;
-
+function updateRTBox(data) {
+    if (!rtBox || !data) return;
     rtBox.setContent(
-        `{center}${jsonData.rt0.trim()}{/center}\n` +
-        `{center}${jsonData.rt1.trim()}{/center}`);
+        `{center}${data.rt0.trim()}{/center}\n` +
+        `{center}${data.rt1.trim()}{/center}`
+    );
 }
 
-// Function to update the StationBox
 function updateStationBox(txInfo) {
     if (!stationBox || !txInfo) return;
-
     const padLength = 10;
     if (txInfo.tx) {
         stationBox.setContent(
@@ -571,43 +564,39 @@ function updateStationBox(txInfo) {
             `${padStringWithSpaces("Location:", 'green', padLength)}${txInfo.city + ", " + txInfo.itu}\n` +
             `${padStringWithSpaces("Distance:", 'green', padLength)}${txInfo.dist + " km"}\n` +
             `${padStringWithSpaces("Power:", 'green', padLength)}${txInfo.erp + " kW " + "[" + txInfo.pol + "]"}\n` +
-            `${padStringWithSpaces("Azimuth:", 'green', padLength)}${txInfo.azi + "°"}`);
+            `${padStringWithSpaces("Azimuth:", 'green', padLength)}${txInfo.azi + "°"}`
+        );
     } else {
         stationBox.setContent("");
     }
 }
 
-// Function to update the statsBox
-function updateStatsBox(jsonData) {
-    if (!statsBox || !jsonData) return;
+function updateStatsBox(data) {
+    if (!statsBox || !data) return;
 
     statsBox.setContent(
-        `{center}Server users: ${jsonData.users}\n` +
+        `{center}Server users: ${data.users}\n` +
         `Server ping: ${pingTime !== null ? pingTime + ' ms' : ''}\n` +
-        `Local audio: ${player.getStatus() ? "Playing" : "Stopped"}{/center}`);
+        `Local audio: ${player.getStatus() ? "Playing" : "Stopped"}{/center}`
+    );
 }
 
-// Function to scale the progress bar value
+// Signal meter
 function scaleValue(value) {
-    const maxvalue = 130; // Set to actual max TEF value
+    const maxvalue = 130; // Adjust if needed
     value = Math.max(0, Math.min(maxvalue, value));
     return Math.floor((value / maxvalue) * 100);
 }
 
-// Function to update the signal meter
 function updateSignal(signal) {
     if (!progressBar) return;
     progressBar.setProgress(scaleValue(signal));
 }
 
-// -----------------------------
-// Audio Streaming Setup
-// -----------------------------
+// Audio
 const player = playAudio(websocketAudio, userAgent, 2048, argv.debug);
 
-// -----------------------------
-// Tuner Information Retrieval
-// -----------------------------
+// Tuner info + Ping
 async function tunerInfo() {
     try {
         const result = await getTunerInfo(argUrl);
@@ -620,12 +609,8 @@ async function tunerInfo() {
         debugLog(error.message);
     }
 }
-
 tunerInfo();
 
-// -----------------------------
-// Ping Functionality
-// -----------------------------
 async function doPing() {
     try {
         pingTime = await getPingTime(argUrl);
@@ -641,23 +626,20 @@ async function doPing() {
 doPing();
 setInterval(doPing, 5000);
 
-// -----------------------------
-// WebSocket Setup and Event Handlers
-// -----------------------------
+// WebSocket
 const wsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (control)` } } : {};
 const ws = new WebSocket(websocketData, wsOptions);
 
-// WebSocket event handlers
-ws.on('open', function () {
+ws.on('open', () => {
     debugLog('WebSocket connection established');
 });
-ws.on('message', function (data) {
+
+ws.on('message', (data) => {
     try {
         const newData = JSON.parse(data);
 
         if (JSON.stringify(newData) !== JSON.stringify(previousJsonData)) {
             jsonData = newData;
-
             updateTunerBox(jsonData);
             updateRdsBox(jsonData);
             updateSignal(jsonData.sig);
@@ -665,75 +647,68 @@ ws.on('message', function (data) {
             updateRTBox(jsonData);
             updateStatsBox(jsonData);
 
-            // Update extraInfoBox if it's displayed
             if (extraInfoBox && !extraInfoBox.hidden) {
                 extraInfoBox.setContent('Connected to: ' + (tunerName || 'N/A'));
             }
 
             screen.render();
         }
-
         previousJsonData = newData;
-
     } catch (error) {
         debugLog('Error parsing JSON:', error);
     }
 });
 
-ws.on('close', function () {
+ws.on('close', () => {
     debugLog('WebSocket connection closed');
 });
 
-// -----------------------------
-// Key Bindings and Event Handling
-// -----------------------------
-screen.on('keypress', function (ch, key) {
-    if ((key.full === 's') || (key.full === 'right')) { // Increase frequency by 100 kHz
+// Key Bindings
+//
+// Removed 'a' and 's'. Now arrow keys are used for freq stepping:
+//  left => -100 kHz, right => +100 kHz
+//  up => +10 kHz,    down => -10 kHz
+//
+// Also kept z/x, r, p, [, ], y, t, h, esc.
+
+screen.on('keypress', (ch, key) => {
+    if (key.full === 'right') {
+        // Increase freq by 100 kHz
         if (jsonData && jsonData.freq) {
-            const newFreq = (jsonData.freq * 1000) + 100;
-            ws.send(`T${newFreq}`);
+            ws.send(`T${(jsonData.freq * 1000) + 100}`);
         }
-    } else if ((key.full === 'a') || (key.full === 'left')) { // Decrease frequency by 100 kHz
+    } else if (key.full === 'left') {
+        // Decrease freq by 100 kHz
         if (jsonData && jsonData.freq) {
-            const newFreq = (jsonData.freq * 1000) - 100;
-            ws.send(`T${newFreq}`);
+            ws.send(`T${(jsonData.freq * 1000) - 100}`);
         }
-    } else if ((key.full === 'x')) { // Increase frequency by 1 MHz
+    } else if (key.full === 'up') {
+        // Increase freq by 10 kHz
         if (jsonData && jsonData.freq) {
-            const newFreq = (jsonData.freq * 1000) + 1000;
-            ws.send(`T${newFreq}`);
+            ws.send(`T${(jsonData.freq * 1000) + 10}`);
         }
-    } else if (key.full === 'z') { // Decrease frequency by 1 MHz
+    } else if (key.full === 'down') {
+        // Decrease freq by 10 kHz
         if (jsonData && jsonData.freq) {
-            const newFreq = (jsonData.freq * 1000) - 1000;
-            ws.send(`T${newFreq}`);
+            ws.send(`T${(jsonData.freq * 1000) - 10}`);
         }
-    } else if ((key.full === 'q') || (key.full === 'down')) { // Decrease frequency by 10 kHz
+    } else if (key.full === 'x') {
+        // Increase freq by 1 MHz
         if (jsonData && jsonData.freq) {
-            const newFreq = (jsonData.freq * 1000) - 10;
-            ws.send(`T${newFreq}`);
+            ws.send(`T${(jsonData.freq * 1000) + 1000}`);
         }
-    } else if ((key.full === 'w') || (key.full === 'up')) { // Increase frequency by 10 kHz
+    } else if (key.full === 'z') {
+        // Decrease freq by 1 MHz
         if (jsonData && jsonData.freq) {
-            const newFreq = (jsonData.freq * 1000) + 10;
-            ws.send(`T${newFreq}`);
+            ws.send(`T${(jsonData.freq * 1000) - 1000}`);
         }
-    } else if (key.full === '1') { // Decrease frequency by 1 kHz
+    } else if (key.full === 'r') {
+        // Refresh freq
         if (jsonData && jsonData.freq) {
-            const newFreq = (jsonData.freq * 1000) - 1;
-            ws.send(`T${newFreq}`);
+            ws.send(`T${(jsonData.freq * 1000)}`);
         }
-    } else if (key.full === '2') { // Increase frequency by 1 kHz
-        if (jsonData && jsonData.freq) {
-            const newFreq = (jsonData.freq * 1000) + 1;
-            ws.send(`T${newFreq}`);
-        }
-    } else if (key.full === 'r') { // Refresh by setting the frequency again
-        if (jsonData && jsonData.freq) {
-            const newFreq = (jsonData.freq * 1000);
-            ws.send(`T${newFreq}`);
-        }
-    } else if (key.full === 't') { // Set frequency
+    } else if (key.full === 't') {
+        // Direct frequency input
         screen.saveFocus();
         const dialog = blessed.prompt({
             parent: parentBox,
@@ -746,7 +721,7 @@ screen.on('keypress', function (ch, key) {
             label: boxLabel('Direct Tuning'),
             tags: true,
         });
-        dialog.input('\n  Enter frequency in MHz', '', function (err, value) {
+        dialog.input('\n  Enter frequency in MHz', '', (err, value) => {
             if (!err) {
                 const newFreq = parseFloat(convertToFrequency(value)) * 1000;
                 if (!isNaN(newFreq)) {
@@ -759,14 +734,16 @@ screen.on('keypress', function (ch, key) {
             screen.restoreFocus();
             screen.render();
         });
-    } else if (key.full === 'h') { // Toggle help visibility
+    } else if (key.full === 'h') {
+        // Toggle help box
         if (helpBox.hidden) {
             helpBox.show();
         } else {
             helpBox.hide();
         }
         screen.render();
-    } else if (key.full === 'p') { // Toggle playback
+    } else if (key.full === 'p') {
+        // Toggle audio playback
         if (player.getStatus()) {
             player.stop();
         } else {
@@ -776,92 +753,33 @@ screen.on('keypress', function (ch, key) {
             updateStatsBox(jsonData);
             screen.render();
         }
-    } else if (key.full === '[') { // Toggle iMS
+    } else if (key.full === '[') {
+        // Toggle iMS
         if (jsonData.ims == 1) {
             ws.send(`G${jsonData.eq}0`);
-        }
-        else {
+        } else {
             ws.send(`G${jsonData.eq}1`);
         }
-    } else if (key.full === ']') { // Toggle EQ
+    } else if (key.full === ']') {
+        // Toggle EQ
         if (jsonData.eq == 1) {
             ws.send(`G0${jsonData.ims}`);
-        }
-        else {
+        } else {
             ws.send(`G1${jsonData.ims}`);
         }
-    } else if (key.full === 'y') { // Toggle antenna
+    } else if (key.full === 'y') {
+        // Toggle antenna
         let newAnt = parseInt(jsonData.ant) + 1;
         if (newAnt >= antNames.length) {
             newAnt = 0;
         }
         ws.send(`Z${newAnt}`);
-    }
-    else {
+    } else {
         debugLog(key.full);
     }
 });
 
 // Quit on Escape, C-c
-screen.key(['escape', 'C-c'], function () {
+screen.key(['escape', 'C-c'], () => {
     process.exit(0);
 });
-
-// -----------------------------
-// Additional Functions
-// -----------------------------
-
-// Function to create the extraInfoBox
-function createExtraInfoBox() {
-    if (!extraInfoBox) {
-        extraInfoBox = blessed.box({
-            parent: parentBox,
-            top: rtBox.top + rtBox.height + boxHeight,
-            left: 0,
-            width: '100%',
-            height: 3,
-            tags: true,
-            border: { type: 'line' },
-            style: boxStyle,
-            label: boxLabel('Additional Connection Info'),
-            content: 'Connected to: ' + (tunerName || 'N/A'),
-        });
-    } else {
-        extraInfoBox.show();
-        extraInfoBox.setContent('Connected to: ' + (tunerName || 'N/A'));
-    }
-    screen.render();
-}
-
-// Function to remove/hide the extraInfoBox
-function removeExtraInfoBox() {
-    if (extraInfoBox) {
-        extraInfoBox.hide();
-        screen.render();
-    }
-}
-
-// Function to initialize the extraInfoBox based on terminal size
-function initializeExtraInfoBox() {
-    const { rows } = screen;
-    if (rows > 25) {
-        createExtraInfoBox();
-    } else {
-        removeExtraInfoBox();
-    }
-}
-
-// Ensure extraInfoBox is updated when tuner info is updated
-function updateServerBox() {
-    if (typeof tunerName !== 'undefined' && tunerName !== '' &&
-        typeof tunerDesc !== 'undefined' && tunerDesc !== '') {
-        serverBox.setContent(tunerDesc);
-        serverBox.setLabel(boxLabel(`Connected to: ${tunerName}`));
-        bottomBox.setContent(genBottomText(argUrl));
-
-        // Update the extraInfoBox content if it's displayed
-        if (extraInfoBox && !extraInfoBox.hidden) {
-            extraInfoBox.setContent('Connected to: ' + (tunerName || 'N/A'));
-        }
-    }
-}

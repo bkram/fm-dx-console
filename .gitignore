@@ -137,3 +137,4 @@ tests/
 # exclude log files
 console.log
 3lasclient.log
+package-lock.json

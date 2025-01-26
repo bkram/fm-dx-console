@@ -1,16 +1,30 @@
 # Changelog
 
+## FM-DX Console 1.50
+
+- UI Enhancements:
+  - Redesigned the help menu into a two-column layout for improved clarity.
+  - Made incremental UI improvements for a cleaner and more intuitive experience.
+  - Removed unused keys, as cursor navigation now handles these functionalities.
+
+- Performance Improvements:
+  - Optimized screen refresh logic for smoother operation.
+  - Introduced command throttling to enhance responsiveness and prevent overloading.
+
+- New Features:
+  - Introduced dynamic screen functionality, enabling adaptable layouts for improved usability and scalability.
+
 ## FM-DX Console 1.41
 
-- Fix display of iMS and EQ, when using fm-dx-webserver version 1.2.7
+- Fixed display issues with iMS and EQ when using fm-dx-webserver version 1.2.7.
 
 ## FM-DX Console 1.4
 
 - Fixed a crash that occurred when closing the tuning window.
-- Added a ping every 5 seconds for a more realistic response time.
+- Added a ping every 5 seconds for more realistic response times.
 - Implemented meta property tags for titles and descriptions.
 - Redesigned the server information box.
 - Moved the connected URL display to the bottom of the window.
-- Add buffering on play
-- URL filtering to support URL from ctrl-fm-tuner.nl
-- Add default antenna name to prevent an antenna named 'undefined'
+- Added buffering during playback to prevent audio artifacts.
+- Enhanced URL filtering to support ctrl-fm-tuner.nl URLs.
+- Added a default antenna name to avoid an antenna being named 'undefined'.

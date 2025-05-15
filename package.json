@@ -7,7 +7,7 @@
     "start": "node fm-dx-console.js"
   },
   "dependencies": {
-    "axios": "^1.6.7",
+    "axios": "^1.8.2",
     "blessed": "^0.1.81",
     "cheerio": "^1.0.0-rc.12",
     "minimist": "^1.2.8",

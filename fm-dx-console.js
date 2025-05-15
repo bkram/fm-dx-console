@@ -513,30 +513,45 @@ function updateTunerBox(data) {
 
 function updateRdsBox(data) {
     if (!rdsBox || !data) return;
-    const padLength = 4;
-    if (data.freq >= 75 && data.pi !== "?") {
-        let msshow;
-        if (data.ms === 0) {
-            msshow = "{grey-fg}M{/grey-fg}S";
-        } else if (data.ms === -1) {
-            msshow = "{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}";
-        } else {
-            msshow = "M{grey-fg}S{/grey-fg}";
-        }
+    const padLength = 5;  // Alignment for labels
 
-        rdsBox.setContent(
-            `${padStringWithSpaces("PS:", 'green', padLength)}${data.ps.trimStart()}\n` +
-            `${padStringWithSpaces("PI:", 'green', padLength)}${data.pi}\n` +
-            `{center}{bold}Flags{/bold}\n` +
-            `${data.tp ? "TP" : "{grey-fg}TP{/grey-fg}"} ` +
-            `${data.ta ? "TA" : "{grey-fg}TA{/grey-fg}"} ` +
-            `${msshow}\n` +
-            `${data.pty ? europe_programmes[data.pty] : ""}{/center}`
-        );
+    // Check for valid RDS data
+    const hasRds = data.freq >= 75 && data.pi !== "?";
+
+    // Values or blanks
+    const psValue = hasRds ? data.ps.trimStart() : "";
+    const piValue = hasRds ? data.pi : "";
+    const eccValue = (hasRds && data.ecc != null) ? data.ecc : "";
+
+    // MS flag display
+    let msshow;
+    if (!hasRds) {
+        msshow = "{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}";
+    } else if (data.ms === 0) {
+        msshow = "{grey-fg}M{/grey-fg}S";
+    } else if (data.ms === -1) {
+        msshow = "{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}";
     } else {
-        rdsBox.setContent('');
+        msshow = "M{grey-fg}S{/grey-fg}";
     }
+
+    // TP/TA flags and programme type
+    const tpStr = hasRds && data.tp ? "TP" : "{grey-fg}TP{/grey-fg}";
+    const taStr = hasRds && data.ta ? "TA" : "{grey-fg}TA{/grey-fg}";
+    const ptyText = (hasRds && data.pty) ? europe_programmes[data.pty] : "";
+
+    // Build and set content
+    const lines = [];
+    lines.push(`${padStringWithSpaces("PS:", 'green', padLength)}${psValue}`);
+    lines.push(`${padStringWithSpaces("PI:", 'green', padLength)}${piValue}`);
+    lines.push(`${padStringWithSpaces("ECC:", 'green', padLength)}${eccValue}`);
+    lines.push(`{center}{bold}Flags{/bold}`);
+    lines.push(`${tpStr} ${taStr} ${msshow}`);
+    lines.push(`${ptyText}{/center}`);
+
+    rdsBox.setContent(lines.join("\n"));
 }
+
 
 function updateRTBox(data) {
     if (!rtBox || !data) return;

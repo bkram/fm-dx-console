@@ -4,8 +4,6 @@
 // Console client for fm-dx-webserver
 
 // -----------------------------
-// Imports
-// -----------------------------
 const argv = require('minimist')(process.argv.slice(2), {
     string: ['url'],
     boolean: ['debug']
@@ -18,56 +16,42 @@ const { getTunerInfo, getPingTime } = require('./tunerinfo');
 const playAudio = require('./3lasclient');
 
 // -----------------------------
-// Global Constants
+// Constants
 // -----------------------------
 const europe_programmes = [
-    "No PTY", "News", "Current Affairs", "Info",
-    "Sport", "Education", "Drama", "Culture", "Science", "Varied",
-    "Pop M", "Rock M", "Easy Listening", "Light Classical",
-    "Serious Classical", "Other Music", "Weather", "Finance",
-    "Children's Programmes", "Social Affairs", "Religion", "Phone-in",
-    "Travel", "Leisure", "Jazz Music", "Country Music", "National Music",
-    "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
+    "No PTY", "News", "Current Affairs", "Info", "Sport", "Education", "Drama", "Culture", "Science", "Varied",
+    "Pop M", "Rock M", "Easy Listening", "Light Classical", "Serious Classical", "Other Music", "Weather", "Finance",
+    "Children's Programmes", "Social Affairs", "Religion", "Phone-in", "Travel", "Leisure", "Jazz Music",
+    "Country Music", "National Music", "Oldies Music", "Folk Music", "Documentary", "Alarm Test", "Alarm",
 ];
-const version = '1.50';
+const version = '1.51';
 const userAgent = `fm-dx-console/${version}`;
-
-// Terminal must be at least 80x24
 const MIN_COLS = 80;
 const MIN_ROWS = 24;
-
-// Throttle interval => 8 commands/sec
 const THROTTLE_MS = 125;
-
-// Style objects
 const titleStyle = { fg: 'black', bg: 'green', bold: true };
 const boxStyle = { border: { fg: 'green', bg: 'blue' }, bg: 'blue' };
 
 // -----------------------------
-// Global Variables
+// State
 // -----------------------------
 let jsonData = null;
-let previousJsonData = null;
-let tunerDesc = '';
+let prevData = null;
 let tunerName = '';
+let tunerDesc = '';
 let antNames = [];
+let pingTime = null;
 let websocketAudio;
 let websocketData;
-let argDebug = argv.debug;
+const argDebug = argv.debug;
 let argUrl;
-let pingTime = null;
 
 // -----------------------------
-// Logging Setup
+// Logging
 // -----------------------------
-const logFilePath = path.join(__dirname, 'console.log');
-const logStream = fs.createWriteStream(logFilePath, { flags: 'w' });
-
+const logStream = fs.createWriteStream(path.join(__dirname, 'console.log'), { flags: 'w' });
 function debugLog(...args) {
-    if (argDebug) {
-        const message = args.join(' ');
-        logStream.write(message + '\n');
-    }
+    if (argDebug) logStream.write(args.join(' ') + '\n');
 }
 
 // -----------------------------
@@ -76,60 +60,38 @@ function debugLog(...args) {
 if (!argv.url) {
     console.error('Usage: node fm-dx-console.js --url <fm-dx> [--debug]');
     process.exit(1);
-} else {
-    argUrl = argv.url.toLowerCase().replace("#", "").replace("?", "");
 }
+argUrl = argv.url.toLowerCase().replace(/[#?]/g, '');
 
-function isValidURL(urlString) {
-    try {
-        new URL(urlString);
-        return true;
-    } catch (err) {
-        return false;
-    }
+function isValidURL(u) {
+    try { new URL(u); return true; } catch { return false; }
 }
-
-function formatWebSocketURL(url) {
-    if (url.endsWith('/')) {
-        url = url.slice(0, -1);
-    }
-    if (url.startsWith("http://")) {
-        url = url.replace("http://", "ws://");
-    } else if (url.startsWith("https://")) {
-        url = url.replace("https://", "wss://");
-    }
-    return url;
+function formatWS(u) {
+    if (u.endsWith('/')) u = u.slice(0, -1);
+    if (u.startsWith('http://')) return u.replace('http://', 'ws://');
+    if (u.startsWith('https://')) return u.replace('https://', 'wss://');
+    return u;
 }
 
 if (isValidURL(argUrl)) {
-    let websocketAddress = formatWebSocketURL(argUrl);
-    websocketAudio = `${websocketAddress}/audio`;
-    websocketData = `${websocketAddress}/text`;
+    const addr = formatWS(argUrl);
+    websocketAudio = `${addr}/audio`;
+    websocketData = `${addr}/text`;
 } else {
-    console.error("Invalid URL provided.");
+    console.error('Invalid URL');
     process.exit(1);
 }
 
-function convertToFrequency(num) {
-    if (
-      num === null ||
-      num === undefined ||
-      isNaN(Number(num.toString().replace(',', '.')))
-    ) {
-        return null;
-    }
-    num = parseFloat(num.toString().replace(',', '.'));
-    while (num >= 100) {
-        num /= 10;
-    }
-    if (num < 76) {
-        num *= 10;
-    }
-    return Math.round(num * 10) / 10;
+function convertToFrequency(n) {
+    if (n == null || isNaN(Number(n.toString().replace(',', '.')))) return null;
+    let f = parseFloat(n.toString().replace(',', '.'));
+    while (f >= 100) f /= 10;
+    if (f < 76) f *= 10;
+    return Math.round(f * 10) / 10;
 }
 
 // -----------------------------
-// Blessed Screen
+// Blessed Screen Setup
 // -----------------------------
 const screen = blessed.screen({
     smartCSR: true,
@@ -140,38 +102,27 @@ const screen = blessed.screen({
 });
 
 // -----------------------------
-// Throttling Queue
+// Command Queue
 // -----------------------------
 const commandQueue = [];
-
-/**
- * Enqueues commands instead of sending them immediately.
- * This helps throttle sending to 8 commands/sec
- */
-function enqueueCommand(cmd) {
-    commandQueue.push(cmd);
-}
-
-/** Every 125 ms, send up to one command if ws is open */
+function enqueueCommand(cmd) { commandQueue.push(cmd); }
 setInterval(() => {
-    if (commandQueue.length > 0 && ws && ws.readyState === WebSocket.OPEN) {
-        const nextCmd = commandQueue.shift();
-        debugLog('Sending command:', nextCmd);
-        ws.send(nextCmd);
+    if (commandQueue.length && ws && ws.readyState === WebSocket.OPEN) {
+        const cmd = commandQueue.shift();
+        debugLog('Sending command:', cmd);
+        ws.send(cmd);
     }
 }, THROTTLE_MS);
 
 // -----------------------------
-// Terminal Size Check
-// If too small, hide UI and show warning
+// UI Helpers
 // -----------------------------
-function checkSizeAndToggleUI() {
+function checkSize() {
     const { cols, rows } = screen;
     if (cols < MIN_COLS || rows < MIN_ROWS) {
         uiBox.hide();
         warningBox.setContent(
-            `\n   Terminal too small!\n\n` +
-            `   Please resize to at least ${MIN_COLS}x${MIN_ROWS}\n`
+            `\n   Terminal too small!\n\n   Please resize to ${MIN_COLS}x${MIN_ROWS}`
         );
         warningBox.show();
     } else {
@@ -181,37 +132,29 @@ function checkSizeAndToggleUI() {
     screen.render();
 }
 
-// -----------------------------
-// Helper UI Functions
-// -----------------------------
-/**
- * Generates bottom bar text with left side = variableString,
- * right side = "Press `h` for help"
- */
-function genBottomText(variableString) {
-    // Right-justify "Press `h` for help"
-    const helpString = "Press `h` for help";
-    const totalWidth = screen.cols - 2;
-    const maxVariableLength = totalWidth - (helpString.length + 1);
+function genBottom(url) {
+    const help = 'Press `h` for help';
+    const tot = screen.cols - 2;
+    const max = tot - (help.length + 1);
+    let v = url;
+    if (v.length > max) v = v.slice(0, max);
+    const pad = tot - v.length - help.length;
+    return ' ' + v + ' '.repeat(Math.max(0, pad)) + help;
+}
 
-    const truncatedVariableString =
-        variableString.length > maxVariableLength
-            ? variableString.substring(0, maxVariableLength)
-            : variableString;
+function pad(txt, col, len) {
+    const stripped = txt.replace(/\{.*?\}/g, '');
+    const sp = len - stripped.length;
+    if (sp <= 0) return txt;
+    return ' ' + `{${col}-fg}` + txt + `{/${col}-fg}` + ' '.repeat(sp);
+}
 
-    const paddingLength =
-        totalWidth - truncatedVariableString.length - helpString.length;
-
-    return (
-        ' ' +
-        truncatedVariableString +
-        ' '.repeat(Math.max(0, paddingLength)) +
-        helpString
-    );
+function boxLabel(txt) {
+    return `{white-fg}{blue-bg}{bold}${txt}{/bold}{/blue-bg}{/white-fg}`;
 }
 
 /** Creates the content of the help box */
-function generateHelpContent() {
+function helpText() {
     const leftCommands = [
         "'←'  decrease 0.1 MHz",
         "'↓'  decrease 0.01 MHz",
@@ -242,485 +185,211 @@ function generateHelpContent() {
     return helpContent;
 }
 
-/**
- * Pads a string (with optional Blessed color tags)
- * to a certain width with trailing spaces
- */
-function padStringWithSpaces(text, color = 'green', totalLength) {
-    const tagRegex = /\{(.*?)\}/g;
-    const strippedText = text.replace(tagRegex, '');
-    const spacesToAdd = totalLength - strippedText.length;
-    if (spacesToAdd <= 0) return text;
-    return ' ' + `{${color}-fg}` + text + `{/${color}-fg}` + ' '.repeat(spacesToAdd);
-}
-
-/** Returns a label string with bold, colored style */
-function boxLabel(label) {
-    return `{white-fg}{blue-bg}{bold}${label}{/bold}{/blue-bg}{/white-fg}`;
-}
 
 // -----------------------------
 // UI Layout
 // -----------------------------
-
-// Main container for the entire UI
-const uiBox = blessed.box({
-    parent: screen,
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    tags: true,
-    style: { bg: 'blue' }
-});
-
-// Warning box if the terminal is too small
-const warningBox = blessed.box({
-    parent: screen,
-    width: 50,
-    height: 7,
-    top: 'center',
-    left: 'center',
-    tags: true,
-    border: 'line',
-    style: boxStyle,
-    label: '{blue-bg}{white-fg}{bold} Resize Needed {/bold}{/white-fg}{/blue-bg}',
-    hidden: true,
-    content: ''
-});
-
-// Single top bar with the title text + clock
-const titleBar = blessed.box({
-    parent: uiBox,
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: 1,
-    tags: true,
-    style: titleStyle,
-    content: ''
-});
-
-/**
- * Updates the top bar, placing the version text on the left
- * and the current time (plus trailing space) on the right.
- */
-function updateTitleBar() {
-    const leftText = ` fm-dx-console ${version} by Bkram `;
-    // Clock with a space at the end
-    const now = new Date();
-    const clockStr = now.toLocaleTimeString([], { hour12: false }) + ' ';
-
-    // Spacing so the clock is right-aligned
-    const totalWidth = screen.cols;
-    let spacing = totalWidth - (leftText.length + clockStr.length);
-    if (spacing < 1) spacing = 1;
-
-    titleBar.setContent(leftText + ' '.repeat(spacing) + clockStr);
-}
-
-// Tuner, RDS, Station sections
-const tunerWidth = 24;
-const rdsWidth = 17;
-const heightInRows = 8;
-
-const tunerBox = blessed.box({
-    parent: uiBox,
-    top: 1,
-    left: 0,
-    width: tunerWidth,
-    height: heightInRows,
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel('Tuner'),
-});
-
-const rdsBox = blessed.box({
-    parent: uiBox,
-    top: 1,
-    left: tunerWidth,
-    width: rdsWidth,
-    height: heightInRows,
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel('RDS'),
-});
-
-const stationBox = blessed.box({
-    parent: uiBox,
-    top: 1,
-    left: tunerWidth + rdsWidth,
-    width: `100%-${tunerWidth + rdsWidth}`,
-    height: heightInRows,
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel('Station Information'),
-});
-
-// RDS Radiotext box
-const rtBox = blessed.box({
-    parent: uiBox,
-    top: tunerBox.top + tunerBox.height, // 9
-    left: 0,
-    width: '100%',
-    height: 4,
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel('RDS Radiotext')
-});
-
-// Signal + Stats boxes
-const boxHeight = 5;
-
-const signalBox = blessed.box({
-    parent: uiBox,
-    top: rtBox.top + rtBox.height, // 13
-    left: 0,
-    width: '50%',
-    height: boxHeight,
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel('Signal'),
-});
-
-const progressBar = blessed.progressbar({
-    parent: signalBox,
-    top: 1,
-    left: 2,
-    width: '100%-5',
-    height: 1,
-    tags: true,
-    style: {
-        bar: { bg: 'red' }
-    },
-    filled: 0
-});
-
-const statsBox = blessed.box({
-    parent: uiBox,
-    top: rtBox.top + rtBox.height, // 13
-    left: '50%',
-    width: '50%',
-    height: boxHeight,
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel('Statistics'),
-});
-
-// Server Info near the bottom
-const serverBox = blessed.box({
-    parent: uiBox,
-    top: signalBox.top + signalBox.height, // row 18
-    left: 0,
-    width: '100%',
-    bottom: 1,  // remain 1 line above bottom bar
-    tags: true,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel('Server Info'),
-    scrollable: true,
-    alwaysScroll: true,
-    scrollbar: {
-        ch: ' ',
-        inverse: true
-    }
-});
-
-// Bottom bar with "Press `h` for help" on the right
-const bottomBox = blessed.box({
-    parent: uiBox,
-    bottom: 0,
-    left: 0,
-    width: '100%',
-    height: 1,
-    tags: true,
-    style: titleStyle,
-    content: genBottomText(argUrl)
-});
-
-// Help box in the center
-const helpBox = blessed.box({
-    parent: uiBox,
-    top: 'center',
-    left: 'center',
-    width: 60,
-    height: 18,
-    border: { type: 'line' },
-    style: boxStyle,
-    label: boxLabel('Help'),
-    content: generateHelpContent(),
-    tags: true,
-    hidden: true
-});
-
-// Render once
+const uiBox = blessed.box({ parent: screen, top: 0, left: 0, width: '100%', height: '100%', tags: true, style: { bg: 'blue' } });
+const warningBox = blessed.box({ parent: uiBox, width: 50, height: 7, top: 'center', left: 'center', tags: true, border: 'line', style: boxStyle, label: boxLabel('Resize'), hidden: true });
+const titleBar = blessed.box({ parent: uiBox, top: 0, left: 0, width: '100%', height: 1, tags: true, style: titleStyle });
+const tunerBox = blessed.box({ parent: uiBox, top: 1, left: 0, width: 24, height: 8, tags: true, border: 'line', style: boxStyle, label: boxLabel('Tuner') });
+const rdsBox = blessed.box({ parent: uiBox, top: 1, left: 24, width: 17, height: 8, tags: true, border: 'line', style: boxStyle, label: boxLabel('RDS') });
+const stationBox = blessed.box({ parent: uiBox, top: 1, left: 41, width: '100%-41', height: 8, tags: true, border: 'line', style: boxStyle, label: boxLabel('Station Information') });
+const rtBox = blessed.box({ parent: uiBox, top: 9, left: 0, width: '100%', height: 4, tags: true, border: 'line', style: boxStyle, label: boxLabel('RDS Radiotext') });
+const afBox = blessed.box({ parent: uiBox, top: 13, left: 0, width: '100%', height: 3, tags: true, border: 'line', style: boxStyle, label: boxLabel('RDS AF') });
+const signalBox = blessed.box({ parent: uiBox, top: 16, left: 0, width: '50%', height: 5, tags: true, border: 'line', style: boxStyle, label: boxLabel('Signal') });
+const progressBar = blessed.progressbar({ parent: signalBox, top: 1, left: 2, width: '100%-5', height: 1, tags: true, style: { bar: { bg: 'red' } }, filled: 0 });
+const statsBox = blessed.box({ parent: uiBox, top: 16, left: '50%', width: '50%', height: 5, tags: true, border: 'line', style: boxStyle, label: boxLabel('Stats') });
+const serverBox = blessed.box({ parent: uiBox, top: 21, left: 0, width: '100%', bottom: 1, tags: true, border: 'line', style: boxStyle, label: boxLabel('Server Info'), scrollable: true, alwaysScroll: true, scrollbar: { ch: ' ', inverse: true } });
+const bottomBox = blessed.box({ parent: uiBox, bottom: 0, left: 0, width: '100%', height: 1, tags: true, style: titleStyle, content: genBottom(argUrl) });
+const helpBox = blessed.box({ parent: uiBox, top: 'center', left: 'center', width: 60, height: 18, border: 'line', style: boxStyle, label: boxLabel('Help'), content: helpText(), tags: true, hidden: true });
 screen.render();
+setInterval(() => { updateTitleBar(); screen.render(); }, 1000);
+screen.on('resize', () => { progressBar.width = signalBox.width - 5; checkSize(); bottomBox.setContent(genBottom(argUrl)); updateTitleBar(); screen.render(); });
 
-// Update the title bar every second (for the clock)
-setInterval(() => {
-    updateTitleBar();
-    screen.render();
-}, 1000);
-
-/**
- * Adjust the progress bar width after a resize
- */
-function updateProgressBarWidth() {
-    progressBar.width = signalBox.width - 5;
+// -----------------------------
+// Update Functions
+// -----------------------------
+function updateTitleBar() {
+    const now = new Date().toLocaleTimeString([], { hour12: false }) + ' ';
+    const left = ` fm-dx-console ${version} by Bkram `;
+    let space = screen.cols - (left.length + now.length);
+    if (space < 1) space = 1;
+    titleBar.setContent(left + ' '.repeat(space) + now);
 }
 
-/**
- * On terminal resize, we re-check if UI is too small,
- * recalc the bottom bar, recalc the title bar, etc.
- */
-screen.on('resize', () => {
-    updateProgressBarWidth();
-    checkSizeAndToggleUI();
-
-    // Recompute the bottom bar text to keep "Press `h` for help" right-aligned
-    bottomBox.setContent(genBottomText(argUrl));
-
-    // Recompute the top bar clock spacing
-    updateTitleBar(); 
-
-    screen.render();
-});
-
-// -----------------------------
-// UI update functions
-// -----------------------------
-function updateTunerBox(data) {
-    if (!tunerBox || !data) return;
-    const padLength = 8;
-    const signalValue = parseFloat(data.sig);
-    const signalDisplay = isNaN(signalValue) ? 'N/A' : `${signalValue.toFixed(1)} dBf`;
-
+function updateTunerBox(d) {
+    if (!tunerBox || !d) return;
+    const p = 8;
+    const sigVal = parseFloat(d.sig);
     tunerBox.setContent(
-        `${padStringWithSpaces("Freq:", 'green', padLength)}${data.freq} MHz\n` +
-        `${padStringWithSpaces("Signal:", 'green', padLength)}${signalDisplay}\n` +
-        `${padStringWithSpaces("Mode:", 'green', padLength)}${data.st ? "Stereo" : "Mono"}\n` +
-        `${padStringWithSpaces("iMS:", 'green', padLength)}${Number(data.ims) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-        `${padStringWithSpaces("EQ:", 'green', padLength)}${Number(data.eq) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-        `${padStringWithSpaces("ANT:", 'green', padLength)}${antNames[data.ant] || 'N/A'}\n`
+        `${pad('Freq:', 'green', p)}${d.freq} MHz\n` +
+        `${pad('Signal:', 'green', p)}${isNaN(sigVal) ? 'N/A' : sigVal.toFixed(1) + ' dBf'}\n` +
+        `${pad('Mode:', 'green', p)}${d.st ? 'Stereo' : 'Mono'}\n` +
+        `${pad('iMS:', 'green', p)}${d.ims ? 'On' : '{grey-fg}Off{/grey-fg}'}\n` +
+        `${pad('EQ:', 'green', p)}${d.eq ? 'On' : '{grey-fg}Off{/grey-fg}'}\n` +
+        `${pad('ANT:', 'green', p)}${antNames[d.ant] || 'N/A'}`
     );
 }
 
-function updateRdsBox(data) {
-    if (!rdsBox || !data) return;
-    const padLength = 5;  // Alignment for labels
-
-    // Check for valid RDS data
-    const hasRds = data.freq >= 75 && data.pi !== "?";
-
-    // Values or blanks
-    const psValue = hasRds ? data.ps.trimStart() : "";
-    const piValue = hasRds ? data.pi : "";
-    const eccValue = (hasRds && data.ecc != null) ? data.ecc : "";
-
-    // MS flag display
-    let msshow;
-    if (!hasRds) {
-        msshow = "{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}";
-    } else if (data.ms === 0) {
-        msshow = "{grey-fg}M{/grey-fg}S";
-    } else if (data.ms === -1) {
-        msshow = "{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}";
-    } else {
-        msshow = "M{grey-fg}S{/grey-fg}";
-    }
-
-    // TP/TA flags and programme type
-    const tpStr = hasRds && data.tp ? "TP" : "{grey-fg}TP{/grey-fg}";
-    const taStr = hasRds && data.ta ? "TA" : "{grey-fg}TA{/grey-fg}";
-    const ptyText = (hasRds && data.pty) ? europe_programmes[data.pty] : "";
-
-    // Build and set content
-    const lines = [];
-    lines.push(`${padStringWithSpaces("PS:", 'green', padLength)}${psValue}`);
-    lines.push(`${padStringWithSpaces("PI:", 'green', padLength)}${piValue}`);
-    lines.push(`${padStringWithSpaces("ECC:", 'green', padLength)}${eccValue}`);
-    lines.push(`{center}{bold}Flags{/bold}`);
-    lines.push(`${tpStr} ${taStr} ${msshow}`);
-    lines.push(`${ptyText}{/center}`);
-
-    rdsBox.setContent(lines.join("\n"));
+function updateRdsBox(d) {
+    if (!rdsBox || !d) return;
+    const padL = 5;
+    const has = d.freq >= 75 && d.pi !== '?';
+    const ps = has ? d.ps.trim() : '';
+    const pi = has ? d.pi : '';
+    const ecc = has && d.ecc != null ? d.ecc : '';
+    let msi;
+    if (!has) msi = '{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}';
+    else if (d.ms === 0) msi = '{grey-fg}M{/grey-fg}S';
+    else if (d.ms === -1) msi = '{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}';
+    else msi = 'M{grey-fg}S{/grey-fg}';
+    const tp = has && d.tp ? 'TP' : '{grey-fg}TP{/grey-fg}';
+    const ta = has && d.ta ? 'TA' : '{grey-fg}TA{/grey-fg}';
+    const pty = has ? europe_programmes[d.pty] : '';
+    rdsBox.setContent(
+        `${pad('PS:', 'green', padL)}${ps}\n` +
+        `${pad('PI:', 'green', padL)}${pi}\n` +
+        `${pad('ECC:', 'green', padL)}${ecc}\n` +
+        `{center}{bold}Flags{/bold}\n` +
+        `${tp} ${ta} ${msi}\n` +
+        `${pty}{/center}`
+    );
 }
 
-
-function updateRTBox(data) {
-    if (!rtBox || !data) return;
+function updateRTBox(d) {
+    if (!rtBox || !d) return;
     rtBox.setContent(
-        `{center}${data.rt0.trim()}{/center}\n` +
-        `{center}${data.rt1.trim()}{/center}`
+        `{center}${d.rt0.trim()}{/center}\n` +
+        `{center}${d.rt1.trim()}{/center}`
     );
 }
 
-function updateStationBox(txInfo) {
-    if (!stationBox || !txInfo) return;
-    const padLength = 10;
-    if (txInfo.tx) {
-        stationBox.setContent(
-            `${padStringWithSpaces("Name:", 'green', padLength)}${txInfo.tx}\n` +
-            `${padStringWithSpaces("Location:", 'green', padLength)}${txInfo.city + ", " + txInfo.itu}\n` +
-            `${padStringWithSpaces("Distance:", 'green', padLength)}${txInfo.dist + " km"}\n` +
-            `${padStringWithSpaces("Power:", 'green', padLength)}${txInfo.erp + " kW " + "[" + txInfo.pol + "]"}\n` +
-            `${padStringWithSpaces("Azimuth:", 'green', padLength)}${txInfo.azi + "°"}`
-        );
+function updateAfBox(d) {
+    if (!afBox) return;
+    if (Array.isArray(d.af) && d.af.length) {
+        const list = d.af.map(f => (f / 1000).toFixed(2)).join(', ');
+        afBox.setContent(' ' + list);
     } else {
-        stationBox.setContent("");
+        afBox.setContent(' No alternative frequencies available.');
     }
+    afBox.show();
 }
 
-function updateStatsBox(data) {
-    if (!statsBox || !data) return;
+function updateSignal(sig) {
+    if (!progressBar) return;
+    const v = Math.max(0, Math.min(130, sig));
+    progressBar.setProgress(Math.floor(v / 130 * 100));
+}
+
+function updateStatsBox(d) {
+    if (!statsBox || !d) return;
     statsBox.setContent(
-        `{center}Server users: ${data.users}\n` +
-        `Server ping: ${pingTime !== null ? pingTime + ' ms' : ''}\n` +
-        `Local audio: ${player.getStatus() ? "Playing" : "Stopped"}{/center}`
+        `${pad('Users:', 'green', 8)}${d.users}\n` +
+        `${pad('Ping:', 'green', 8)}${pingTime || 'N/A'} ms\n` +
+        `${pad('Audio:', 'green', 8)}${player.getStatus() ? 'On' : 'Off'}`
     );
 }
 
-function scaleValue(value) {
-    const maxvalue = 130;
-    value = Math.max(0, Math.min(maxvalue, value));
-    return Math.floor((value / maxvalue) * 100);
+function updateStationBox(tx) {
+    if (!stationBox || !tx) return;
+    if (tx.tx) {
+        stationBox.setContent(
+            `${pad('Name:', 'green', 10)}${tx.tx}\n` +
+            `${pad('Loc:', 'green', 10)}${tx.city}, ${tx.itu}\n` +
+            `${pad('Dist:', 'green', 10)}${tx.dist} km\n` +
+            `${pad('Power:', 'green', 10)}${tx.erp} kW [${tx.pol}]\n` +
+            `${pad('Azimuth:', 'green', 10)}${tx.azi}°`
+        );
+    } else stationBox.setContent('');
 }
 
-function updateSignal(signal) {
-    if (!progressBar) return;
-    progressBar.setProgress(scaleValue(signal));
-}
-
-/**
- * Update the Server Box
- * - If terminal is too small, show just tunerName
- * - Otherwise, show tunerName + blank line + tunerDesc
- */
+// -----------------------------
+// Update Server Box
+// -----------------------------
 function updateServerBox() {
     if (!serverBox) return;
-    if (!tunerName && !tunerDesc) {
-        serverBox.setContent('');
-        return;
-    }
-    if (screen.rows <= 25) {
+    if (screen.rows <= MIN_ROWS + 1) {
         serverBox.setContent(tunerName);
     } else {
-        // Add a leading space for aesthetics
-        serverBox.setContent(` ${tunerName}\n\n${tunerDesc}`);
+        serverBox.setContent(` ${tunerName}
+
+${tunerDesc}`);
     }
 }
 
-// -----------------------------
-// Audio
-// -----------------------------
-const player = playAudio(websocketAudio, userAgent, 2048, argv.debug);
 
 // -----------------------------
-// Tuner Info + Ping
+// Audio & Ping
 // -----------------------------
+const player = playAudio(websocketAudio, userAgent, 2048, argDebug);
+
 async function tunerInfo() {
     try {
-        const result = await getTunerInfo(argUrl);
-        tunerName = result.tunerName || '';
-        tunerDesc = result.tunerDesc || '';
-        antNames = result.antNames || [];
-
-        updateServerBox();
-        screen.render();
-    } catch (error) {
-        debugLog(error.message);
-    }
+        const res = await getTunerInfo(argUrl);
+        tunerName = res.tunerName;
+        tunerDesc = res.tunerDesc;
+        antNames = res.antNames;
+        updateServerBox(); screen.render();
+    } catch (e) { debugLog(e); }
 }
-tunerInfo();
 
 async function doPing() {
     try {
         pingTime = await getPingTime(argUrl);
-        debugLog('Ping Time:', pingTime, 'ms');
-        if (jsonData) {
-            updateStatsBox(jsonData);
-            screen.render();
-        }
-    } catch (error) {
-        debugLog('Ping Error:', error.message);
-    }
+        if (jsonData) { updateStatsBox(jsonData); screen.render(); }
+    } catch (e) { debugLog(e); }
 }
+
 doPing();
 setInterval(doPing, 5000);
+tunerInfo();
 
 // -----------------------------
-// WebSocket Setup
+// WebSocket Connection
 // -----------------------------
-const wsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (control)` } } : {};
-const ws = new WebSocket(websocketData, wsOptions);
-
-ws.on('open', () => {
-    debugLog('WebSocket connection established');
-});
-
-ws.on('message', (data) => {
+const ws = new WebSocket(websocketData, { headers: { 'User-Agent': `${userAgent} (control)` } });
+ws.on('open', () => debugLog('WebSocket open'));
+ws.on('message', (msg) => {
     try {
-        const newData = JSON.parse(data);
-        if (JSON.stringify(newData) !== JSON.stringify(previousJsonData)) {
-            jsonData = newData;
-            updateTunerBox(jsonData);
-            updateRdsBox(jsonData);
-            updateSignal(jsonData.sig);
-            updateStationBox(jsonData.txInfo);
-            updateRTBox(jsonData);
-            updateStatsBox(jsonData);
+        const d = JSON.parse(msg);
+        if (JSON.stringify(d) !== JSON.stringify(prevData)) {
+            jsonData = d;
+            updateTunerBox(d);
+            updateRdsBox(d);
+            updateRTBox(d);
+            updateAfBox(d);
+            updateSignal(d.sig);
+            updateStationBox(d.txInfo);
+            updateStatsBox(d);
             updateServerBox();
-
             screen.render();
         }
-        previousJsonData = newData;
-    } catch (error) {
-        debugLog('Error parsing JSON:', error);
-    }
+        prevData = d;
+    } catch (e) { debugLog(e); }
 });
-
-ws.on('close', () => {
-    debugLog('WebSocket connection closed');
-});
+ws.on('close', () => debugLog('WebSocket closed'));
 
 // -----------------------------
 // Key Bindings
 // -----------------------------
 screen.on('keypress', (ch, key) => {
+    if (!jsonData || !key.full) return;
+    const freq = jsonData.freq * 1000;
     if (key.full === 'left') {
-        if (jsonData && jsonData.freq) {
-            enqueueCommand(`T${(jsonData.freq * 1000) - 100}`);
-        }
+        enqueueCommand(`T${freq - 100}`);
     } else if (key.full === 'right') {
-        if (jsonData && jsonData.freq) {
-            enqueueCommand(`T${(jsonData.freq * 1000) + 100}`);
-        }
+        enqueueCommand(`T${freq + 100}`);
     } else if (key.full === 'up') {
-        if (jsonData && jsonData.freq) {
-            enqueueCommand(`T${(jsonData.freq * 1000) + 10}`);
-        }
+        enqueueCommand(`T${freq + 10}`);
     } else if (key.full === 'down') {
-        if (jsonData && jsonData.freq) {
-            enqueueCommand(`T${(jsonData.freq * 1000) - 10}`);
-        }
+        enqueueCommand(`T${freq - 10}`);
     } else if (key.full === 'x') {
-        if (jsonData && jsonData.freq) {
-            enqueueCommand(`T${(jsonData.freq * 1000) + 1000}`);
-        }
+        enqueueCommand(`T${freq + 1000}`);
     } else if (key.full === 'z') {
-        if (jsonData && jsonData.freq) {
-            enqueueCommand(`T${(jsonData.freq * 1000) - 1000}`);
-        }
+        enqueueCommand(`T${freq - 1000}`);
     } else if (key.full === 'r') {
-        if (jsonData && jsonData.freq) {
-            enqueueCommand(`T${(jsonData.freq * 1000)}`);
-        }
+        enqueueCommand(`T${freq}`);
     } else if (key.full === 't') {
         // Direct freq input
         screen.saveFocus();
@@ -735,57 +404,38 @@ screen.on('keypress', (ch, key) => {
             label: boxLabel('Direct Tuning'),
             tags: true
         });
-        dialog.input('\n  Enter frequency in MHz', '', (err, value) => {
+        dialog.input('Enter frequency in MHz', '', (err, value) => {
             if (!err) {
-                const newFreq = parseFloat(convertToFrequency(value)) * 1000;
-                if (!isNaN(newFreq)) {
-                    enqueueCommand(`T${newFreq}`);
-                } else {
-                    debugLog('Invalid frequency input.');
-                }
+                const f = convertToFrequency(value);
+                if (f) enqueueCommand(`T${f * 1000}`);
+                else debugLog('Invalid frequency input.');
             }
             dialog.destroy();
             screen.restoreFocus();
             screen.render();
         });
     } else if (key.full === 'h') {
-        // Toggle the help box
         helpBox.hidden = !helpBox.hidden;
         screen.render();
     } else if (key.full === 'p') {
-        // Toggle audio
-        if (player.getStatus()) {
-            player.stop();
-        } else {
-            player.play();
-        }
-        if (jsonData) {
-            updateStatsBox(jsonData);
-            screen.render();
-        }
+        if (player.getStatus()) player.stop(); else player.play();
+        updateStatsBox(jsonData);
+        screen.render();
     } else if (key.full === '[') {
         // Toggle iMS
-        if (jsonData && jsonData.ims == 1) {
-            enqueueCommand(`G${jsonData.eq}0`);
-        } else if (jsonData) {
-            enqueueCommand(`G${jsonData.eq}1`);
+        if (jsonData.ims != null && jsonData.eq != null) {
+            const newIms = jsonData.ims ? 0 : 1;
+            enqueueCommand(`G${jsonData.eq}${newIms}`);
         }
     } else if (key.full === ']') {
         // Toggle EQ
-        if (jsonData && jsonData.eq == 1) {
-            enqueueCommand(`G0${jsonData.ims}`);
-        } else if (jsonData) {
-            enqueueCommand(`G1${jsonData.ims}`);
+        if (jsonData.eq != null && jsonData.ims != null) {
+            const newEq = jsonData.eq ? 0 : 1;
+            enqueueCommand(`G${newEq}${jsonData.ims}`);
         }
     } else if (key.full === 'y') {
-        // Toggle antenna
-        if (jsonData) {
-            let newAnt = parseInt(jsonData.ant) + 1;
-            if (newAnt >= antNames.length) {
-                newAnt = 0;
-            }
-            enqueueCommand(`Z${newAnt}`);
-        }
+        let na = (parseInt(jsonData.ant) + 1) % antNames.length;
+        enqueueCommand(`Z${na}`);
     } else if (key.full === 'escape' || key.full === 'C-c') {
         process.exit(0);
     } else {
@@ -796,6 +446,6 @@ screen.on('keypress', (ch, key) => {
 // -----------------------------
 // Final Initialization
 // -----------------------------
-checkSizeAndToggleUI();
-updateTitleBar();     // Initial top bar update
-updateServerBox();    // Fill server info if tuner info is already loaded
+checkSize();
+updateTitleBar();
+updateServerBox();

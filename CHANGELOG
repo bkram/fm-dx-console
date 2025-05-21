@@ -1,5 +1,13 @@
 # Changelog
 
+## FM-DX Console 1.60
+
+- Improvements:
+  - RDS ECC Displayed.
+  - RDS AF Displayed.
+  - No longer reduce the screen updates speed.
+  - Some small fixes under the hood.
+
 ## FM-DX Console 1.50
 
 - UI Enhancements:

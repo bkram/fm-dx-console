@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 //
-// (c) Bkram 2024
+// (c) Bkram 2025
 // Console client for fm-dx-webserver
 
-// -----------------------------
+// =============================================================
+// Imports and Dependencies
+// =============================================================
 const argv = require('minimist')(process.argv.slice(2), {
     string: ['url'],
     boolean: ['debug']
@@ -15,26 +17,26 @@ const WebSocket = require('ws');
 const { getTunerInfo, getPingTime } = require('./tunerinfo');
 const playAudio = require('./3lasclient');
 
-// -----------------------------
+// =============================================================
 // Constants
-// -----------------------------
+// =============================================================
 const europe_programmes = [
     "No PTY", "News", "Current Affairs", "Info", "Sport", "Education", "Drama", "Culture", "Science", "Varied",
     "Pop M", "Rock M", "Easy Listening", "Light Classical", "Serious Classical", "Other Music", "Weather", "Finance",
     "Children's Programmes", "Social Affairs", "Religion", "Phone-in", "Travel", "Leisure", "Jazz Music",
     "Country Music", "National Music", "Oldies Music", "Folk Music", "Documentary", "Alarm Test", "Alarm",
 ];
-const version = '1.51';
+const version = '1.60';
 const userAgent = `fm-dx-console/${version}`;
 const MIN_COLS = 80;
-const MIN_ROWS = 24;
+const MIN_ROWS = 25;
 const THROTTLE_MS = 125;
 const titleStyle = { fg: 'black', bg: 'green', bold: true };
 const boxStyle = { border: { fg: 'green', bg: 'blue' }, bg: 'blue' };
 
-// -----------------------------
-// State
-// -----------------------------
+// =============================================================
+// State Variables
+// =============================================================
 let jsonData = null;
 let prevData = null;
 let tunerName = '';
@@ -45,18 +47,23 @@ let websocketAudio;
 let websocketData;
 const argDebug = argv.debug;
 let argUrl;
+let exiting = false;
 
-// -----------------------------
-// Logging
-// -----------------------------
+
+// =============================================================
+// Logging Utilities
+// =============================================================
 const logStream = fs.createWriteStream(path.join(__dirname, 'console.log'), { flags: 'w' });
 function debugLog(...args) {
-    if (argDebug) logStream.write(args.join(' ') + '\n');
+    if (argDebug) {
+        const ts = new Date().toISOString();
+        logStream.write(`[${ts}] ${args.join(' ')}\n`);
+    }
 }
 
-// -----------------------------
-// Argument Parsing
-// -----------------------------
+// =============================================================
+// Argument Parsing and Validation
+// =============================================================
 if (!argv.url) {
     console.error('Usage: node fm-dx-console.js --url <fm-dx> [--debug]');
     process.exit(1);
@@ -90,9 +97,9 @@ function convertToFrequency(n) {
     return Math.round(f * 10) / 10;
 }
 
-// -----------------------------
+// =============================================================
 // Blessed Screen Setup
-// -----------------------------
+// =============================================================
 const screen = blessed.screen({
     smartCSR: true,
     mouse: true,
@@ -101,9 +108,9 @@ const screen = blessed.screen({
     style: { bg: 'blue' }
 });
 
-// -----------------------------
-// Command Queue
-// -----------------------------
+// =============================================================
+// Command Queue and Throttling
+// =============================================================
 const commandQueue = [];
 function enqueueCommand(cmd) { commandQueue.push(cmd); }
 setInterval(() => {
@@ -114,9 +121,9 @@ setInterval(() => {
     }
 }, THROTTLE_MS);
 
-// -----------------------------
-// UI Helpers
-// -----------------------------
+// =============================================================
+// UI Helper Functions
+// =============================================================
 function checkSize() {
     const { cols, rows } = screen;
     if (cols < MIN_COLS || rows < MIN_ROWS) {
@@ -185,12 +192,11 @@ function helpText() {
     return helpContent;
 }
 
-
-// -----------------------------
-// UI Layout
-// -----------------------------
+// =============================================================
+// UI Layout and Widgets
+// =============================================================
 const uiBox = blessed.box({ parent: screen, top: 0, left: 0, width: '100%', height: '100%', tags: true, style: { bg: 'blue' } });
-const warningBox = blessed.box({ parent: uiBox, width: 50, height: 7, top: 'center', left: 'center', tags: true, border: 'line', style: boxStyle, label: boxLabel('Resize'), hidden: true });
+const warningBox = blessed.box({ parent: screen, width: 50, height: 7, top: 'center', left: 'center', tags: true, border: 'line', style: boxStyle, label: boxLabel('Resize'), hidden: true });
 const titleBar = blessed.box({ parent: uiBox, top: 0, left: 0, width: '100%', height: 1, tags: true, style: titleStyle });
 const tunerBox = blessed.box({ parent: uiBox, top: 1, left: 0, width: 24, height: 8, tags: true, border: 'line', style: boxStyle, label: boxLabel('Tuner') });
 const rdsBox = blessed.box({ parent: uiBox, top: 1, left: 24, width: 17, height: 8, tags: true, border: 'line', style: boxStyle, label: boxLabel('RDS') });
@@ -207,9 +213,9 @@ screen.render();
 setInterval(() => { updateTitleBar(); screen.render(); }, 1000);
 screen.on('resize', () => { progressBar.width = signalBox.width - 5; checkSize(); bottomBox.setContent(genBottom(argUrl)); updateTitleBar(); screen.render(); });
 
-// -----------------------------
-// Update Functions
-// -----------------------------
+// =============================================================
+// UI Update Functions
+// =============================================================
 function updateTitleBar() {
     const now = new Date().toLocaleTimeString([], { hour12: false }) + ' ';
     const left = ` fm-dx-console ${version} by Bkram `;
@@ -304,9 +310,9 @@ function updateStationBox(tx) {
     } else stationBox.setContent('');
 }
 
-// -----------------------------
-// Update Server Box
-// -----------------------------
+// =============================================================
+// Server Info Box Update
+// =============================================================
 function updateServerBox() {
     if (!serverBox) return;
     if (screen.rows <= MIN_ROWS + 1) {
@@ -318,10 +324,9 @@ ${tunerDesc}`);
     }
 }
 
-
-// -----------------------------
-// Audio & Ping
-// -----------------------------
+// =============================================================
+// Audio Player and Ping Handling
+// =============================================================
 const player = playAudio(websocketAudio, userAgent, 2048, argDebug);
 
 async function tunerInfo() {
@@ -345,16 +350,28 @@ doPing();
 setInterval(doPing, 5000);
 tunerInfo();
 
-// -----------------------------
-// WebSocket Connection
-// -----------------------------
-const ws = new WebSocket(websocketData, { headers: { 'User-Agent': `${userAgent} (control)` } });
-ws.on('open', () => debugLog('WebSocket open'));
-ws.on('message', (msg) => {
-    try {
-        const d = JSON.parse(msg);
-        if (JSON.stringify(d) !== JSON.stringify(prevData)) {
-            jsonData = d;
+// =============================================================
+// WebSocket Connection and Data Handling
+// =============================================================
+let ws;
+let reconnectAttempts = 0;
+
+function connectWebSocket() {
+    ws = new WebSocket(websocketData, {
+        headers: { 'User-Agent': `${userAgent} (control)` }
+    });
+
+    ws.on('open', () => {
+        debugLog('WebSocket connected');
+        reconnectAttempts = 0;
+    });
+
+    ws.on('message', (msg) => {
+        try {
+            const d = JSON.parse(msg);
+            jsonData = d;           // always update
+            prevData = d;
+
             updateTunerBox(d);
             updateRdsBox(d);
             updateRTBox(d);
@@ -364,15 +381,29 @@ ws.on('message', (msg) => {
             updateStatsBox(d);
             updateServerBox();
             screen.render();
+        } catch (e) {
+            debugLog('Error parsing message:', e);
         }
-        prevData = d;
-    } catch (e) { debugLog(e); }
-});
-ws.on('close', () => debugLog('WebSocket closed'));
+    });
 
-// -----------------------------
-// Key Bindings
-// -----------------------------
+    ws.on('close', () => {
+        debugLog('WebSocket closed');
+        reconnectAttempts++;
+        const delay = Math.min(10000, 1000 * reconnectAttempts);
+        debugLog(`Reconnecting in ${delay / 1000}s...`);
+        setTimeout(connectWebSocket, delay);
+    });
+
+    ws.on('error', (err) => {
+        debugLog('WebSocket error:', err.message);
+    });
+}
+
+connectWebSocket();
+
+// =============================================================
+// Key Bindings and Input Handling
+// =============================================================
 screen.on('keypress', (ch, key) => {
     if (!jsonData || !key.full) return;
     const freq = jsonData.freq * 1000;
@@ -443,9 +474,29 @@ screen.on('keypress', (ch, key) => {
     }
 });
 
-// -----------------------------
-// Final Initialization
-// -----------------------------
+// =============================================================
+// Final Initialization and Graceful Exit
+// =============================================================
+
 checkSize();
 updateTitleBar();
 updateServerBox();
+
+function gracefulExit() {
+    if (exiting) return;
+    exiting = true;
+
+    debugLog('Shutting down...');
+    logStream.end();
+    if (player.getStatus()) player.stop();
+    screen.destroy();
+    process.exit(0);
+}
+
+process.on('SIGINT', gracefulExit);
+process.on('SIGTERM', gracefulExit);
+process.on('exit', gracefulExit);
+process.on('uncaughtException', (err) => {
+    debugLog('Uncaught exception:', err);
+    gracefulExit();
+});

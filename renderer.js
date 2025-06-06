@@ -2,6 +2,7 @@ let args;
 let currentData;
 let audioPlaying = false;
 let antNames = [];
+let lastPing = null;
 
 const freqInputEl = document.getElementById('freq-input');
 
@@ -54,7 +55,7 @@ function updateUI() {
   if (!currentData) return;
   if (currentData.freq !== undefined && currentData.freq !== null) {
     const freq = parseFloat(currentData.freq);
-    if (!isNaN(freq)) {
+    if (!isNaN(freq) && document.activeElement !== freqInputEl) {
       freqInputEl.value = freq.toFixed(3);
     }
   }
@@ -104,10 +105,14 @@ function updateUI() {
     station.textContent = '';
   }
 
-  const stats = document.getElementById('stats');
-  if (currentData.users !== undefined) {
-    stats.textContent = `Users: ${currentData.users}`;
-  }
+  updateStatus();
+}
+
+function updateStatus() {
+  const statsEl = document.getElementById('stats');
+  const users = currentData && currentData.users !== undefined ? currentData.users : '';
+  const ping = lastPing !== null ? `${lastPing} ms` : '';
+  statsEl.textContent = `Users: ${users}\nPing: ${ping}\nAudio: ${audioPlaying ? 'Playing' : 'Stopped'}`;
 }
 
 function scaleValue(value) {
@@ -189,13 +194,12 @@ async function startPing() {
   if (!args || !args.url) return;
   const pingUrl = new URL(args.url);
   pingUrl.pathname += 'ping';
-  const stats = document.getElementById('stats');
   setInterval(async () => {
     try {
       const start = Date.now();
       await fetch(pingUrl.toString());
-      const ms = Date.now() - start;
-      stats.textContent = `Users: ${currentData ? currentData.users : ''} Ping: ${ms} ms  Audio: ${audioPlaying ? 'Playing' : 'Stopped'}`;
+      lastPing = Date.now() - start;
+      updateStatus();
     } catch (e) {
       // ignore
     }

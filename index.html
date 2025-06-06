@@ -19,6 +19,12 @@
       background: #333;
       padding: 10px;
       border: 1px solid #555;
+      margin-bottom: 6px;
+    }
+
+    #actions {
+      display: flex;
+      gap: 6px;
       margin-bottom: 10px;
     }
 
@@ -76,6 +82,9 @@
     <button id="up001" class="material-icons" title="+0.01 MHz">keyboard_arrow_right</button>
     <button id="up01" class="material-icons" title="+0.1 MHz">skip_next</button>
     <button id="up1" class="material-icons" title="+1 MHz">fast_forward</button>
+  </div>
+
+  <div id="actions">
     <button id="set-btn">Set</button>
     <button id="refresh-btn">Refresh</button>
     <button id="ims-btn">iMS</button>
@@ -107,7 +116,7 @@
   </div>
   <div class="section">
     <strong>Status:</strong>
-    <span id="stats"></span>
+    <pre id="stats"></pre>
   </div>
   <div class="section">
     <strong>Server:</strong>

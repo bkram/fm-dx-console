@@ -136,8 +136,6 @@ document.getElementById('up01').onclick = () => doTune(100);
 document.getElementById('down01').onclick = () => doTune(-100);
 document.getElementById('up001').onclick = () => doTune(10);
 document.getElementById('down001').onclick = () => doTune(-10);
-document.getElementById('up0001').onclick = () => doTune(1);
-document.getElementById('down0001').onclick = () => doTune(-1);
 document.getElementById('refresh-btn').onclick = () => {
   if (currentData && currentData.freq !== undefined) {
     const freq = parseFloat(currentData.freq);

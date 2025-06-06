@@ -47,8 +47,8 @@ node fm-dx-console.js --url https://fm-dx-server/
 The project includes a graphical interface styled like a small audio player. It
 displays the tuned frequency to three decimals. The value can be edited and will
 only update from the tuner when the input field is not focused. Material icons
-are used for the tuning controls. Buttons let you tune in 1 MHz, 0.1 MHz, 0.01
-MHz and 0.001 MHz steps, toggle iMS/EQ, cycle antennas and control audio
+are used for the tuning controls. Buttons let you tune in 1 MHz, 0.1 MHz and 0.01
+MHz steps, toggle iMS/EQ, cycle antennas and control audio
 playback. Tuner updates are received over a WebSocket so the fields refresh
 automatically. Pressing **Enter** in the frequency field tunes to the value and
 shows the rounded frequency again. The interface also supports the same

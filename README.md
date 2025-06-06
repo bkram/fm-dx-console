@@ -42,6 +42,14 @@ or
 node fm-dx-console.js --url https://fm-dx-server/
 ```
 
+### Electron Application
+
+You can also launch the client in a graphical window using Electron:
+
+```bash
+npm run electron -- --url http://fm-dx-server:[port]/
+```
+
 ## Help
 
 The following keys can be used to control the tuner.

@@ -6,40 +6,73 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      margin: 10px;
+      margin: 20px;
       background: #222;
       color: #eee;
     }
+
+    #player {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: #333;
+      padding: 10px;
+      border: 1px solid #555;
+      margin-bottom: 10px;
+    }
+
+    #freq-display {
+      font-size: 1.8em;
+      font-family: "Courier New", monospace;
+      background: #000;
+      color: #0f0;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin: 0 8px;
+      min-width: 90px;
+      text-align: center;
+    }
+
+    button {
+      background: #444;
+      color: #fff;
+      border: none;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #666;
+    }
+
     .section {
       border: 1px solid #555;
-      padding: 10px;
-      margin-bottom: 10px;
-      background: #333;
+      padding: 8px;
+      margin-bottom: 8px;
+      background: #2a2a2a;
     }
-    button { margin: 2px; }
-    #freq-display { font-size: 1.5em; margin: 0 10px; }
   </style>
 </head>
 <body>
-  <h1>FM DX GUI</h1>
-  <div class="section" id="controls">
-    <button id="down1">-1 MHz</button>
+  <h1>FM DX Player</h1>
+
+  <div id="player">
+    <button id="play-btn">Play</button>
+    <button id="down1">-1</button>
     <button id="down01">-0.1</button>
     <button id="down001">-0.01</button>
     <span id="freq-display">--.- MHz</span>
     <button id="up001">+0.01</button>
     <button id="up01">+0.1</button>
-    <button id="up1">+1 MHz</button>
-    <button id="refresh-btn">Refresh</button>
+    <button id="up1">+1</button>
     <button id="set-btn">Set</button>
+    <button id="refresh-btn">Refresh</button>
     <button id="ims-btn">iMS</button>
     <button id="eq-btn">EQ</button>
     <button id="ant-btn">Ant</button>
-    <button id="play-btn">Play</button>
   </div>
 
   <div class="section" id="signal-section">
-    <label>Signal: <progress id="signal" value="0" max="100"></progress>
+    <label>Signal <progress id="signal" value="0" max="100"></progress>
       <span id="signal-label"></span></label>
   </div>
 

@@ -540,9 +540,11 @@ function updateRdsBox(data) {
 
 function updateRTBox(data) {
     if (!rtBox || !data) return;
+    const line1 = data.rt1 ? data.rt1.trim() : '\xA0';
+    const line2 = data.rt2 ? data.rt2.trim() : '\xA0';
     rtBox.setContent(
-        `{center}${data.rt0.trim()}{/center}\n` +
-        `{center}${data.rt1.trim()}{/center}`
+        `{center}${line1}{/center}\n` +
+        `{center}${line2}{/center}`
     );
 }
 

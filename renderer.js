@@ -87,11 +87,9 @@ function updateUI() {
   }
 
   const rt = document.getElementById('rt-info');
-  if (currentData.rt0 || currentData.rt1) {
-    rt.textContent = `${currentData.rt0 || ''} ${currentData.rt1 || ''}`;
-  } else {
-    rt.textContent = '';
-  }
+  const line1 = currentData.rt1 ? currentData.rt1 : '\u00a0';
+  const line2 = currentData.rt2 ? currentData.rt2 : '\u00a0';
+  rt.textContent = `${line1}\n${line2}`;
 
   const station = document.getElementById('station-info');
   if (currentData.txInfo && currentData.txInfo.tx) {

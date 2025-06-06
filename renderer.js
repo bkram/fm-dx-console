@@ -146,16 +146,13 @@ document.getElementById('refresh-btn').onclick = () => {
     }
   }
 };
-document.getElementById('set-btn').onclick = () => {
-  const value = freqInputEl.value;
-  const f = convertToFrequency(value);
-  if (!isNaN(f)) {
-    sendCmd(`T${f * 1000}`);
-  }
-};
 freqInputEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
-    document.getElementById('set-btn').click();
+    const f = convertToFrequency(freqInputEl.value);
+    if (!isNaN(f)) {
+      sendCmd(`T${f * 1000}`);
+      freqInputEl.blur();
+    }
   }
 });
 document.getElementById('ims-btn').onclick = () => {
@@ -189,6 +186,52 @@ document.getElementById('play-btn').onclick = async () => {
   audioPlaying = !audioPlaying;
   if (currentData) updateUI();
 };
+
+document.addEventListener('keydown', (e) => {
+  if (document.activeElement === freqInputEl) {
+    if (e.key === 'Enter') return; // handled separately
+    return;
+  }
+  switch (e.key) {
+    case 'ArrowLeft':
+      doTune(-100);
+      break;
+    case 'ArrowRight':
+      doTune(100);
+      break;
+    case 'ArrowUp':
+      doTune(10);
+      break;
+    case 'ArrowDown':
+      doTune(-10);
+      break;
+    case 'x':
+      doTune(1000);
+      break;
+    case 'z':
+      doTune(-1000);
+      break;
+    case 'r':
+      document.getElementById('refresh-btn').click();
+      break;
+    case 'p':
+      document.getElementById('play-btn').click();
+      break;
+    case '[':
+      document.getElementById('ims-btn').click();
+      break;
+    case ']':
+      document.getElementById('eq-btn').click();
+      break;
+    case 'y':
+      document.getElementById('ant-btn').click();
+      break;
+    case 't':
+      freqInputEl.focus();
+      freqInputEl.select();
+      break;
+  }
+});
 
 async function startPing() {
   if (!args || !args.url) return;

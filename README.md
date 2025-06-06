@@ -50,7 +50,9 @@ only update from the tuner when the input field is not focused. Material icons
 are used for the tuning controls. Buttons let you tune in 1 MHz, 0.1 MHz, 0.01
 MHz and 0.001 MHz steps, toggle iMS/EQ, cycle antennas and control audio
 playback. Tuner updates are received over a WebSocket so the fields refresh
-automatically. Launch it with:
+automatically. Pressing **Enter** in the frequency field tunes to the value and
+shows the rounded frequency again. The interface also supports the same
+keyboard shortcuts as the console version. Launch it with:
 
 The status section shows the current user count, ping time and whether audio is
 playing on separate lines.
@@ -61,7 +63,8 @@ npm run electron -- --url http://fm-dx-server:[port]/
 
 ## Help (console version)
 
-The following keys can be used when running the command line interface:
+The following keys can be used when running the command line interface. The
+Electron GUI understands these shortcuts as well:
 
 Frequency Adjustment
 

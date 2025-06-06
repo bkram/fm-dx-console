@@ -173,6 +173,9 @@ document.getElementById('ant-btn').onclick = () => {
   }
 };
 
+let scanning = false;
+document.getElementById('scan-btn').onclick = runSpectrumScan;
+
 document.getElementById('play-btn').onclick = async () => {
   if (audioPlaying) {
     await electronAPI.stopAudio();
@@ -245,4 +248,36 @@ async function startPing() {
       // ignore
     }
   }, 5000);
+}
+
+async function runSpectrumScan() {
+  if (scanning) return;
+  scanning = true;
+  const canvas = document.getElementById('spectrum-canvas');
+  const ctx = canvas.getContext('2d');
+  const points = [];
+  for (let f = 83.0; f <= 108.0; f += 0.1) {
+    sendCmd(`T${Math.round(f * 1000)}`);
+    await new Promise(r => setTimeout(r, 300));
+    const sig = currentData && currentData.sig !== undefined ? parseFloat(currentData.sig) : 0;
+    points.push({ freq: f, sig: isNaN(sig) ? 0 : sig });
+  }
+  drawSpectrum(ctx, canvas, points);
+  scanning = false;
+}
+
+function drawSpectrum(ctx, canvas, points) {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#0f0';
+  ctx.beginPath();
+  const max = 130;
+  const stepX = canvas.width / (points.length - 1);
+  points.forEach((p, i) => {
+    const x = i * stepX;
+    const y = canvas.height - (Math.min(max, p.sig) / max) * canvas.height;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
 }

@@ -56,6 +56,8 @@ keyboard shortcuts as the console version. Launch it with:
 
 The status section shows the current user count, ping time and whether audio is
 playing on separate lines.
+The **Spectrum Scan** button sweeps the band from 83 to 108 MHz in 0.1 MHz steps
+and renders a signal-strength graph.
 
 ```bash
 npm run electron -- --url http://fm-dx-server:[port]/

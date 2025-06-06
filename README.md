@@ -44,7 +44,8 @@ node fm-dx-console.js --url https://fm-dx-server/
 
 ### Electron Application
 
-A simple graphical interface is available using Electron. Launch it with:
+A graphical interface is also included using Electron. It exposes buttons for
+tuning, toggling iMS/EQ, cycling antennas and playing audio. Launch it with:
 
 ```bash
 npm run electron -- --url http://fm-dx-server:[port]/

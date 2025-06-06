@@ -2,6 +2,16 @@ let ws;
 let args;
 let currentData;
 let audioPlaying = false;
+let antNames = [];
+
+const europe_programmes = [
+  'No PTY', 'News', 'Current Affairs', 'Info', 'Sport', 'Education', 'Drama',
+  'Culture', 'Science', 'Varied', 'Pop M', 'Rock M', 'Easy Listening',
+  'Light Classical', 'Serious Classical', 'Other Music', 'Weather', 'Finance',
+  "Children's Programmes", 'Social Affairs', 'Religion', 'Phone-in', 'Travel',
+  'Leisure', 'Jazz Music', 'Country Music', 'National Music', 'Oldies Music',
+  'Folk Music', 'Documentary', 'Alarm Test'
+];
 
 function formatWebSocketURL(url) {
   if (!url) return '';
@@ -44,6 +54,15 @@ electronAPI.onInitArgs((a) => {
   args = a;
   connect();
   startPing();
+  if (args.url) {
+    electronAPI.getTunerInfo(args.url).then(info => {
+      if (info) {
+        antNames = info.antNames || [];
+        const srv = document.getElementById('server-info');
+        srv.textContent = `${info.tunerName} - ${info.tunerDesc}`;
+      }
+    });
+  }
 });
 
 function updateUI() {
@@ -52,22 +71,59 @@ function updateUI() {
   if (currentData.freq) {
     freqSpan.textContent = `${currentData.freq.toFixed(1)} MHz`;
   }
+  const signal = document.getElementById('signal');
+  const signalLabel = document.getElementById('signal-label');
+  if (currentData.sig !== undefined) {
+    signal.value = scaleValue(currentData.sig);
+    signalLabel.textContent = `${currentData.sig.toFixed(1)} dBf`;
+  }
+
+  const tuner = document.getElementById('tuner-info');
+  const ant = antNames[currentData.ant] || currentData.ant;
+  tuner.textContent =
+    `Mode: ${currentData.st ? 'Stereo' : 'Mono'}\n` +
+    `iMS: ${currentData.ims ? 'On' : 'Off'}\n` +
+    `EQ: ${currentData.eq ? 'On' : 'Off'}\n` +
+    `ANT: ${ant}`;
+
   const rds = document.getElementById('rds-info');
   if (currentData.ps) {
-    rds.textContent = `PS: ${currentData.ps}  PI: ${currentData.pi || ''}`;
+    const flags = `${currentData.tp ? 'TP ' : ''}${currentData.ta ? 'TA ' : ''}${currentData.ms ? 'MS' : ''}`;
+    const pty = currentData.pty ? europe_programmes[currentData.pty] : '';
+    rds.textContent = `PS: ${currentData.ps}  PI: ${currentData.pi || ''}\n${flags}\n${pty}`;
+  } else {
+    rds.textContent = '';
   }
+
   const rt = document.getElementById('rt-info');
   if (currentData.rt0 || currentData.rt1) {
     rt.textContent = `${currentData.rt0 || ''} ${currentData.rt1 || ''}`;
+  } else {
+    rt.textContent = '';
   }
+
+  const station = document.getElementById('station-info');
+  if (currentData.txInfo && currentData.txInfo.tx) {
+    station.textContent =
+      `Name: ${currentData.txInfo.tx}\n` +
+      `Location: ${currentData.txInfo.city}, ${currentData.txInfo.itu}\n` +
+      `Distance: ${currentData.txInfo.dist} km\n` +
+      `Power: ${currentData.txInfo.erp} kW [${currentData.txInfo.pol}]\n` +
+      `Azimuth: ${currentData.txInfo.azi}\u00B0`;
+  } else {
+    station.textContent = '';
+  }
+
   const stats = document.getElementById('stats');
   if (currentData.users !== undefined) {
     stats.textContent = `Users: ${currentData.users}`;
   }
-  const server = document.getElementById('server-info');
-  if (currentData.txInfo && currentData.txInfo.tx) {
-    server.textContent = `${currentData.txInfo.tx} - ${currentData.txInfo.city || ''}`;
-  }
+}
+
+function scaleValue(value) {
+  const maxvalue = 130;
+  value = Math.max(0, Math.min(maxvalue, value));
+  return Math.floor((value / maxvalue) * 100);
 }
 
 function doTune(delta) {
@@ -82,6 +138,39 @@ document.getElementById('up01').onclick = () => doTune(100);
 document.getElementById('down01').onclick = () => doTune(-100);
 document.getElementById('up001').onclick = () => doTune(10);
 document.getElementById('down001').onclick = () => doTune(-10);
+document.getElementById('refresh-btn').onclick = () => {
+  if (currentData && currentData.freq) {
+    sendCmd(`T${currentData.freq * 1000}`);
+  }
+};
+document.getElementById('set-btn').onclick = () => {
+  const value = prompt('Enter frequency in MHz');
+  if (value !== null) {
+    const f = convertToFrequency(value);
+    if (!isNaN(f)) {
+      sendCmd(`T${f * 1000}`);
+    }
+  }
+};
+document.getElementById('ims-btn').onclick = () => {
+  if (currentData) {
+    const cmd = currentData.ims == 1 ? `G${currentData.eq}0` : `G${currentData.eq}1`;
+    sendCmd(cmd);
+  }
+};
+document.getElementById('eq-btn').onclick = () => {
+  if (currentData) {
+    const cmd = currentData.eq == 1 ? `G0${currentData.ims}` : `G1${currentData.ims}`;
+    sendCmd(cmd);
+  }
+};
+document.getElementById('ant-btn').onclick = () => {
+  if (currentData) {
+    let newAnt = parseInt(currentData.ant) + 1;
+    if (antNames.length && newAnt >= antNames.length) newAnt = 0;
+    sendCmd(`Z${newAnt}`);
+  }
+};
 
 document.getElementById('play-btn').onclick = async () => {
   if (audioPlaying) {
@@ -92,6 +181,7 @@ document.getElementById('play-btn').onclick = async () => {
     document.getElementById('play-btn').textContent = 'Stop';
   }
   audioPlaying = !audioPlaying;
+  if (currentData) updateUI();
 };
 
 async function startPing() {
@@ -104,7 +194,7 @@ async function startPing() {
       const start = Date.now();
       await fetch(pingUrl.toString());
       const ms = Date.now() - start;
-      stats.textContent = `Users: ${currentData ? currentData.users : ''} Ping: ${ms} ms`;
+      stats.textContent = `Users: ${currentData ? currentData.users : ''} Ping: ${ms} ms  Audio: ${audioPlaying ? 'Playing' : 'Stopped'}`;
     } catch (e) {
       // ignore
     }

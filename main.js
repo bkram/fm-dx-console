@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const minimist = require('minimist');
 const playAudio = require('./3lasclient');
+const { getTunerInfo } = require('./tunerinfo');
 
 let player;
 
@@ -47,6 +48,14 @@ function createWindow() {
   ipcMain.handle('audio-stop', async () => {
     if (player) {
       await player.stop();
+    }
+  });
+
+  ipcMain.handle('get-tuner-info', async (_e, url) => {
+    try {
+      return await getTunerInfo(url);
+    } catch {
+      return null;
     }
   });
 }

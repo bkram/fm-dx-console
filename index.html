@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>FM DX GUI</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -21,7 +22,7 @@
       margin-bottom: 10px;
     }
 
-    #freq-display {
+    #freq-input {
       font-size: 1.8em;
       font-family: "Courier New", monospace;
       background: #000;
@@ -31,6 +32,7 @@
       margin: 0 8px;
       min-width: 100px;
       text-align: center;
+      border: none;
     }
 
     button {
@@ -39,6 +41,10 @@
       border: none;
       padding: 4px 8px;
       cursor: pointer;
+    }
+    button.material-icons {
+      font-family: 'Material Icons';
+      font-size: 20px;
     }
     button:hover {
       background: #666;
@@ -60,16 +66,16 @@
   <h1>FM DX Player</h1>
 
   <div id="player">
-    <button id="play-btn" title="Play">&#9658;</button>
-    <button id="down1">-1</button>
-    <button id="down01">-0.1</button>
-    <button id="down001">-0.01</button>
-    <button id="down0001">-0.001</button>
-    <span id="freq-display">--.--- MHz</span>
-    <button id="up0001">+0.001</button>
-    <button id="up001">+0.01</button>
-    <button id="up01">+0.1</button>
-    <button id="up1">+1</button>
+    <button id="play-btn" title="Play" class="material-icons">play_arrow</button>
+    <button id="down1" class="material-icons" title="-1 MHz">fast_rewind</button>
+    <button id="down01" class="material-icons" title="-0.1 MHz">skip_previous</button>
+    <button id="down001" class="material-icons" title="-0.01 MHz">keyboard_arrow_left</button>
+    <button id="down0001" class="material-icons" title="-0.001 MHz">keyboard_double_arrow_left</button>
+    <input id="freq-input" type="text" value="" placeholder="--.--- MHz" />
+    <button id="up0001" class="material-icons" title="+0.001 MHz">keyboard_double_arrow_right</button>
+    <button id="up001" class="material-icons" title="+0.01 MHz">keyboard_arrow_right</button>
+    <button id="up01" class="material-icons" title="+0.1 MHz">skip_next</button>
+    <button id="up1" class="material-icons" title="+1 MHz">fast_forward</button>
     <button id="set-btn">Set</button>
     <button id="refresh-btn">Refresh</button>
     <button id="ims-btn">iMS</button>

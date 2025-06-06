@@ -3,6 +3,8 @@ let currentData;
 let audioPlaying = false;
 let antNames = [];
 
+const freqInputEl = document.getElementById('freq-input');
+
 const europe_programmes = [
   'No PTY', 'News', 'Current Affairs', 'Info', 'Sport', 'Education', 'Drama',
   'Culture', 'Science', 'Varied', 'Pop M', 'Rock M', 'Easy Listening',
@@ -50,11 +52,10 @@ electronAPI.onWsData((data) => {
 
 function updateUI() {
   if (!currentData) return;
-  const freqSpan = document.getElementById('freq-display');
   if (currentData.freq !== undefined && currentData.freq !== null) {
     const freq = parseFloat(currentData.freq);
     if (!isNaN(freq)) {
-      freqSpan.textContent = `${freq.toFixed(3)} MHz`;
+      freqInputEl.value = freq.toFixed(3);
     }
   }
   const signal = document.getElementById('signal');
@@ -141,14 +142,17 @@ document.getElementById('refresh-btn').onclick = () => {
   }
 };
 document.getElementById('set-btn').onclick = () => {
-  const value = prompt('Enter frequency in MHz');
-  if (value !== null) {
-    const f = convertToFrequency(value);
-    if (!isNaN(f)) {
-      sendCmd(`T${f * 1000}`);
-    }
+  const value = freqInputEl.value;
+  const f = convertToFrequency(value);
+  if (!isNaN(f)) {
+    sendCmd(`T${f * 1000}`);
   }
 };
+freqInputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    document.getElementById('set-btn').click();
+  }
+});
 document.getElementById('ims-btn').onclick = () => {
   if (currentData) {
     const cmd = currentData.ims == 1 ? `G${currentData.eq}0` : `G${currentData.eq}1`;
@@ -172,10 +176,10 @@ document.getElementById('ant-btn').onclick = () => {
 document.getElementById('play-btn').onclick = async () => {
   if (audioPlaying) {
     await electronAPI.stopAudio();
-    document.getElementById('play-btn').innerHTML = '&#9658;';
+    document.getElementById('play-btn').textContent = 'play_arrow';
   } else {
     await electronAPI.startAudio();
-    document.getElementById('play-btn').innerHTML = '&#9632;';
+    document.getElementById('play-btn').textContent = 'stop';
   }
   audioPlaying = !audioPlaying;
   if (currentData) updateUI();

@@ -257,18 +257,37 @@ async function runSpectrumScan() {
   const canvas = document.getElementById('spectrum-canvas');
   const ctx = canvas.getContext('2d');
   const points = [];
+
   const origFreq = currentData && currentData.freq !== undefined ? parseFloat(currentData.freq) : null;
-  for (let f = 83.0; f <= 108.0; f += 0.1) {
+  const wasPlaying = audioPlaying;
+  if (wasPlaying) {
+    await electronAPI.stopAudio();
+    document.getElementById('play-btn').textContent = 'play_arrow';
+    audioPlaying = false;
+    updateStatus();
+  }
+
+  for (let f = 83.0; f <= 108.0; f += 0.05) {
     sendCmd(`T${Math.round(f * 1000)}`);
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 150));
     const sig = currentData && currentData.sig !== undefined ? parseFloat(currentData.sig) : 0;
     points.push({ freq: f, sig: isNaN(sig) ? 0 : sig });
+    spectrumData = points;
+    drawSpectrum(ctx, canvas, spectrumData);
   }
-  spectrumData = points;
-  drawSpectrum(ctx, canvas, spectrumData);
+
   if (origFreq !== null) {
     sendCmd(`T${Math.round(origFreq * 1000)}`);
+    await new Promise(r => setTimeout(r, 300));
   }
+
+  if (wasPlaying) {
+    await electronAPI.startAudio();
+    document.getElementById('play-btn').textContent = 'stop';
+    audioPlaying = true;
+    updateStatus();
+  }
+
   scanning = false;
 }
 

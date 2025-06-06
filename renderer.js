@@ -17,7 +17,7 @@ function convertToFrequency(num) {
   num = parseFloat(num);
   while (num >= 100) num /= 10;
   if (num < 76) num *= 10;
-  return Math.round(num * 10) / 10;
+  return Math.round(num * 1000) / 1000;
 }
 
 
@@ -54,7 +54,7 @@ function updateUI() {
   if (currentData.freq !== undefined && currentData.freq !== null) {
     const freq = parseFloat(currentData.freq);
     if (!isNaN(freq)) {
-      freqSpan.textContent = `${freq.toFixed(1)} MHz`;
+      freqSpan.textContent = `${freq.toFixed(3)} MHz`;
     }
   }
   const signal = document.getElementById('signal');
@@ -130,6 +130,8 @@ document.getElementById('up01').onclick = () => doTune(100);
 document.getElementById('down01').onclick = () => doTune(-100);
 document.getElementById('up001').onclick = () => doTune(10);
 document.getElementById('down001').onclick = () => doTune(-10);
+document.getElementById('up0001').onclick = () => doTune(1);
+document.getElementById('down0001').onclick = () => doTune(-1);
 document.getElementById('refresh-btn').onclick = () => {
   if (currentData && currentData.freq !== undefined) {
     const freq = parseFloat(currentData.freq);

@@ -29,7 +29,7 @@
       padding: 2px 8px;
       border-radius: 4px;
       margin: 0 8px;
-      min-width: 90px;
+      min-width: 100px;
       text-align: center;
     }
 
@@ -50,6 +50,10 @@
       margin-bottom: 8px;
       background: #2a2a2a;
     }
+    pre {
+      margin: 4px 0 0 0;
+      white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
@@ -60,7 +64,9 @@
     <button id="down1">-1</button>
     <button id="down01">-0.1</button>
     <button id="down001">-0.01</button>
-    <span id="freq-display">--.- MHz</span>
+    <button id="down0001">-0.001</button>
+    <span id="freq-display">--.--- MHz</span>
+    <button id="up0001">+0.001</button>
     <button id="up001">+0.01</button>
     <button id="up01">+0.1</button>
     <button id="up1">+1</button>
@@ -72,16 +78,35 @@
   </div>
 
   <div class="section" id="signal-section">
-    <label>Signal <progress id="signal" value="0" max="100"></progress>
-      <span id="signal-label"></span></label>
+    <strong>Signal:</strong>
+    <progress id="signal" value="0" max="100"></progress>
+    <span id="signal-label"></span>
   </div>
 
-  <div class="section" id="tuner-info"></div>
-  <div class="section" id="rds-info"></div>
-  <div class="section" id="rt-info"></div>
-  <div class="section" id="station-info"></div>
-  <div class="section" id="stats"></div>
-  <div class="section" id="server-info"></div>
+  <div class="section">
+    <strong>Tuner:</strong>
+    <pre id="tuner-info"></pre>
+  </div>
+  <div class="section">
+    <strong>RDS:</strong>
+    <pre id="rds-info"></pre>
+  </div>
+  <div class="section">
+    <strong>RadioText:</strong>
+    <pre id="rt-info"></pre>
+  </div>
+  <div class="section">
+    <strong>Station:</strong>
+    <pre id="station-info"></pre>
+  </div>
+  <div class="section">
+    <strong>Status:</strong>
+    <span id="stats"></span>
+  </div>
+  <div class="section">
+    <strong>Server:</strong>
+    <span id="server-info"></span>
+  </div>
 
   <script src="renderer.js"></script>
 </body>

@@ -1,4 +1,3 @@
-let ws;
 let args;
 let currentData;
 let audioPlaying = false;
@@ -13,14 +12,6 @@ const europe_programmes = [
   'Folk Music', 'Documentary', 'Alarm Test'
 ];
 
-function formatWebSocketURL(url) {
-  if (!url) return '';
-  if (url.endsWith('/')) url = url.slice(0, -1);
-  if (url.startsWith('http://')) return url.replace('http://', 'ws://');
-  if (url.startsWith('https://')) return url.replace('https://', 'wss://');
-  return url;
-}
-
 function convertToFrequency(num) {
   if (num === null || num === undefined) return null;
   num = parseFloat(num);
@@ -29,30 +20,13 @@ function convertToFrequency(num) {
   return Math.round(num * 10) / 10;
 }
 
-function connect() {
-  if (!args.url) return;
-  const wsAddr = `${formatWebSocketURL(args.url)}/text`;
-  ws = new WebSocket(wsAddr);
-  ws.onmessage = (evt) => {
-    try {
-      const data = JSON.parse(evt.data);
-      currentData = data;
-      updateUI();
-    } catch (err) {
-      console.error(err);
-    }
-  };
-}
 
 function sendCmd(cmd) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(cmd);
-  }
+  electronAPI.sendCommand(cmd);
 }
 
 electronAPI.onInitArgs((a) => {
   args = a;
-  connect();
   startPing();
   if (args.url) {
     electronAPI.getTunerInfo(args.url).then(info => {
@@ -62,6 +36,15 @@ electronAPI.onInitArgs((a) => {
         srv.textContent = `${info.tunerName} - ${info.tunerDesc}`;
       }
     });
+  }
+});
+
+electronAPI.onWsData((data) => {
+  try {
+    currentData = JSON.parse(data);
+    updateUI();
+  } catch (err) {
+    console.error(err);
   }
 });
 

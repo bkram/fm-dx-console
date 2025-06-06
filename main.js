@@ -3,6 +3,7 @@ const path = require('path');
 const minimist = require('minimist');
 const playAudio = require('./3lasclient');
 const { getTunerInfo } = require('./tunerinfo');
+const WebSocket = require('ws');
 
 let player;
 
@@ -35,6 +36,17 @@ function createWindow() {
     win.webContents.send('init-args', argv);
   });
 
+  const userAgent = `fm-dx-console/${app.getVersion()}`;
+  let ws;
+  if (argv.url) {
+    const wsAddr = `${formatWebSocketURL(argv.url)}/text`;
+    const opts = { headers: { 'User-Agent': `${userAgent} (control)` } };
+    ws = new WebSocket(wsAddr, opts);
+    ws.on('message', (data) => {
+      win.webContents.send('ws-data', data.toString());
+    });
+  }
+
   ipcMain.handle('audio-start', () => {
     if (!argv.url) return;
     if (!player) {
@@ -56,6 +68,12 @@ function createWindow() {
       return await getTunerInfo(url);
     } catch {
       return null;
+    }
+  });
+
+  ipcMain.on('ws-send', (_e, cmd) => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(cmd);
     }
   });
 }

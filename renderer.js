@@ -51,14 +51,20 @@ electronAPI.onWsData((data) => {
 function updateUI() {
   if (!currentData) return;
   const freqSpan = document.getElementById('freq-display');
-  if (currentData.freq) {
-    freqSpan.textContent = `${currentData.freq.toFixed(1)} MHz`;
+  if (currentData.freq !== undefined && currentData.freq !== null) {
+    const freq = parseFloat(currentData.freq);
+    if (!isNaN(freq)) {
+      freqSpan.textContent = `${freq.toFixed(1)} MHz`;
+    }
   }
   const signal = document.getElementById('signal');
   const signalLabel = document.getElementById('signal-label');
   if (currentData.sig !== undefined) {
-    signal.value = scaleValue(currentData.sig);
-    signalLabel.textContent = `${currentData.sig.toFixed(1)} dBf`;
+    const sig = parseFloat(currentData.sig);
+    if (!isNaN(sig)) {
+      signal.value = scaleValue(sig);
+      signalLabel.textContent = `${sig.toFixed(1)} dBf`;
+    }
   }
 
   const tuner = document.getElementById('tuner-info');
@@ -110,8 +116,11 @@ function scaleValue(value) {
 }
 
 function doTune(delta) {
-  if (currentData && currentData.freq) {
-    sendCmd(`T${(currentData.freq * 1000) + delta}`);
+  if (currentData && currentData.freq !== undefined) {
+    const freq = parseFloat(currentData.freq);
+    if (!isNaN(freq)) {
+      sendCmd(`T${(freq * 1000) + delta}`);
+    }
   }
 }
 
@@ -122,8 +131,11 @@ document.getElementById('down01').onclick = () => doTune(-100);
 document.getElementById('up001').onclick = () => doTune(10);
 document.getElementById('down001').onclick = () => doTune(-10);
 document.getElementById('refresh-btn').onclick = () => {
-  if (currentData && currentData.freq) {
-    sendCmd(`T${currentData.freq * 1000}`);
+  if (currentData && currentData.freq !== undefined) {
+    const freq = parseFloat(currentData.freq);
+    if (!isNaN(freq)) {
+      sendCmd(`T${freq * 1000}`);
+    }
   }
 };
 document.getElementById('set-btn').onclick = () => {
@@ -158,10 +170,10 @@ document.getElementById('ant-btn').onclick = () => {
 document.getElementById('play-btn').onclick = async () => {
   if (audioPlaying) {
     await electronAPI.stopAudio();
-    document.getElementById('play-btn').textContent = 'Play';
+    document.getElementById('play-btn').innerHTML = '&#9658;';
   } else {
     await electronAPI.startAudio();
-    document.getElementById('play-btn').textContent = 'Stop';
+    document.getElementById('play-btn').innerHTML = '&#9632;';
   }
   audioPlaying = !audioPlaying;
   if (currentData) updateUI();

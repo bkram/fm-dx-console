@@ -47,7 +47,8 @@ node fm-dx-console.js --url https://fm-dx-server/
 The project includes a graphical interface styled like a small audio player. It
 displays the tuned frequency, signal meter, RDS information and station details
 while providing buttons for tuning, toggling iMS/EQ, cycling antennas and
-controlling audio playback. Launch it with:
+controlling audio playback. Tuner updates are received over a WebSocket so the
+fields refresh automatically. Launch it with:
 
 ```bash
 npm run electron -- --url http://fm-dx-server:[port]/

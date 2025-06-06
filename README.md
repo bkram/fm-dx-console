@@ -51,8 +51,10 @@ are used for the tuning controls. Buttons let you tune in 1 MHz, 0.1 MHz and 0.0
 MHz steps, toggle iMS/EQ, cycle antennas and control audio
 playback. Tuner updates are received over a WebSocket so the fields refresh
 automatically. Pressing **Enter** in the frequency field tunes to the value and
-shows the rounded frequency again. The interface also supports the same
-keyboard shortcuts as the console version. Launch it with:
+shows the rounded frequency again. The interface now places the Tuner and RDS
+panels side by side, as well as the Station and Status panels, while the
+spectrum display is slightly smaller. Keyboard shortcuts from the console client
+are also supported. Launch it with:
 
 The status section shows the current user count, ping time and whether audio is
 playing on separate lines.

@@ -174,6 +174,7 @@ document.getElementById('ant-btn').onclick = () => {
 };
 
 let scanning = false;
+let spectrumData = [];
 document.getElementById('scan-btn').onclick = runSpectrumScan;
 
 document.getElementById('play-btn').onclick = async () => {
@@ -256,15 +257,30 @@ async function runSpectrumScan() {
   const canvas = document.getElementById('spectrum-canvas');
   const ctx = canvas.getContext('2d');
   const points = [];
+  const origFreq = currentData && currentData.freq !== undefined ? parseFloat(currentData.freq) : null;
   for (let f = 83.0; f <= 108.0; f += 0.1) {
     sendCmd(`T${Math.round(f * 1000)}`);
     await new Promise(r => setTimeout(r, 300));
     const sig = currentData && currentData.sig !== undefined ? parseFloat(currentData.sig) : 0;
     points.push({ freq: f, sig: isNaN(sig) ? 0 : sig });
   }
-  drawSpectrum(ctx, canvas, points);
+  spectrumData = points;
+  drawSpectrum(ctx, canvas, spectrumData);
+  if (origFreq !== null) {
+    sendCmd(`T${Math.round(origFreq * 1000)}`);
+  }
   scanning = false;
 }
+
+document.getElementById('spectrum-canvas').addEventListener('click', (e) => {
+  if (!spectrumData.length) return;
+  const canvas = e.currentTarget;
+  const rect = canvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const idx = Math.round(x / rect.width * (spectrumData.length - 1));
+  const freq = spectrumData[Math.max(0, Math.min(idx, spectrumData.length - 1))].freq;
+  sendCmd(`T${Math.round(freq * 1000)}`);
+});
 
 function drawSpectrum(ctx, canvas, points) {
   ctx.fillStyle = '#000';

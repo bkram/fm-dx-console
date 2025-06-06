@@ -1,10 +1,24 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const pty = require('node-pty');
+const minimist = require('minimist');
+const playAudio = require('./3lasclient');
 
-let ptyProcess;
+let player;
+
+function formatWebSocketURL(url) {
+  if (!url) return '';
+  if (url.endsWith('/')) url = url.slice(0, -1);
+  if (url.startsWith('http://')) {
+    return url.replace('http://', 'ws://');
+  }
+  if (url.startsWith('https://')) {
+    return url.replace('https://', 'wss://');
+  }
+  return url;
+}
 
 function createWindow() {
+  const argv = minimist(process.argv.slice(2), { string: ['url'], boolean: ['debug'] });
   const win = new BrowserWindow({
     width: 1000,
     height: 700,
@@ -16,6 +30,25 @@ function createWindow() {
   });
 
   win.loadFile('index.html');
+  win.webContents.once('did-finish-load', () => {
+    win.webContents.send('init-args', argv);
+  });
+
+  ipcMain.handle('audio-start', () => {
+    if (!argv.url) return;
+    if (!player) {
+      const wsAddr = `${formatWebSocketURL(argv.url)}/audio`;
+      const userAgent = `fm-dx-console/${app.getVersion()}`;
+      player = playAudio(wsAddr, userAgent, 2048, argv.debug);
+    }
+    player.play();
+  });
+
+  ipcMain.handle('audio-stop', async () => {
+    if (player) {
+      await player.stop();
+    }
+  });
 }
 
 app.whenReady().then(() => {
@@ -28,27 +61,4 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
-});
-
-ipcMain.on('start-console', (event) => {
-  if (ptyProcess) {
-    return;
-  }
-  const args = process.argv.slice(2);
-  ptyProcess = pty.spawn(process.execPath, [path.join(__dirname, 'fm-dx-console.js'), ...args], {
-    name: 'xterm-color',
-    cols: 80,
-    rows: 30,
-    cwd: process.cwd(),
-    env: process.env
-  });
-  ptyProcess.onData((data) => {
-    event.sender.send('pty-data', data);
-  });
-});
-
-ipcMain.on('pty-input', (event, data) => {
-  if (ptyProcess) {
-    ptyProcess.write(data);
-  }
 });

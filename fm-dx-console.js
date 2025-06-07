@@ -550,7 +550,8 @@ function updateTunerBox(data) {
 
 function updateRdsBox(data) {
     if (!rdsBox || !data) return;
-    const padLength = 8;
+    // Use a slightly wider prefix column so all values line up
+    const padLength = 9;
     if (data.freq >= 75 && data.pi !== "?") {
         let msshow;
         if (data.ms === 0) {
@@ -574,7 +575,12 @@ function updateRdsBox(data) {
         if (country) {
             lines.push(`${prefix('Country:')}${country}`);
         }
-        lines.push(`${prefix('Flags:')}${data.tp ? 'TP' : 'TP?'} ${data.ta ? 'TA' : 'TA?'} ${msshow}`);
+        lines.push(
+            `${prefix('Flags:')}` +
+            `${data.tp ? 'TP' : '{grey-fg}TP{/grey-fg}'} ` +
+            `${data.ta ? 'TA' : '{grey-fg}TA{/grey-fg}'} ` +
+            `${msshow}`
+        );
         const ptyNum = data.pty !== undefined ? data.pty : 0;
         lines.push(`${prefix('PTY:')}${ptyNum}/${europe_programmes[ptyNum] || 'None'}`);
         if (data.dynamic_pty !== undefined || data.artificial_head !== undefined || data.compressed !== undefined) {

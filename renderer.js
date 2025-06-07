@@ -149,8 +149,9 @@ function updateUI() {
   if (currentData.ecc) {
     rdsText += `\nECC: ${currentData.ecc}`;
   }
-  const country = currentData.country_name || currentData.country_iso;
+  let country = currentData.country_name || currentData.country_iso;
   if (country) {
+    if (country === 'UN') country = 'None';
     rdsText += `\nCountry: ${country}`;
   }
   if (flags) {
@@ -173,8 +174,10 @@ function updateUI() {
     if (currentData.af.length) {
       rdsText += `\nAF: ${currentData.af.length} frequencies detected`;
     } else {
-      rdsText += `\nAF:`;
+      rdsText += `\nAF: None`;
     }
+  } else {
+    rdsText += `\nAF: None`;
   }
   rds.innerHTML = rdsText.replace(/\n/g, '<br>');
 

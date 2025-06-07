@@ -280,6 +280,11 @@ async function runSpectrumScan() {
   const canvas = document.getElementById('spectrum-canvas');
   const ctx = canvas.getContext('2d');
   const points = [];
+  for (let f = 83.0; f <= 108.0; f += 0.05) {
+    points.push({ freq: parseFloat(f.toFixed(2)), sig: 0 });
+  }
+  spectrumData = points;
+  drawSpectrum(ctx, canvas, spectrumData);
 
   const origFreq = currentData && currentData.freq !== undefined ? parseFloat(currentData.freq) : null;
   const wasPlaying = audioPlaying;
@@ -290,13 +295,15 @@ async function runSpectrumScan() {
     updateStatus();
   }
 
+  let idx = 0;
   for (let f = 83.0; f <= 108.0; f += 0.05) {
     sendCmd(`T${Math.round(f * 1000)}`);
     await new Promise(r => setTimeout(r, 150));
     const sig = currentData && currentData.sig !== undefined ? parseFloat(currentData.sig) : 0;
-    points.push({ freq: f, sig: isNaN(sig) ? 0 : sig });
+    points[idx].sig = isNaN(sig) ? 0 : sig;
     spectrumData = points;
     drawSpectrum(ctx, canvas, spectrumData);
+    idx++;
   }
 
   if (origFreq !== null) {

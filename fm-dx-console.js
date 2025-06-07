@@ -254,6 +254,24 @@ function padStringWithSpaces(text, color = 'green', totalLength) {
     return ' ' + `{${color}-fg}` + text + `{/${color}-fg}` + ' '.repeat(spacesToAdd);
 }
 
+/**
+ * Apply grey markup to characters with non-zero error counts
+ */
+function processStringWithErrors(str, errors) {
+    if (!str) return '';
+    const errArr = (errors || '').split(',').map(e => parseInt(e, 10) || 0);
+    let out = '';
+    for (let i = 0; i < str.length; i++) {
+        const ch = str[i];
+        if (errArr[i] > 0) {
+            out += `{grey-fg}${ch}{/grey-fg}`;
+        } else {
+            out += ch;
+        }
+    }
+    return out;
+}
+
 /** Returns a label string with bold, colored style */
 function boxLabel(label) {
     return `{white-fg}{blue-bg}{bold}${label}{/bold}{/blue-bg}{/white-fg}`;
@@ -346,6 +364,12 @@ const rdsBox = blessed.box({
     border: { type: 'line' },
     style: boxStyle,
     label: boxLabel('RDS'),
+    scrollable: true,
+    alwaysScroll: true,
+    scrollbar: {
+        ch: ' ',
+        inverse: true
+    },
 });
 
 const stationBox = blessed.box({
@@ -524,15 +548,40 @@ function updateRdsBox(data) {
             msshow = "M{grey-fg}S{/grey-fg}";
         }
 
-        rdsBox.setContent(
-            `${padStringWithSpaces("PS:", 'green', padLength)}${data.ps.trimStart()}\n` +
-            `${padStringWithSpaces("PI:", 'green', padLength)}${data.pi}\n` +
-            `{center}{bold}Flags{/bold}\n` +
+        const psDisplay = processStringWithErrors(data.ps.trimStart(), data.ps_errors);
+        let content =
+            `${padStringWithSpaces("PS:", 'green', padLength)}${psDisplay}\n` +
+            `${padStringWithSpaces("PI:", 'green', padLength)}${data.pi}`;
+
+        if (data.ecc) {
+            content += `\n${padStringWithSpaces("ECC:", 'green', padLength)}${data.ecc}`;
+        }
+        const country = data.country_name || data.country_iso;
+        if (country) {
+            content += `\n${padStringWithSpaces("Country:", 'green', padLength)}${country}`;
+        }
+
+        content +=
+            `\n{center}{bold}Flags{/bold}\n` +
             `${data.tp ? "TP" : "{grey-fg}TP{/grey-fg}"} ` +
             `${data.ta ? "TA" : "{grey-fg}TA{/grey-fg}"} ` +
             `${msshow}\n` +
-            `${data.pty ? europe_programmes[data.pty] : ""}{/center}`
-        );
+            `PTY: ${data.pty !== undefined ? data.pty : 0}/` +
+            `${europe_programmes[data.pty !== undefined ? data.pty : 0] || 'None'}{/center}`;
+
+        if (data.dynamic_pty !== undefined || data.artificial_head !== undefined || data.compressed !== undefined) {
+            content += `\nDI: ` +
+                `DP:${data.dynamic_pty ? 'On' : 'Off'} ` +
+                `AH:${data.artificial_head ? 'On' : 'Off'} ` +
+                `C:${data.compressed ? 'On' : 'Off'} ` +
+                `Stereo:${data.st ? 'Yes' : 'No'}`;
+        }
+
+        if (Array.isArray(data.af) && data.af.length) {
+            content += `\n${padStringWithSpaces("AF:", 'green', padLength)}${data.af.join(',')}`;
+        }
+
+        rdsBox.setContent(content);
     } else {
         rdsBox.setContent('');
     }
@@ -540,9 +589,11 @@ function updateRdsBox(data) {
 
 function updateRTBox(data) {
     if (!rtBox || !data) return;
+    const line1 = processStringWithErrors(data.rt0 ? data.rt0.trim() : '\xA0', data.rt0_errors);
+    const line2 = processStringWithErrors(data.rt1 ? data.rt1.trim() : '\xA0', data.rt1_errors);
     rtBox.setContent(
-        `{center}${data.rt0.trim()}{/center}\n` +
-        `{center}${data.rt1.trim()}{/center}`
+        `{center}${line1}{/center}\n` +
+        `{center}${line2}{/center}`
     );
 }
 

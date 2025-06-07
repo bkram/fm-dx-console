@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>FMDX App</title>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #2b2b2b;
+      --fg-color: #ececec;
+      --control-bg: #3c3c3c;
+      --control-border: #5a5a5a;
+      --accent: #3c7dd9;
+    }
+
+    body {
+      font-family: "DejaVu Sans", Arial, sans-serif;
+      margin: 20px;
+      background: var(--bg-color);
+      color: var(--fg-color);
+    }
+
+    #player {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--control-bg);
+      padding: 10px;
+      border: 1px solid var(--control-border);
+      border-radius: 4px;
+      margin-bottom: 6px;
+    }
+
+    #actions {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    #freq-input {
+      font-size: 1.8em;
+      font-family: "Courier New", monospace;
+      background: #000;
+      color: #0f0;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin: 0 8px;
+      min-width: 100px;
+      text-align: center;
+      border: none;
+    }
+
+    #url-input {
+      font-family: "Courier New", monospace;
+      background: #000;
+      color: #0f0;
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: none;
+      min-width: 360px;
+    }
+
+    button {
+      background: var(--control-bg);
+      color: var(--fg-color);
+      border: 1px solid var(--control-border);
+      border-radius: 4px;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+    button.material-icons {
+      font-family: 'Material Icons';
+      font-size: 20px;
+    }
+    button:hover {
+      background: var(--accent);
+    }
+
+    #signal-unit-select {
+      background: var(--control-bg);
+      color: var(--fg-color);
+      border: 1px solid var(--control-border);
+      border-radius: 4px;
+    }
+
+    .section {
+      border: 1px solid var(--control-border);
+      padding: 8px;
+      margin-bottom: 8px;
+      background: var(--control-bg);
+      border-radius: 4px;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+    }
+    .row .section {
+      flex: 1;
+    }
+    pre {
+      margin: 4px 0 0 0;
+      white-space: pre-wrap;
+    }
+    #spectrum-canvas {
+      width: 100%;
+      background: #000;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div id="url-bar" style="margin-bottom:8px;">
+    <input id="url-input" type="text" placeholder="Server URL" style="min-width:400px;" />
+    <button id="url-btn" type="button">Connect</button>
+  </div>
+
+  <div id="player">
+    <button id="play-btn" type="button" title="Play" class="material-icons">play_arrow</button>
+    <button id="down1" type="button" class="material-icons" title="-1 MHz">fast_rewind</button>
+    <button id="down01" type="button" class="material-icons" title="-0.1 MHz">skip_previous</button>
+    <button id="down001" type="button" class="material-icons" title="-0.01 MHz">keyboard_arrow_left</button>
+    <input id="freq-input" type="text" value="" placeholder="--.--- MHz" />
+    <button id="up001" type="button" class="material-icons" title="+0.01 MHz">keyboard_arrow_right</button>
+    <button id="up01" type="button" class="material-icons" title="+0.1 MHz">skip_next</button>
+    <button id="up1" type="button" class="material-icons" title="+1 MHz">fast_forward</button>
+  </div>
+
+  <div id="actions">
+    <button id="refresh-btn" type="button">Refresh</button>
+    <button id="ims-btn" type="button">iMS</button>
+    <button id="eq-btn" type="button">EQ</button>
+    <button id="ant-btn" type="button">Ant</button>
+    <button id="scan-btn" type="button">Spectrum Scan</button>
+  </div>
+
+  <div class="section" id="signal-section">
+    <strong>Signal:</strong>
+    <progress id="signal" value="0" max="100"></progress>
+    <span id="signal-label"></span>
+    <select id="signal-unit-select">
+      <option value="dbf">dBf</option>
+      <option value="dbuv">dBµV</option>
+      <option value="dbm">dBm</option>
+    </select>
+  </div>
+
+  <div class="row">
+    <div class="section">
+      <strong>Tuner:</strong>
+      <pre id="tuner-info"></pre>
+    </div>
+    <div class="section">
+      <strong>RDS:</strong>
+      <pre id="rds-info"></pre>
+    </div>
+  </div>
+  <div class="section">
+    <strong>RadioText:</strong>
+    <pre id="rt-info"></pre>
+  </div>
+  <div class="row">
+    <div class="section">
+      <strong>Station:</strong>
+      <pre id="station-info">Name:
+Location:
+Distance:
+Power:
+Azimuth:</pre>
+    </div>
+    <div class="section">
+      <strong>Status:</strong>
+      <pre id="stats"></pre>
+    </div>
+  </div>
+  <div class="section">
+    <strong>Spectrum:</strong>
+    <canvas id="spectrum-canvas" width="1160" height="140"></canvas>
+    <div style="font-size: 0.9em; color: #bbb;">(click a point to tune)</div>
+  </div>
+  <div class="section">
+    <strong>Server:</strong>
+    <pre id="server-info"></pre>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

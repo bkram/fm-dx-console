@@ -15,6 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const WebSocket = require('ws');
 const { getTunerInfo, getPingTime } = require('./tunerinfo');
+const { setAntNames, getAntNames, getAntLabel, cycleAntenna } = require('./antenna');
 const playAudio = require('./3lasclient');
 
 // -----------------------------
@@ -50,12 +51,12 @@ let jsonData = null;
 let previousJsonData = null;
 let tunerDesc = '';
 let tunerName = '';
-let antNames = [];
 let websocketAudio;
 let websocketData;
 let argDebug = argv.debug;
 let argUrl;
 let pingTime = null;
+let lastRdsData = null;
 
 // -----------------------------
 // Logging Setup
@@ -141,6 +142,12 @@ const screen = blessed.screen({
 // Hide blinking terminal cursor which otherwise appears in the RDS box
 screen.program.hideCursor();
 
+/** Render the screen and keep the cursor hidden */
+function renderScreen() {
+    screen.render();
+    screen.program.hideCursor();
+}
+
 // -----------------------------
 // Throttling Queue
 // -----------------------------
@@ -180,7 +187,7 @@ function checkSizeAndToggleUI() {
         warningBox.hide();
         uiBox.show();
     }
-    screen.render();
+    renderScreen();
 }
 
 // -----------------------------
@@ -253,8 +260,10 @@ function padStringWithSpaces(text, color = 'green', totalLength) {
     const tagRegex = /\{(.*?)\}/g;
     const strippedText = text.replace(tagRegex, '');
     const spacesToAdd = totalLength - strippedText.length;
-    if (spacesToAdd <= 0) return text;
-    return ' ' + `{${color}-fg}` + text + `{/${color}-fg}` + ' '.repeat(spacesToAdd);
+    const trailing = Math.max(1, spacesToAdd);
+    return (
+        ' ' + `{${color}-fg}` + text + `{/${color}-fg}` + ' '.repeat(trailing)
+    );
 }
 
 /**
@@ -273,6 +282,11 @@ function processStringWithErrors(str, errors) {
         }
     }
     return out;
+}
+
+/** Strip non-ASCII characters from a string */
+function stripUnicode(str) {
+    return (str || '').replace(/[^\x00-\x7F]/g, '');
 }
 
 /** Returns a label string with bold, colored style */
@@ -344,15 +358,24 @@ function updateTitleBar() {
 // Layout widths for 80x25 terminals
 // Shrink the tuner and station boxes a little so RDS
 // has enough room for ECC and AF data
-const tunerWidth = '100%';
-const rdsWidth = '100%';
+// Place Tuner and RDS next to each other so everything fits in 80x25
+// widen tuner and RDS boxes so their content fits properly
+// These widths will be scaled proportionally when the terminal resizes
+let tunerWidth = 22;
+let rdsWidth = 30;
+const TUNER_RATIO = tunerWidth / 80;  // ratios based on original 80 column layout
+const RDS_RATIO = rdsWidth / 80;
+const MIN_TUNER = 16;
+const MIN_RDS = 24;
 const heightInRows = 8;
+const rdsHeight = heightInRows + 2;
+const rowHeight = Math.max(heightInRows, rdsHeight);
 
 const tunerBox = blessed.box({
     parent: uiBox,
     top: 1,
     left: 0,
-    width: '100%',
+    width: tunerWidth,
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
@@ -362,10 +385,10 @@ const tunerBox = blessed.box({
 
 const rdsBox = blessed.box({
     parent: uiBox,
-    top: tunerBox.top + tunerBox.height,
-    left: 0,
-    width: '100%',
-    height: heightInRows,
+    top: 1,
+    left: tunerWidth,
+    width: rdsWidth,
+    height: rdsHeight,
     tags: true,
     border: { type: 'line' },
     style: boxStyle,
@@ -380,9 +403,9 @@ const rdsBox = blessed.box({
 
 const stationBox = blessed.box({
     parent: uiBox,
-    top: rdsBox.top + rdsBox.height,
-    left: 0,
-    width: '100%',
+    top: 1,
+    left: tunerWidth + rdsWidth,
+    width: screen.cols - (tunerWidth + rdsWidth),
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
@@ -393,7 +416,7 @@ const stationBox = blessed.box({
 // RDS Radiotext box
 const rtBox = blessed.box({
     parent: uiBox,
-    top: stationBox.top + stationBox.height,
+    top: tunerBox.top + rowHeight, // below Tuner/RDS/Station row
     left: 0,
     width: '100%',
     height: 4,
@@ -408,7 +431,7 @@ const boxHeight = 5;
 
 const signalBox = blessed.box({
     parent: uiBox,
-    top: rtBox.top + rtBox.height, // 13
+    top: rtBox.top + rtBox.height,
     left: 0,
     width: '50%',
     height: boxHeight,
@@ -433,7 +456,7 @@ const progressBar = blessed.progressbar({
 
 const statsBox = blessed.box({
     parent: uiBox,
-    top: rtBox.top + rtBox.height, // 13
+    top: rtBox.top + rtBox.height,
     left: '50%',
     width: '50%',
     height: boxHeight,
@@ -491,12 +514,12 @@ const helpBox = blessed.box({
 });
 
 // Render once
-screen.render();
+renderScreen();
 
 // Update the title bar every second (for the clock)
 setInterval(() => {
     updateTitleBar();
-    screen.render();
+    renderScreen();
 }, 1000);
 
 /**
@@ -507,20 +530,43 @@ function updateProgressBarWidth() {
 }
 
 /**
+ * Adjust tuner, RDS, and station box widths based on screen size
+ */
+function applyLayout() {
+    const total = screen.cols;
+    tunerWidth = Math.max(MIN_TUNER, Math.floor(total * TUNER_RATIO));
+    rdsWidth = Math.max(MIN_RDS, Math.floor(total * RDS_RATIO));
+    const stationWidth = Math.max(20, total - tunerWidth - rdsWidth);
+
+    tunerBox.width = tunerWidth;
+    rdsBox.left = tunerWidth;
+    rdsBox.width = rdsWidth;
+    stationBox.left = tunerWidth + rdsWidth;
+    stationBox.width = stationWidth;
+}
+
+/**
  * On terminal resize, we re-check if UI is too small,
  * recalc the bottom bar, recalc the title bar, etc.
  */
 screen.on('resize', () => {
     updateProgressBarWidth();
+    applyLayout();
     checkSizeAndToggleUI();
 
     // Recompute the bottom bar text to keep "Press `h` for help" right-aligned
     bottomBox.setContent(genBottomText(argUrl));
 
     // Recompute the top bar clock spacing
-    updateTitleBar(); 
+    updateTitleBar();
 
-    screen.render();
+    if (jsonData) {
+        updateTunerBox(jsonData);
+        updateRdsBox(jsonData);
+        updateStationBox(jsonData.txInfo);
+    }
+
+    renderScreen();
 });
 
 // -----------------------------
@@ -538,54 +584,79 @@ function updateTunerBox(data) {
         `${padStringWithSpaces("Mode:", 'green', padLength)}${data.st ? "Stereo" : "Mono"}\n` +
         `${padStringWithSpaces("iMS:", 'green', padLength)}${Number(data.ims) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
         `${padStringWithSpaces("EQ:", 'green', padLength)}${Number(data.eq) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-        `${padStringWithSpaces("ANT:", 'green', padLength)}${antNames[data.ant] || 'N/A'}\n`
+        `${padStringWithSpaces("ANT:", 'green', padLength)}${getAntLabel(data.ant)}\n`
     );
 }
 
 function updateRdsBox(data) {
     if (!rdsBox || !data) return;
-    const padLength = 4;
-    if (data.freq >= 75 && data.pi !== "?") {
+    // Use a slightly wider prefix column so all values line up
+    const padLength = 9;
+    const hasValidRds = data.freq >= 75 && data.pi !== "?";
+    const useData = hasValidRds ? data : lastRdsData && lastRdsData.pi !== "?" ? lastRdsData : null;
+    if (useData) {
+        if (hasValidRds) lastRdsData = data;
         let msshow;
-        if (data.ms === 0) {
-            msshow = "{grey-fg}M{/grey-fg}S";
-        } else if (data.ms === -1) {
-            msshow = "{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}";
+        if (useData.ms === 0) {
+            msshow = '{grey-fg}M{/grey-fg}S';
+        } else if (useData.ms === -1) {
+            msshow = '{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}';
         } else {
-            msshow = "M{grey-fg}S{/grey-fg}";
+            msshow = 'M{grey-fg}S{/grey-fg}';
         }
 
-        const psDisplay = processStringWithErrors(data.ps.trimStart(), data.ps_errors);
+        const psDisplay = processStringWithErrors(useData.ps.trimStart(), useData.ps_errors);
+        const prefix = (txt) => padStringWithSpaces(txt, 'green', padLength);
         const lines = [];
-        lines.push(`PS: ${psDisplay}`);
-        lines.push(`PI: ${data.pi}`);
-        if (data.ecc) {
-            lines.push(`ECC: ${data.ecc}`);
+
+        lines.push(`${prefix('PS:')}${psDisplay}`);
+        lines.push(`${prefix('PI:')}${useData.pi}`);
+        lines.push(`${prefix('ECC:')}${useData.ecc || ''}`);
+        const countryIso = useData.country_iso;
+        const countryName = useData.country_name;
+        const countryValue =
+            countryName || (countryIso && countryIso !== 'UN' ? countryIso : '');
+        lines.push(`${prefix('Country:')}${countryValue}`);
+        lines.push(
+            `${prefix('Flags:')}` +
+            `${useData.tp ? 'TP' : '{grey-fg}TP{/grey-fg}'} ` +
+            `${useData.ta ? 'TA' : '{grey-fg}TA{/grey-fg}'} ` +
+            `${msshow}`
+        );
+        const ptyNum = useData.pty !== undefined ? useData.pty : 0;
+        lines.push(`${prefix('PTY:')}${ptyNum}`);
+        const fullPtyText = europe_programmes[ptyNum] || 'None';
+        const maxPtyLen = rdsBox.width - 2 - (padLength + 1);
+        const truncatedPty =
+            fullPtyText.length > maxPtyLen
+                ? fullPtyText.slice(0, maxPtyLen - 1) + '…'
+                : fullPtyText;
+        lines.push(`${prefix('PTY txt:')}${truncatedPty}`);
+        if (useData.dynamic_pty !== undefined || useData.artificial_head !== undefined || useData.compressed !== undefined) {
+            lines.push(`${prefix('DI:')}DP:${useData.dynamic_pty ? 'On' : 'Off'} AH:${useData.artificial_head ? 'On' : 'Off'} C:${useData.compressed ? 'On' : 'Off'} Stereo:${useData.st ? 'Yes' : 'No'}`);
         }
-        const country = data.country_name || data.country_iso;
-        if (country) {
-            lines.push(`Country: ${country}`);
-        }
-        lines.push(`Flags: ${data.tp ? 'TP' : 'TP?'} ${data.ta ? 'TA' : 'TA?'} ${msshow}`);
-        const ptyNum = data.pty !== undefined ? data.pty : 0;
-        lines.push(`PTY: ${ptyNum}/${europe_programmes[ptyNum] || 'None'}`);
-        if (data.dynamic_pty !== undefined || data.artificial_head !== undefined || data.compressed !== undefined) {
-            lines.push(`DI: DP:${data.dynamic_pty ? 'On' : 'Off'} AH:${data.artificial_head ? 'On' : 'Off'} C:${data.compressed ? 'On' : 'Off'} Stereo:${data.st ? 'Yes' : 'No'}`);
-        }
-        if (Array.isArray(data.af) && data.af.length) {
-            lines.push(`AF: ${data.af.join(',')}`);
+        if (Array.isArray(useData.af) && useData.af.length) {
+            lines.push(`${prefix('AF:')}Yes`);
+        } else {
+            lines.push(`${prefix('AF:')}None`);
         }
 
-        const colWidth = Math.floor((screen.cols - 4) / 2);
-        let output = '';
-        for (let i = 0; i < lines.length; i += 2) {
-            const left = padStringWithSpaces(lines[i], 'green', padLength).padEnd(colWidth);
-            const right = lines[i + 1] ? lines[i + 1] : '';
-            output += left + right + '\n';
-        }
-        rdsBox.setContent(output.trim());
+        rdsBox.setContent(lines.join('\n'));
+        renderScreen();
     } else {
-        rdsBox.setContent('');
+        const prefix = (txt) => padStringWithSpaces(txt, 'green', padLength);
+        const placeholders = [
+            `${prefix('PS:')}`,
+            `${prefix('PI:')}`,
+            `${prefix('ECC:')}`,
+            `${prefix('Country:')}`,
+            `${prefix('Flags:')}{grey-fg}TP{/grey-fg} {grey-fg}TA{/grey-fg} {grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}`,
+            `${prefix('PTY:')}`,
+            `${prefix('PTY txt:')}`,
+            `${prefix('DI:')}`,
+            `${prefix('AF:')}`
+        ];
+        rdsBox.setContent(placeholders.join('\n'));
     }
 }
 
@@ -603,24 +674,37 @@ function updateStationBox(txInfo) {
     if (!stationBox || !txInfo) return;
     const padLength = 10;
     if (txInfo.tx) {
+        const locParts = (txInfo.city || '').split(',');
+        const location = locParts[0] ? locParts[0].trim() : '';
+        const country = locParts.length > 1 ? locParts.slice(1).join(',').trim() : (txInfo.itu || '');
+
         stationBox.setContent(
             `${padStringWithSpaces("Name:", 'green', padLength)}${txInfo.tx}\n` +
-            `${padStringWithSpaces("Location:", 'green', padLength)}${txInfo.city + ", " + txInfo.itu}\n` +
+            `${padStringWithSpaces("Location:", 'green', padLength)}${location}\n` +
+            `${padStringWithSpaces("Country:", 'green', padLength)}${country}\n` +
             `${padStringWithSpaces("Distance:", 'green', padLength)}${txInfo.dist + " km"}\n` +
             `${padStringWithSpaces("Power:", 'green', padLength)}${txInfo.erp + " kW " + "[" + txInfo.pol + "]"}\n` +
             `${padStringWithSpaces("Azimuth:", 'green', padLength)}${txInfo.azi + "°"}`
         );
     } else {
-        stationBox.setContent("");
+        stationBox.setContent(
+            `${padStringWithSpaces('Name:', 'green', padLength)}\n` +
+            `${padStringWithSpaces('Location:', 'green', padLength)}\n` +
+            `${padStringWithSpaces('Country:', 'green', padLength)}\n` +
+            `${padStringWithSpaces('Distance:', 'green', padLength)}\n` +
+            `${padStringWithSpaces('Power:', 'green', padLength)}\n` +
+            `${padStringWithSpaces('Azimuth:', 'green', padLength)}`
+        );
     }
 }
 
 function updateStatsBox(data) {
     if (!statsBox || !data) return;
+    const padLength = 16;
     statsBox.setContent(
-        `{center}Server users: ${data.users}\n` +
-        `Server ping: ${pingTime !== null ? pingTime + ' ms' : ''}\n` +
-        `Local audio: ${player.getStatus() ? "Playing" : "Stopped"}{/center}`
+        `${padStringWithSpaces('Server users:', 'green', padLength)}${data.users}\n` +
+        `${padStringWithSpaces('Server ping:', 'green', padLength)}${pingTime !== null ? pingTime + ' ms' : ''}\n` +
+        `${padStringWithSpaces('Local audio:', 'green', padLength)}${player.getStatus() ? 'Playing' : 'Stopped'}`
     );
 }
 
@@ -646,12 +730,13 @@ function updateServerBox() {
         serverBox.setContent('');
         return;
     }
-    if (screen.rows <= 25) {
-        serverBox.setContent(tunerName);
-    } else {
-        // Add a leading space for aesthetics
-        serverBox.setContent(` ${tunerName}\n\n${tunerDesc}`);
+    const name = stripUnicode(tunerName);
+    const desc = stripUnicode(tunerDesc);
+    const content = [` ${name}`];
+    if (desc) {
+        content.push('', desc);
     }
+    serverBox.setContent(content.join('\n'));
 }
 
 // -----------------------------
@@ -667,10 +752,10 @@ async function tunerInfo() {
         const result = await getTunerInfo(argUrl);
         tunerName = result.tunerName || '';
         tunerDesc = result.tunerDesc || '';
-        antNames = result.antNames || [];
+        setAntNames(result.antNames || []);
 
         updateServerBox();
-        screen.render();
+        renderScreen();
     } catch (error) {
         debugLog(error.message);
     }
@@ -683,7 +768,7 @@ async function doPing() {
         debugLog('Ping Time:', pingTime, 'ms');
         if (jsonData) {
             updateStatsBox(jsonData);
-            screen.render();
+            renderScreen();
         }
     } catch (error) {
         debugLog('Ping Error:', error.message);
@@ -715,7 +800,7 @@ ws.on('message', (data) => {
             updateStatsBox(jsonData);
             updateServerBox();
 
-            screen.render();
+            renderScreen();
         }
         previousJsonData = newData;
     } catch (error) {
@@ -784,12 +869,12 @@ screen.on('keypress', async (ch, key) => {
             }
             dialog.destroy();
             screen.restoreFocus();
-            screen.render();
+            renderScreen();
         });
     } else if (key.full === 'h') {
         // Toggle the help box
         helpBox.hidden = !helpBox.hidden;
-        screen.render();
+        renderScreen();
     } else if (key.full === 'p') {
         // Toggle audio
         if (player.getStatus()) {
@@ -799,7 +884,7 @@ screen.on('keypress', async (ch, key) => {
         }
         if (jsonData) {
             updateStatsBox(jsonData);
-            screen.render();
+            renderScreen();
         }
     } else if (key.full === '[') {
         // Toggle iMS
@@ -816,15 +901,18 @@ screen.on('keypress', async (ch, key) => {
             enqueueCommand(`G1${jsonData.ims}`);
         }
     } else if (key.full === 'y') {
-        // Toggle antenna
-        if (jsonData) {
-            let newAnt = parseInt(jsonData.ant) + 1;
-            if (newAnt >= antNames.length) {
-                newAnt = 0;
-            }
+        // Toggle antennas in a 0-based cycle (Z0, Z1, Z0, ...).
+        // Update jsonData locally so rapid toggling works before the server responds.
+        if (jsonData && jsonData.ant !== undefined) {
+            const current = parseInt(jsonData.ant, 10) || 0;
+            const count = Math.max(getAntNames().length, 2);
+            const newAnt = (current + 1) % count;
             enqueueCommand(`Z${newAnt}`);
+            jsonData.ant = newAnt;
+            updateTunerBox(jsonData);
+            renderScreen();
         }
-    } else if (key.full === 's') {
+    } else if (key.full.toLowerCase() === 's') {
         // Toggle server info popup
         serverBox.hidden = !serverBox.hidden;
         if (!serverBox.hidden) {
@@ -834,7 +922,7 @@ screen.on('keypress', async (ch, key) => {
             serverBox.setContent('');
             screen.realloc();
         }
-        screen.render();
+        renderScreen();
     } else if (key.full === 'escape' || key.full === 'C-c') {
         process.exit(0);
     } else {
@@ -846,5 +934,7 @@ screen.on('keypress', async (ch, key) => {
 // Final Initialization
 // -----------------------------
 checkSizeAndToggleUI();
+applyLayout();
+updateProgressBarWidth();
 updateTitleBar();     // Initial top bar update
 updateServerBox();    // Fill server info if tuner info is already loaded

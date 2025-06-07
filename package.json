@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node fm-dx-console.js",
     "electron": "electron .",
-    "test": "node test/tunerinfo.test.js"
+    "test": "node test/tunerinfo.test.js && node test/antenna.test.js"
 
   },
   "dependencies": {

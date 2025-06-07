@@ -5,52 +5,58 @@ const cheerio = require('cheerio');
 const axios = require('axios');
 
 /**
- * Fetch tuner information from the provided URL.
+ * Fetch tuner information from the provided URL. It first tries the
+ * `/static_data` endpoint which exposes the server description in JSON.
+ * If that fails (older servers), it falls back to scraping the HTML page.
+ *
  * @param {string} url - The URL of the web server.
- * @returns {Object} An object containing tuner name and description.
- * @throws {Error} If fetching tuner information fails.
+ * @returns {Object} An object containing tuner name, description and
+ * antenna names.
  */
 async function getTunerInfo(url) {
+    const baseUrl = new URL(url);
+    const staticUrl = new URL('static_data', baseUrl).toString();
     try {
-        const response = await axios.get(url); // Asynchronous HTTP request using axios
-        const html = response.data;
-        const $ = cheerio.load(html);
+        // Preferred method: fetch JSON info
+        const res = await axios.get(staticUrl);
+        const data = res.data || {};
+        let tunerName = data.tunerName || '';
+        let tunerDesc = data.tunerDesc || '';
+        const antObj = data.ant || {};
+        let antNames = Object.values(antObj)
+            .filter(a => a && typeof a === 'object' && a.enabled)
+            .map(a => (typeof a.name === 'string' ? a.name : ''))
+            .filter(Boolean);
 
-        // Extract and clean the og:title
-        const tunerName = $('meta[property="og:title"]').attr('content')
-            .replace('FM-DX WebServer ', '')  // Remove "FM-DX WebServer "
-            // .replace('[', ' ')                 // Remove "["
-            // .replace(']', ' ');                // Remove "]"
+        // If key info is missing, fall back to HTML scraping
+        if (!tunerDesc || antNames.length === 0) {
+            const response = await axios.get(url);
+            const html = response.data;
+            const $ = cheerio.load(html);
 
-        // Extract and clean the og:description
-        let tunerDesc = $('meta[property="og:description"]').attr('content')
-            .replace('Server description: ', '')  // Remove "Server description:"
-            .trim();  // Remove leading and trailing whitespace
-
-        // Add a space to the beginning of each line in the description
-        if (tunerDesc) {
-            tunerDesc = tunerDesc;
-            // tunerDesc = tunerDesc
-            //     .split(/\r?\n/)  // Split by either \n or \r\n (handles different OS newline formats)
-            //     .map(line => ' ' + line.trim())  // Add a space and remove extra whitespace at the beginning of each line
-            //     .slice(0, 10)  // Keep only the first 3 lines
-            //     .join('\n')  // Join the lines back with \n
-            //     .replace(/\.\s*$/, '');  // Remove any trailing period followed by optional spaces
+            if (!tunerName) {
+                tunerName = $('meta[property="og:title"]').attr('content')
+                    .replace('FM-DX WebServer ', '');
+            }
+            if (!tunerDesc) {
+                tunerDesc = $('meta[property="og:description"]').attr('content')
+                    .replace('Server description: ', '')
+                    .trim();
+            }
+            if (antNames.length === 0) {
+                antNames = [];
+                $('#data-ant ul.options li, #data-ant li, select[name="ant"] option').each((_, el) => {
+                    const name = $(el).text().trim();
+                    if (name) antNames.push(name);
+                });
+                if (antNames.length === 0) antNames.push('Default');
+            }
         }
 
-        const antNames = [];
-        // Antenna names can be listed inside #data-ant or within a select box
-        $('#data-ant ul.options li, #data-ant li, select[name="ant"] option').each((_, element) => {
-            const name = $(element).text().trim();
-            if (name) antNames.push(name);
-        });
-
-        if (antNames.length === 0) {
-            antNames.push('Default');
-        }
         return { tunerName, tunerDesc, antNames };
     } catch (error) {
-        throw new Error('Failed to fetch content: ' + error.message);
+        console.error('tunerinfo error:', error.message);
+        return { tunerName: '', tunerDesc: '', antNames: [] };
     }
 }
 

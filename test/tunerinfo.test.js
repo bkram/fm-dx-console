@@ -5,6 +5,20 @@ let calledUrl;
 const axiosStub = {
   get: async (url) => {
     calledUrl = url;
+    if (url.endsWith('/static_data')) {
+      return {
+        data: {
+          tunerName: 'Test',
+          tunerDesc: 'Desc',
+          ant: {
+            enabled: true,
+            ant1: { enabled: true, name: 'A' },
+            ant2: { enabled: false, name: 'B' },
+            ant3: { enabled: true, name: 'C' }
+          }
+        }
+      };
+    }
     return { status: 200 };
   }
 };
@@ -16,7 +30,7 @@ Module._load = function(request, parent, isMain) {
   return originalLoad(request, parent, isMain);
 };
 
-const { getPingTime } = require('../tunerinfo');
+const { getPingTime, getTunerInfo } = require('../tunerinfo');
 
 (async () => {
   await getPingTime('http://example.com/');
@@ -24,6 +38,9 @@ const { getPingTime } = require('../tunerinfo');
 
   await getPingTime('http://example.com/dir');
   assert.strictEqual(calledUrl, 'http://example.com/dir/ping');
+
+  const info = await getTunerInfo('http://example.com/');
+  assert.deepStrictEqual(info.antNames, ['A', 'C']);
 
   console.log('All tests passed');
 })()

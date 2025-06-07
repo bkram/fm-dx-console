@@ -891,13 +891,12 @@ screen.on('keypress', async (ch, key) => {
             enqueueCommand(`G1${jsonData.ims}`);
         }
     } else if (key.full === 'y') {
-        // Toggle antenna even if names failed to load. Update jsonData so
-        // rapid toggling works even before the server responds.
+        // Toggle antennas in a 0-based cycle (Z0, Z1, Z0, ...).
+        // Update jsonData locally so rapid toggling works before the server responds.
         if (jsonData && jsonData.ant !== undefined) {
             const current = parseInt(jsonData.ant, 10) || 0;
-            const nameCount = getAntNames().length;
-            const count = Math.max(nameCount, current + 1, 2);
-            const newAnt = cycleAntenna(current, count);
+            const count = Math.max(getAntNames().length, 2);
+            const newAnt = (current + 1) % count;
             enqueueCommand(`Z${newAnt}`);
             jsonData.ant = newAnt;
             updateTunerBox(jsonData);

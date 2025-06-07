@@ -62,32 +62,26 @@ const { getPingTime, getTunerInfo } = require('../tunerinfo');
   await getPingTime('http://example.com/dir');
   assert.strictEqual(calledUrl, 'http://example.com/dir/ping');
 
-  // Scenario 1: static data
+  // Scenario 1: static data with HTML antenna list
+  const htmlMulti = '<div id="data-ant"><input placeholder="Ant B"><ul class="options"><li data-value="0">VER</li><li data-value="1">HOR</li></ul></div>';
   axiosBehavior = (url) => {
     if (url.endsWith('/static_data')) {
       return {
         data: {
           tunerName: 'Test',
           tunerDesc: 'Desc',
-          antSel: 2,
-          ant: {
-            enabled: true,
-            ant1: { enabled: true, name: 'A' },
-            ant2: { enabled: false, name: 'B' },
-            ant3: { enabled: true, name: 'C' }
-          }
+          antSel: 2
         }
       };
     }
-    return { status: 200 };
+    return { data: htmlMulti };
   };
-  cheerioBehavior = () => ({ attr: () => '', each: () => {}, length: 0 });
+  cheerioBehavior = makeCheerio;
   let info = await getTunerInfo('http://example.com/');
-  assert.deepStrictEqual(info.antNames, ['A', 'C']);
+  assert.deepStrictEqual(info.antNames, ['VER', 'HOR']);
   assert.strictEqual(info.activeAnt, 2);
 
-  // Scenario 2: HTML with two antennas
-  const htmlMulti = '<div id="data-ant"><input placeholder="Ant B"><ul class="options"><li data-value="0">VER</li><li data-value="1">HOR</li></ul></div>';
+  // Scenario 2: HTML with two antennas only
   axiosBehavior = (url) => {
     if (url.endsWith('/static_data')) return { data: {} };
     return { data: htmlMulti };

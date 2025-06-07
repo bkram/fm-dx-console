@@ -894,7 +894,9 @@ screen.on('keypress', async (ch, key) => {
         // Toggle antenna even if names failed to load. Update jsonData so
         // rapid toggling works even before the server responds.
         if (jsonData && jsonData.ant !== undefined) {
-            const newAnt = cycleAntenna(jsonData.ant);
+            const count = getAntNames().length || undefined;
+            const current = parseInt(jsonData.ant, 10) || 0;
+            const newAnt = cycleAntenna(current, count);
             enqueueCommand(`Z${newAnt}`);
             jsonData.ant = newAnt;
             updateTunerBox(jsonData);

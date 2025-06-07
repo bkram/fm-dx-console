@@ -21,10 +21,15 @@ function getAntLabel(index) {
     return 'N/A';
 }
 
-function cycleAntenna(currentIndex) {
-    const count = antNames.length > 0 ? antNames.length : 2;
-    const next = (parseInt(currentIndex, 10) + 1) % count;
-    return next;
+function cycleAntenna(currentIndex, countOverride) {
+    const count =
+        countOverride && countOverride > 0
+            ? countOverride
+            : antNames.length > 0
+            ? antNames.length
+            : 2;
+    const idx = parseInt(currentIndex, 10) || 0;
+    return (idx + 1) % count;
 }
 
 module.exports = { setAntNames, getAntNames, getAntLabel, cycleAntenna };

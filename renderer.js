@@ -128,10 +128,10 @@ function updateUI() {
 
   const tuner = document.getElementById('tuner-info');
   let ant;
-  if (antNames.length <= 1) {
+  if (antNames.length === 0) {
     ant = 'Default';
   } else {
-    ant = antNames[currentData.ant] || currentData.ant;
+    ant = antNames[currentData.ant] || antNames[0] || currentData.ant;
   }
   tuner.textContent =
     `Mode: ${currentData.st ? 'Stereo' : 'Mono'}\n` +
@@ -277,7 +277,8 @@ document.getElementById('eq-btn').onclick = () => {
 document.getElementById('ant-btn').onclick = () => {
   if (currentData) {
     let newAnt = parseInt(currentData.ant) + 1;
-    if (antNames.length && newAnt >= antNames.length) newAnt = 0;
+    const count = Math.max(antNames.length, 1);
+    if (newAnt >= count) newAnt = 0;
     sendCmd(`Z${newAnt}`);
     fetchSpectrumData();
   }

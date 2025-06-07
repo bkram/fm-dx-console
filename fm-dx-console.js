@@ -228,7 +228,7 @@ function generateHelpContent() {
         "'r'  refresh",
         "'p'  play audio",
         "'['  toggle iMS",
-        "'y'  toggle antenna",
+        "'y'  cycle antenna",
         "'s'  server info",
     ];
 
@@ -901,12 +901,12 @@ screen.on('keypress', async (ch, key) => {
             enqueueCommand(`G1${jsonData.ims}`);
         }
     } else if (key.full === 'y') {
-        // Toggle antennas in a 0-based cycle (Z0, Z1, Z0, ...).
+        // Toggle antennas in a 0-based cycle.
         // Update jsonData locally so rapid toggling works before the server responds.
         if (jsonData && jsonData.ant !== undefined) {
             const current = parseInt(jsonData.ant, 10) || 0;
-            const count = Math.max(getAntNames().length, 2);
-            const newAnt = (current + 1) % count;
+            const count = Math.max(getAntNames().length, 1);
+            const newAnt = count > 0 ? (current + 1) % count : 0;
             enqueueCommand(`Z${newAnt}`);
             jsonData.ant = newAnt;
             updateTunerBox(jsonData);

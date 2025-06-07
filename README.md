@@ -120,4 +120,4 @@ Toggles
 
     '[' toggle iMS
     ']' toggle EQ
-    'y' toggle antenna (0 = first, 1 = second)
+    'y' cycle antenna

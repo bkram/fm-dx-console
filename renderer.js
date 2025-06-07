@@ -233,6 +233,7 @@ document.getElementById('ant-btn').onclick = () => {
     let newAnt = parseInt(currentData.ant) + 1;
     if (antNames.length && newAnt >= antNames.length) newAnt = 0;
     sendCmd(`Z${newAnt}`);
+    fetchSpectrumData();
   }
 };
 

@@ -29,7 +29,7 @@ const europe_programmes = [
     "Travel", "Leisure", "Jazz Music", "Country Music", "National Music",
     "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
 ];
-const version = '1.50';
+const version = '1.52';
 const userAgent = `fm-dx-console/${version}`;
 
 // Terminal must be at least 80x24
@@ -449,7 +449,7 @@ const serverBox = blessed.box({
     top: 'center',
     left: 'center',
     width: 60,
-    height: 7,
+    height: 18,
     tags: true,
     border: { type: 'line' },
     style: boxStyle,
@@ -834,6 +834,9 @@ screen.on('keypress', (ch, key) => {
         serverBox.hidden = !serverBox.hidden;
         if (!serverBox.hidden) {
             updateServerBox();
+        } else {
+            serverBox.setContent('');
+            screen.realloc();
         }
         screen.render();
     } else if (key.full === 'escape' || key.full === 'C-c') {

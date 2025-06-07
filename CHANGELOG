@@ -1,5 +1,10 @@
 # Changelog
 
+## FM-DX Console 1.52
+- Larger pop-up for server information matching the help window
+- Redraw screen after closing server info to remove artifacts
+- Added 's' shortcut to toggle server info
+
 ## FM-DX Console 1.50
 
 - UI Enhancements:

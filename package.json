@@ -1,6 +1,6 @@
 {
   "name": "fm-dx-console",
-  "version": "1.50",
+  "version": "1.52",
   "description": "Console client for fm-dx-webserver",
   "main": "main.js",
   "scripts": {

@@ -253,8 +253,10 @@ function padStringWithSpaces(text, color = 'green', totalLength) {
     const tagRegex = /\{(.*?)\}/g;
     const strippedText = text.replace(tagRegex, '');
     const spacesToAdd = totalLength - strippedText.length;
-    if (spacesToAdd <= 0) return text;
-    return ' ' + `{${color}-fg}` + text + `{/${color}-fg}` + ' '.repeat(spacesToAdd);
+    const trailing = Math.max(1, spacesToAdd);
+    return (
+        ' ' + `{${color}-fg}` + text + `{/${color}-fg}` + ' '.repeat(trailing)
+    );
 }
 
 /**
@@ -347,7 +349,7 @@ function updateTitleBar() {
 // Place Tuner and RDS next to each other so everything fits in 80x25
 // widen tuner and RDS boxes so their content fits properly
 const tunerWidth = 24;
-const rdsWidth = 30;
+const rdsWidth = 28; // slightly smaller so overall layout fits nicely
 const heightInRows = 8;
 const rdsHeight = heightInRows + 2;
 const rowHeight = Math.max(heightInRows, rdsHeight);

@@ -28,6 +28,12 @@ function makeCheerio(html) {
         attr: () => undefined
       };
     }
+    if (selector === '#data-ant input') {
+      const m = html.match(/<input[^>]*placeholder="([^"]*)"/);
+      return {
+        attr: (name) => (name === 'placeholder' && m ? m[1] : undefined)
+      };
+    }
     if (selector === '#data-ant-container') {
       return { length: html.includes('data-ant-container') ? 1 : 0 };
     }
@@ -63,6 +69,7 @@ const { getPingTime, getTunerInfo } = require('../tunerinfo');
         data: {
           tunerName: 'Test',
           tunerDesc: 'Desc',
+          antSel: 2,
           ant: {
             enabled: true,
             ant1: { enabled: true, name: 'A' },
@@ -77,9 +84,10 @@ const { getPingTime, getTunerInfo } = require('../tunerinfo');
   cheerioBehavior = () => ({ attr: () => '', each: () => {}, length: 0 });
   let info = await getTunerInfo('http://example.com/');
   assert.deepStrictEqual(info.antNames, ['A', 'C']);
+  assert.strictEqual(info.activeAnt, 2);
 
   // Scenario 2: HTML with two antennas
-  const htmlMulti = '<div id="data-ant"><ul class="options"><li data-value="0">VER</li><li data-value="1">HOR</li></ul></div>';
+  const htmlMulti = '<div id="data-ant"><input placeholder="Ant B"><ul class="options"><li data-value="0">VER</li><li data-value="1">HOR</li></ul></div>';
   axiosBehavior = (url) => {
     if (url.endsWith('/static_data')) return { data: {} };
     return { data: htmlMulti };
@@ -87,6 +95,7 @@ const { getPingTime, getTunerInfo } = require('../tunerinfo');
   cheerioBehavior = makeCheerio;
   info = await getTunerInfo('http://example.com/');
   assert.deepStrictEqual(info.antNames, ['VER', 'HOR']);
+  assert.strictEqual(info.activeAnt, 1);
 
   // Scenario 3: HTML single antenna container
   const htmlSingle = '<div id="data-ant-container"></div>';
@@ -97,6 +106,7 @@ const { getPingTime, getTunerInfo } = require('../tunerinfo');
   cheerioBehavior = makeCheerio;
   info = await getTunerInfo('http://example.com/');
   assert.deepStrictEqual(info.antNames, ['Default']);
+  assert.strictEqual(info.activeAnt, 0);
 
   console.log('All tests passed');
 })()

@@ -10,8 +10,8 @@ const axios = require('axios');
  * If that fails (older servers), it falls back to scraping the HTML page.
  *
  * @param {string} url - The URL of the web server.
- * @returns {Object} An object containing tuner name, description and
- * antenna names.
+ * @returns {Object} An object containing tuner name, description,
+ * antenna names and the currently active antenna index when available.
  */
 async function getTunerInfo(url) {
     const baseUrl = new URL(url);
@@ -27,6 +27,14 @@ async function getTunerInfo(url) {
             .filter(a => a && typeof a === 'object' && a.enabled)
             .map(a => (typeof a.name === 'string' ? a.name : ''))
             .filter(Boolean);
+        let activeAnt =
+            data.antSel !== undefined
+                ? Number(data.antSel)
+                : data.activeAnt !== undefined
+                ? Number(data.activeAnt)
+                : antObj.active !== undefined
+                ? Number(antObj.active)
+                : undefined;
 
         // If key info is missing, fall back to HTML scraping
         if (!tunerDesc || antNames.length === 0) {
@@ -54,12 +62,21 @@ async function getTunerInfo(url) {
                     antNames.push('Default');
                 }
             }
+            if (activeAnt === undefined) {
+                const placeholder = $('#data-ant input').attr('placeholder') || '';
+                const match = placeholder.match(/Ant\s*([A-Z])/i);
+                if (match) {
+                    activeAnt = match[1].charCodeAt(0) - 'A'.charCodeAt(0);
+                } else if ($('#data-ant-container').length) {
+                    activeAnt = 0;
+                }
+            }
         }
 
-        return { tunerName, tunerDesc, antNames };
+        return { tunerName, tunerDesc, antNames, activeAnt };
     } catch (error) {
         console.error('tunerinfo error:', error.message);
-        return { tunerName: '', tunerDesc: '', antNames: [] };
+        return { tunerName: '', tunerDesc: '', antNames: [], activeAnt: undefined };
     }
 }
 

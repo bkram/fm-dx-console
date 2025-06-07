@@ -759,6 +759,10 @@ async function tunerInfo() {
         tunerName = result.tunerName || '';
         tunerDesc = result.tunerDesc || '';
         setAntNames(result.antNames || []);
+        if (result.activeAnt !== undefined) {
+            if (!jsonData) jsonData = {};
+            jsonData.ant = result.activeAnt;
+        }
 
         updateServerBox();
         renderScreen();

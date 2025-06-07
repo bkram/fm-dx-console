@@ -670,6 +670,12 @@ function updateRTBox(data) {
     );
 }
 
+function resetRds() {
+    lastRdsData = null;
+    updateRdsBox({});
+    updateRTBox({});
+}
+
 function updateStationBox(txInfo) {
     if (!stationBox || !txInfo) return;
     const padLength = 10;
@@ -819,30 +825,37 @@ screen.on('keypress', async (ch, key) => {
     if (key.full === 'left') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000) - 100}`);
+            resetRds();
         }
     } else if (key.full === 'right') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000) + 100}`);
+            resetRds();
         }
     } else if (key.full === 'up') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000) + 10}`);
+            resetRds();
         }
     } else if (key.full === 'down') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000) - 10}`);
+            resetRds();
         }
     } else if (key.full === 'x') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000) + 1000}`);
+            resetRds();
         }
     } else if (key.full === 'z') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000) - 1000}`);
+            resetRds();
         }
     } else if (key.full === 'r') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000)}`);
+            resetRds();
         }
     } else if (key.full === 't') {
         // Direct freq input
@@ -863,6 +876,7 @@ screen.on('keypress', async (ch, key) => {
                 const newFreq = parseFloat(convertToFrequency(value)) * 1000;
                 if (!isNaN(newFreq)) {
                     enqueueCommand(`T${newFreq}`);
+                    resetRds();
                 } else {
                     debugLog('Invalid frequency input.');
                 }

@@ -45,11 +45,14 @@ async function getTunerInfo(url) {
             }
             if (antNames.length === 0) {
                 antNames = [];
-                $('#data-ant ul.options li, #data-ant li, select[name="ant"] option').each((_, el) => {
+                const list = $('#data-ant ul.options li, #data-ant li');
+                list.each((_, el) => {
                     const name = $(el).text().trim();
                     if (name) antNames.push(name);
                 });
-                if (antNames.length === 0) antNames.push('Default');
+                if (antNames.length === 0 && $('#data-ant-container').length) {
+                    antNames.push('Default');
+                }
             }
         }
 

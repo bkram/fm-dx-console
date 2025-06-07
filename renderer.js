@@ -209,6 +209,11 @@ function updateStatus() {
   statsEl.textContent = `Users: ${users}\nPing: ${ping}\nAudio: ${audioPlaying ? 'Playing' : 'Stopped'}`;
 }
 
+function resetRdsUI() {
+  document.getElementById('rds-info').textContent = '';
+  document.getElementById('rt-info').textContent = '\u00a0\n\u00a0';
+}
+
 function scaleValue(value) {
   const maxvalue = 130;
   value = Math.max(0, Math.min(maxvalue, value));
@@ -220,6 +225,7 @@ function doTune(delta) {
     const freq = parseFloat(currentData.freq);
     if (!isNaN(freq)) {
       sendCmd(`T${(freq * 1000) + delta}`);
+      resetRdsUI();
     }
   }
 }
@@ -235,6 +241,7 @@ document.getElementById('refresh-btn').onclick = () => {
     const freq = parseFloat(currentData.freq);
     if (!isNaN(freq)) {
       sendCmd(`T${freq * 1000}`);
+      resetRdsUI();
     }
   }
 };
@@ -243,6 +250,7 @@ freqInputEl.addEventListener('keydown', (e) => {
     const f = convertToFrequency(freqInputEl.value);
     if (!isNaN(f)) {
       sendCmd(`T${f * 1000}`);
+      resetRdsUI();
       freqInputEl.blur();
     }
   } else if (!/[0-9.,]/.test(e.key) &&
@@ -426,6 +434,7 @@ document.getElementById('spectrum-canvas').addEventListener('click', (e) => {
   const freq = spectrumData[Math.max(0, Math.min(idx, spectrumData.length - 1))].freq;
   const rounded = Math.round(freq * 10) / 10; // tune in 0.1 MHz steps
   sendCmd(`T${Math.round(rounded * 1000)}`);
+  resetRdsUI();
 });
 
 let dragging = false;
@@ -448,6 +457,7 @@ function handleDrag(e, final = false) {
     freqInputEl.value = rounded.toFixed(1);
     drawSpectrum(ctx, canvas, spectrumData, rounded);
     sendCmd(`T${Math.round(rounded * 1000)}`);
+    resetRdsUI();
   } else {
     freqInputEl.value = rounded.toFixed(1);
     drawSpectrum(ctx, canvas, spectrumData, rounded);

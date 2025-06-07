@@ -344,15 +344,16 @@ function updateTitleBar() {
 // Layout widths for 80x25 terminals
 // Shrink the tuner and station boxes a little so RDS
 // has enough room for ECC and AF data
-const tunerWidth = '100%';
-const rdsWidth = '100%';
+// Place Tuner and RDS next to each other so everything fits in 80x25
+const tunerWidth = 20;
+const rdsWidth = 24;
 const heightInRows = 8;
 
 const tunerBox = blessed.box({
     parent: uiBox,
     top: 1,
     left: 0,
-    width: '100%',
+    width: tunerWidth,
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
@@ -362,9 +363,9 @@ const tunerBox = blessed.box({
 
 const rdsBox = blessed.box({
     parent: uiBox,
-    top: tunerBox.top + tunerBox.height,
-    left: 0,
-    width: '100%',
+    top: 1,
+    left: tunerWidth,
+    width: rdsWidth,
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
@@ -380,9 +381,9 @@ const rdsBox = blessed.box({
 
 const stationBox = blessed.box({
     parent: uiBox,
-    top: rdsBox.top + rdsBox.height,
-    left: 0,
-    width: '100%',
+    top: 1,
+    left: tunerWidth + rdsWidth,
+    width: `100%-${tunerWidth + rdsWidth}`,
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
@@ -393,7 +394,7 @@ const stationBox = blessed.box({
 // RDS Radiotext box
 const rtBox = blessed.box({
     parent: uiBox,
-    top: stationBox.top + stationBox.height,
+    top: tunerBox.top + tunerBox.height, // below Tuner/RDS/Station row
     left: 0,
     width: '100%',
     height: 4,
@@ -546,14 +547,7 @@ function updateRdsBox(data) {
     if (!rdsBox || !data) return;
     const padLength = 4;
     if (data.freq >= 75 && data.pi !== "?") {
-        let msshow;
-        if (data.ms === 0) {
-            msshow = "{grey-fg}M{/grey-fg}S";
-        } else if (data.ms === -1) {
-            msshow = "{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}";
-        } else {
-            msshow = "M{grey-fg}S{/grey-fg}";
-        }
+        const flags = `${data.tp ? 'TP ' : ''}${data.ta ? 'TA ' : ''}${data.ms ? 'MS' : ''}`.trim();
 
         const psDisplay = processStringWithErrors(data.ps.trimStart(), data.ps_errors);
         const lines = [];
@@ -566,14 +560,22 @@ function updateRdsBox(data) {
         if (country) {
             lines.push(`Country: ${country}`);
         }
-        lines.push(`Flags: ${data.tp ? 'TP' : 'TP?'} ${data.ta ? 'TA' : 'TA?'} ${msshow}`);
+        if (flags) {
+            lines.push(`Flags: ${flags}`);
+        }
         const ptyNum = data.pty !== undefined ? data.pty : 0;
         lines.push(`PTY: ${ptyNum}/${europe_programmes[ptyNum] || 'None'}`);
         if (data.dynamic_pty !== undefined || data.artificial_head !== undefined || data.compressed !== undefined) {
             lines.push(`DI: DP:${data.dynamic_pty ? 'On' : 'Off'} AH:${data.artificial_head ? 'On' : 'Off'} C:${data.compressed ? 'On' : 'Off'} Stereo:${data.st ? 'Yes' : 'No'}`);
         }
-        if (Array.isArray(data.af) && data.af.length) {
-            lines.push(`AF: ${data.af.join(',')}`);
+        if (Array.isArray(data.af)) {
+            if (data.af.length) {
+                lines.push(`AF: ${data.af.length} frequencies detected`);
+            } else {
+                lines.push('AF: None');
+            }
+        } else {
+            lines.push('AF: None');
         }
 
         const colWidth = Math.floor((screen.cols - 4) / 2);

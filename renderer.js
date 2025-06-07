@@ -242,7 +242,7 @@ let spectrumData = [];
 document.getElementById('scan-btn').onclick = runSpectrumScan;
 
 async function fetchSpectrumData() {
-  if (!currentUrl) return;
+  if (!currentUrl) return false;
   const data = await electronAPI.getSpectrumData();
   const canvas = document.getElementById('spectrum-canvas');
   const ctx = canvas.getContext('2d');
@@ -257,7 +257,7 @@ async function fetchSpectrumData() {
         return { freq: parseFloat((parseFloat(f) / 1000).toFixed(2)), sig: parseFloat(s) };
       });
       drawSpectrum(ctx, canvas, spectrumData);
-      return;
+      return true;
     }
   }
   if (!spectrumData.length) {
@@ -266,6 +266,7 @@ async function fetchSpectrumData() {
     }
   }
   drawSpectrum(ctx, canvas, spectrumData);
+  return false;
 }
 
 window.addEventListener('DOMContentLoaded', fetchSpectrumData);
@@ -358,8 +359,13 @@ async function runSpectrumScan() {
   drawSpectrum(ctx, canvas, spectrumData);
 
   await electronAPI.startSpectrumScan();
-  await new Promise(r => setTimeout(r, 2000));
-  await fetchSpectrumData();
+  const endTime = Date.now() + 10000;
+  let gotData = false;
+  while (Date.now() < endTime) {
+    await new Promise(r => setTimeout(r, 500));
+    gotData = await fetchSpectrumData();
+    if (gotData) break;
+  }
 
   scanning = false;
 }

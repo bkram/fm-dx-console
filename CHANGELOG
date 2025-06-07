@@ -1,4 +1,8 @@
 # Changelog
+## FM-DX Console 1.52
+- Switched spectrum display to the server-side Spectrum Graph plugin.
+- Added a unit selector for signal levels (dBf, dBµV or dBm) with persistent preference.
+- Hide spectrum features when the plugin is not installed.
 
 ## FM-DX Console 1.50
 

@@ -29,7 +29,7 @@ const europe_programmes = [
     "Travel", "Leisure", "Jazz Music", "Country Music", "National Music",
     "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
 ];
-const version = '1.50';
+const version = '1.52';
 const userAgent = `fm-dx-console/${version}`;
 
 // Terminal must be at least 80x24

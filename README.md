@@ -28,6 +28,8 @@ npm install
 
 ffplay needs to be installed, and accessible in your path.
 
+To use the spectrum display, install the [Spectrum Graph plugin](https://github.com/AmateurAudioDude/FM-DX-Webserver-Plugin-Spectrum-Graph) on the fm-dx-webserver.
+If the plugin is missing the Spectrum section and scan button are hidden.
 ## Starting
 
 ### Webserver address must be used
@@ -68,13 +70,9 @@ errors are reported. The frequency field accepts only numeric input and the
 shortcut **t** focuses it without inserting the letter. Launch it with:
 
 The status section shows the current user count, ping time and whether audio is
-playing on separate lines.
-The **Spectrum Scan** button sweeps the band from 83 to 108 MHz in 0.05 MHz steps
-and updates the spectrum display in real time. Frequencies not yet scanned start
-at 0 dBf so the graph covers the full range while the sweep runs. Audio playback
-is paused during the scan and resumes when finished. Once the sweep completes
-the tuner returns to the original frequency. Clicking a point on the graph tunes
-directly to that frequency.
+playing on separate lines. A drop-down next to the signal meter lets you choose
+whether levels are displayed in dBf, dBµV or dBm.
+The **Spectrum Scan** button uses the Spectrum Graph plugin to sweep the band from 83 to 108 MHz in 0.05 MHz steps and update the display in real time. Frequencies not yet scanned start at 0 dBf so the graph covers the full range while the sweep runs. Audio playback is paused during the scan and resumes when finished. Once the sweep completes the tuner returns to the original frequency. Clicking a point on the graph tunes directly to that frequency.
 
 ```bash
 npm run electron -- --url http://fm-dx-server:[port]/

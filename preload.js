@@ -8,5 +8,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onWsData: (cb) => ipcRenderer.on('ws-data', (_e, data) => cb(data)),
   sendCommand: (cmd) => ipcRenderer.send('ws-send', cmd),
   setUrl: (url) => ipcRenderer.invoke('set-url', url),
-  onAudioStopped: (cb) => ipcRenderer.on('audio-stopped', cb)
+  onAudioStopped: (cb) => ipcRenderer.on('audio-stopped', cb),
+  getSpectrumData: () => ipcRenderer.invoke('get-spectrum-data'),
+  startSpectrumScan: () => ipcRenderer.invoke('start-spectrum-scan')
 });

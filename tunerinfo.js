@@ -39,8 +39,10 @@ async function getTunerInfo(url) {
         }
 
         const antNames = [];
-        $('#data-ant ul.options li').each((index, element) => {
-            antNames.push($(element).text().trim());
+        // Antenna names can be listed inside #data-ant or within a select box
+        $('#data-ant ul.options li, #data-ant li, select[name="ant"] option').each((_, element) => {
+            const name = $(element).text().trim();
+            if (name) antNames.push(name);
         });
 
         if (antNames.length === 0) {

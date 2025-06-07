@@ -114,6 +114,7 @@ General Controls
     't' set frequency
     'Esc' quit
     'h' toggle help
+    's' toggle server info
 
 Toggles
 

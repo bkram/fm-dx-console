@@ -222,6 +222,7 @@ function generateHelpContent() {
         "'p'  play audio",
         "'['  toggle iMS",
         "'y'  toggle antenna",
+        "'s'  server info",
     ];
 
     const rightCommands = [
@@ -442,17 +443,18 @@ const statsBox = blessed.box({
     label: boxLabel('Statistics'),
 });
 
-// Server Info near the bottom
+// Server Info popup (hidden by default)
 const serverBox = blessed.box({
     parent: uiBox,
-    top: signalBox.top + signalBox.height, // row 18
-    left: 0,
-    width: '100%',
-    bottom: 1,  // remain 1 line above bottom bar
+    top: 'center',
+    left: 'center',
+    width: 60,
+    height: 7,
     tags: true,
     border: { type: 'line' },
     style: boxStyle,
     label: boxLabel('Server Info'),
+    hidden: true,
     scrollable: true,
     alwaysScroll: true,
     scrollbar: {
@@ -827,6 +829,13 @@ screen.on('keypress', (ch, key) => {
             }
             enqueueCommand(`Z${newAnt}`);
         }
+    } else if (key.full === 's') {
+        // Toggle server info popup
+        serverBox.hidden = !serverBox.hidden;
+        if (!serverBox.hidden) {
+            updateServerBox();
+        }
+        screen.render();
     } else if (key.full === 'escape' || key.full === 'C-c') {
         process.exit(0);
     } else {

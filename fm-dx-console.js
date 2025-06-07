@@ -346,6 +346,12 @@ const rdsBox = blessed.box({
     border: { type: 'line' },
     style: boxStyle,
     label: boxLabel('RDS'),
+    scrollable: true,
+    alwaysScroll: true,
+    scrollbar: {
+        ch: ' ',
+        inverse: true
+    },
 });
 
 const stationBox = blessed.box({
@@ -524,16 +530,31 @@ function updateRdsBox(data) {
             msshow = "M{grey-fg}S{/grey-fg}";
         }
 
-        rdsBox.setContent(
+        let content =
             `${padStringWithSpaces("PS:", 'green', padLength)}${data.ps.trimStart()}\n` +
-            `${padStringWithSpaces("PI:", 'green', padLength)}${data.pi}\n` +
-            `{center}{bold}Flags{/bold}\n` +
+            `${padStringWithSpaces("PI:", 'green', padLength)}${data.pi}`;
+
+        if (data.ecc) {
+            content += `\n${padStringWithSpaces("ECC:", 'green', padLength)}${data.ecc}`;
+        }
+        const country = data.country_name || data.country_iso;
+        if (country) {
+            content += `\n${padStringWithSpaces("Country:", 'green', padLength)}${country}`;
+        }
+
+        content +=
+            `\n{center}{bold}Flags{/bold}\n` +
             `${data.tp ? "TP" : "{grey-fg}TP{/grey-fg}"} ` +
             `${data.ta ? "TA" : "{grey-fg}TA{/grey-fg}"} ` +
             `${msshow}\n` +
             `PTY: ${data.pty !== undefined ? data.pty : 0}/` +
-            `${europe_programmes[data.pty !== undefined ? data.pty : 0] || 'None'}{/center}`
-        );
+            `${europe_programmes[data.pty !== undefined ? data.pty : 0] || 'None'}{/center}`;
+
+        if (Array.isArray(data.af) && data.af.length) {
+            content += `\n${padStringWithSpaces("AF:", 'green', padLength)}${data.af.join(',')}`;
+        }
+
+        rdsBox.setContent(content);
     } else {
         rdsBox.setContent('');
     }

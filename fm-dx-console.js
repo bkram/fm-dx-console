@@ -254,6 +254,24 @@ function padStringWithSpaces(text, color = 'green', totalLength) {
     return ' ' + `{${color}-fg}` + text + `{/${color}-fg}` + ' '.repeat(spacesToAdd);
 }
 
+/**
+ * Apply grey markup to characters with non-zero error counts
+ */
+function processStringWithErrors(str, errors) {
+    if (!str) return '';
+    const errArr = (errors || '').split(',').map(e => parseInt(e, 10) || 0);
+    let out = '';
+    for (let i = 0; i < str.length; i++) {
+        const ch = str[i];
+        if (errArr[i] > 0) {
+            out += `{grey-fg}${ch}{/grey-fg}`;
+        } else {
+            out += ch;
+        }
+    }
+    return out;
+}
+
 /** Returns a label string with bold, colored style */
 function boxLabel(label) {
     return `{white-fg}{blue-bg}{bold}${label}{/bold}{/blue-bg}{/white-fg}`;
@@ -530,8 +548,9 @@ function updateRdsBox(data) {
             msshow = "M{grey-fg}S{/grey-fg}";
         }
 
+        const psDisplay = processStringWithErrors(data.ps.trimStart(), data.ps_errors);
         let content =
-            `${padStringWithSpaces("PS:", 'green', padLength)}${data.ps.trimStart()}\n` +
+            `${padStringWithSpaces("PS:", 'green', padLength)}${psDisplay}\n` +
             `${padStringWithSpaces("PI:", 'green', padLength)}${data.pi}`;
 
         if (data.ecc) {
@@ -570,8 +589,8 @@ function updateRdsBox(data) {
 
 function updateRTBox(data) {
     if (!rtBox || !data) return;
-    const line1 = data.rt0 ? data.rt0.trim() : '\xA0';
-    const line2 = data.rt1 ? data.rt1.trim() : '\xA0';
+    const line1 = processStringWithErrors(data.rt0 ? data.rt0.trim() : '\xA0', data.rt0_errors);
+    const line2 = processStringWithErrors(data.rt1 ? data.rt1.trim() : '\xA0', data.rt1_errors);
     rtBox.setContent(
         `{center}${line1}{/center}\n` +
         `{center}${line2}{/center}`

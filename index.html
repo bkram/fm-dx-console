@@ -41,6 +41,16 @@
       border: none;
     }
 
+    #url-input {
+      font-family: "Courier New", monospace;
+      background: #000;
+      color: #0f0;
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: none;
+      min-width: 200px;
+    }
+
     button {
       background: #444;
       color: #fff;
@@ -82,6 +92,11 @@
 </head>
 <body>
   <h1>FMDX App</h1>
+
+  <div id="url-bar" style="margin-bottom:8px;">
+    <input id="url-input" type="text" placeholder="Server URL" style="min-width:200px;" />
+    <button id="url-btn" type="button">Connect</button>
+  </div>
 
   <div id="player">
     <button id="play-btn" type="button" title="Play" class="material-icons">play_arrow</button>

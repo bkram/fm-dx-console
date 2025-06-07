@@ -3,8 +3,11 @@ let currentData;
 let audioPlaying = false;
 let antNames = [];
 let lastPing = null;
+let currentUrl = '';
+let pingTimer = null;
 
 const freqInputEl = document.getElementById('freq-input');
+const urlInputEl = document.getElementById('url-input');
 
 const europe_programmes = [
   'No PTY', 'News', 'Current Affairs', 'Info', 'Sport', 'Education', 'Drama',
@@ -29,16 +32,20 @@ function sendCmd(cmd) {
 }
 
 electronAPI.onInitArgs((a) => {
-  args = a;
-  startPing();
-  if (args.url) {
-    electronAPI.getTunerInfo(args.url).then(info => {
-      if (info) {
-        antNames = info.antNames || [];
-        const srv = document.getElementById('server-info');
-        srv.textContent = `${info.tunerName} - ${info.tunerDesc}`;
-      }
-    });
+  args = Object.assign({}, args, a);
+  if (a.url !== undefined) {
+    currentUrl = a.url;
+    urlInputEl.value = currentUrl || '';
+    startPing();
+    if (currentUrl) {
+      electronAPI.getTunerInfo(currentUrl).then(info => {
+        if (info) {
+          antNames = info.antNames || [];
+          const srv = document.getElementById('server-info');
+          srv.textContent = `${info.tunerName} - ${info.tunerDesc}`;
+        }
+      });
+    }
   }
 });
 
@@ -148,6 +155,13 @@ freqInputEl.addEventListener('keydown', (e) => {
     }
   }
 });
+
+document.getElementById('url-btn').onclick = setBackendUrl;
+urlInputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    setBackendUrl();
+  }
+});
 document.getElementById('ims-btn').onclick = () => {
   if (currentData) {
     const cmd = currentData.ims == 1 ? `G${currentData.eq}0` : `G${currentData.eq}1`;
@@ -231,10 +245,11 @@ document.addEventListener('keydown', (e) => {
 });
 
 async function startPing() {
-  if (!args || !args.url) return;
-  const pingUrl = new URL(args.url);
+  if (!currentUrl) return;
+  const pingUrl = new URL(currentUrl);
   pingUrl.pathname += 'ping';
-  setInterval(async () => {
+  if (pingTimer) clearInterval(pingTimer);
+  pingTimer = setInterval(async () => {
     try {
       const start = Date.now();
       await fetch(pingUrl.toString());
@@ -310,4 +325,22 @@ function drawSpectrum(ctx, canvas, points) {
     else ctx.lineTo(x, y);
   });
   ctx.stroke();
+}
+
+function setBackendUrl() {
+  const url = urlInputEl.value.trim();
+  currentUrl = url;
+  electronAPI.setUrl(url);
+  startPing();
+  if (url) {
+    electronAPI.getTunerInfo(url).then(info => {
+      const srv = document.getElementById('server-info');
+      if (info) {
+        antNames = info.antNames || [];
+        srv.textContent = `${info.tunerName} - ${info.tunerDesc}`;
+      } else {
+        srv.textContent = '';
+      }
+    });
+  }
 }

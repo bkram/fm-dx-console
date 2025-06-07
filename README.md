@@ -70,6 +70,9 @@ frequency.
 npm run electron -- --url http://fm-dx-server:[port]/
 ```
 
+The server URL can also be changed at runtime using the field above the
+controls.
+
 ## Help (console version)
 
 The following keys can be used when running the command line interface. The

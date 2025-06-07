@@ -560,36 +560,38 @@ function updateRdsBox(data) {
     }
 
         const psDisplay = processStringWithErrors(data.ps.trimStart(), data.ps_errors);
+        const prefix = (txt) => padStringWithSpaces(txt, 'green', padLength);
         const rows = [];
-        rows.push([`PS: ${psDisplay}`, `PI: ${data.pi}`]);
+
+        rows.push([`${prefix('PS:')}${psDisplay}`, `${prefix('PI:')}${data.pi}`]);
         if (data.ecc) {
-            rows.push([`ECC: ${data.ecc}`, '']);
+            rows.push([`${prefix('ECC:')}${data.ecc}`, '']);
         }
         const country = data.country_name || data.country_iso;
         if (country) {
-            rows.push([`Country: ${country}`, '']);
+            rows.push([`${prefix('Country:')}${country}`, '']);
         }
-        rows.push([`Flags: ${data.tp ? 'TP' : 'TP?'} ${data.ta ? 'TA' : 'TA?'} ${msshow}`, '']);
+        rows.push([`${prefix('Flags:')}${data.tp ? 'TP' : 'TP?'} ${data.ta ? 'TA' : 'TA?'} ${msshow}`, '']);
         const ptyNum = data.pty !== undefined ? data.pty : 0;
-        rows.push([`PTY: ${ptyNum}/${europe_programmes[ptyNum] || 'None'}`, '']);
+        rows.push([`${prefix('PTY:')}${ptyNum}/${europe_programmes[ptyNum] || 'None'}`, '']);
         if (data.dynamic_pty !== undefined || data.artificial_head !== undefined || data.compressed !== undefined) {
-            rows.push([`DI: DP:${data.dynamic_pty ? 'On' : 'Off'} AH:${data.artificial_head ? 'On' : 'Off'} C:${data.compressed ? 'On' : 'Off'} Stereo:${data.st ? 'Yes' : 'No'}`,'']);
+            rows.push([`${prefix('DI:')}DP:${data.dynamic_pty ? 'On' : 'Off'} AH:${data.artificial_head ? 'On' : 'Off'} C:${data.compressed ? 'On' : 'Off'} Stereo:${data.st ? 'Yes' : 'No'}`,'']);
         }
         if (Array.isArray(data.af)) {
             if (data.af.length) {
-                rows.push([`AF: ${data.af.length} frequencies detected`, '']);
+                rows.push([`${prefix('AF:')}${data.af.length} frequencies detected`, '']);
             } else {
-                rows.push(['AF: None', '']);
+                rows.push([`${prefix('AF:')}None`, '']);
             }
         } else {
-            rows.push(['AF: None', '']);
+            rows.push([`${prefix('AF:')}None`, '']);
         }
 
         const boxWidth = typeof rdsBox.width === 'string' ? screen.cols : rdsBox.width;
         const colWidth = Math.floor((boxWidth - 2) / 2);
         let output = '';
         for (const [leftText, rightText] of rows) {
-            const left = padStringWithSpaces(leftText, 'green', padLength).padEnd(colWidth);
+            const left = (leftText || '').padEnd(colWidth);
             const right = rightText || '';
             output += left + right + '\n';
         }

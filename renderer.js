@@ -96,7 +96,19 @@ function updateUI() {
   const ptyName = europe_programmes[ptyNum] || 'None';
   const ps = currentData.ps ? currentData.ps : '';
   const pi = currentData.pi || '';
-  rds.textContent = `PS: ${ps}  PI: ${pi}\n${flags}\nPTY: ${ptyNum}/${ptyName}`;
+  let rdsText = `PS: ${ps}\nPI: ${pi}`;
+  if (currentData.ecc) {
+    rdsText += `\nECC: ${currentData.ecc}`;
+  }
+  const country = currentData.country_name || currentData.country_iso;
+  if (country) {
+    rdsText += `\nCountry: ${country}`;
+  }
+  rdsText += `\n${flags}\nPTY: ${ptyNum}/${ptyName}`;
+  if (Array.isArray(currentData.af) && currentData.af.length) {
+    rdsText += `\nAF: ${currentData.af.join(',')}`;
+  }
+  rds.textContent = rdsText;
 
   const rt = document.getElementById('rt-info');
   const line1 = currentData.rt0 ? currentData.rt0 : '\u00a0';

@@ -338,8 +338,10 @@ function updateTitleBar() {
 }
 
 // Tuner, RDS, Station sections
-const tunerWidth = 24;
-const rdsWidth = 17;
+// Layout widths for 80x25 terminals
+// Slightly reduce the tuner section to give RDS more space
+const tunerWidth = 20;
+const rdsWidth = 24;
 const heightInRows = 8;
 
 const tunerBox = blessed.box({

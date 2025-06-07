@@ -56,6 +56,7 @@ let websocketData;
 let argDebug = argv.debug;
 let argUrl;
 let pingTime = null;
+let lastRdsData = null;
 
 // -----------------------------
 // Logging Setup
@@ -585,35 +586,38 @@ function updateRdsBox(data) {
     if (!rdsBox || !data) return;
     // Use a slightly wider prefix column so all values line up
     const padLength = 9;
-    if (data.freq >= 75 && data.pi !== "?") {
+    const hasValidRds = data.freq >= 75 && data.pi !== "?";
+    const useData = hasValidRds ? data : lastRdsData && lastRdsData.pi !== "?" ? lastRdsData : null;
+    if (useData) {
+        if (hasValidRds) lastRdsData = data;
         let msshow;
-        if (data.ms === 0) {
+        if (useData.ms === 0) {
             msshow = '{grey-fg}M{/grey-fg}S';
-        } else if (data.ms === -1) {
+        } else if (useData.ms === -1) {
             msshow = '{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}';
         } else {
             msshow = 'M{grey-fg}S{/grey-fg}';
         }
 
-        const psDisplay = processStringWithErrors(data.ps.trimStart(), data.ps_errors);
+        const psDisplay = processStringWithErrors(useData.ps.trimStart(), useData.ps_errors);
         const prefix = (txt) => padStringWithSpaces(txt, 'green', padLength);
         const lines = [];
 
         lines.push(`${prefix('PS:')}${psDisplay}`);
-        lines.push(`${prefix('PI:')}${data.pi}`);
-        lines.push(`${prefix('ECC:')}${data.ecc || ''}`);
-        const countryIso = data.country_iso;
-        const countryName = data.country_name;
+        lines.push(`${prefix('PI:')}${useData.pi}`);
+        lines.push(`${prefix('ECC:')}${useData.ecc || ''}`);
+        const countryIso = useData.country_iso;
+        const countryName = useData.country_name;
         const countryValue =
             countryName || (countryIso && countryIso !== 'UN' ? countryIso : '');
         lines.push(`${prefix('Country:')}${countryValue}`);
         lines.push(
             `${prefix('Flags:')}` +
-            `${data.tp ? 'TP' : '{grey-fg}TP{/grey-fg}'} ` +
-            `${data.ta ? 'TA' : '{grey-fg}TA{/grey-fg}'} ` +
+            `${useData.tp ? 'TP' : '{grey-fg}TP{/grey-fg}'} ` +
+            `${useData.ta ? 'TA' : '{grey-fg}TA{/grey-fg}'} ` +
             `${msshow}`
         );
-        const ptyNum = data.pty !== undefined ? data.pty : 0;
+        const ptyNum = useData.pty !== undefined ? useData.pty : 0;
         lines.push(`${prefix('PTY:')}${ptyNum}`);
         const fullPtyText = europe_programmes[ptyNum] || 'None';
         const maxPtyLen = rdsBox.width - 2 - (padLength + 1);
@@ -622,10 +626,10 @@ function updateRdsBox(data) {
                 ? fullPtyText.slice(0, maxPtyLen - 1) + '…'
                 : fullPtyText;
         lines.push(`${prefix('PTY txt:')}${truncatedPty}`);
-        if (data.dynamic_pty !== undefined || data.artificial_head !== undefined || data.compressed !== undefined) {
-            lines.push(`${prefix('DI:')}DP:${data.dynamic_pty ? 'On' : 'Off'} AH:${data.artificial_head ? 'On' : 'Off'} C:${data.compressed ? 'On' : 'Off'} Stereo:${data.st ? 'Yes' : 'No'}`);
+        if (useData.dynamic_pty !== undefined || useData.artificial_head !== undefined || useData.compressed !== undefined) {
+            lines.push(`${prefix('DI:')}DP:${useData.dynamic_pty ? 'On' : 'Off'} AH:${useData.artificial_head ? 'On' : 'Off'} C:${useData.compressed ? 'On' : 'Off'} Stereo:${useData.st ? 'Yes' : 'No'}`);
         }
-        if (Array.isArray(data.af) && data.af.length) {
+        if (Array.isArray(useData.af) && useData.af.length) {
             lines.push(`${prefix('AF:')}Yes`);
         } else {
             lines.push(`${prefix('AF:')}None`);

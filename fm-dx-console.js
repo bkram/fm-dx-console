@@ -347,8 +347,10 @@ function updateTitleBar() {
 // Place Tuner and RDS next to each other so everything fits in 80x25
 // widen tuner and RDS boxes so their content fits properly
 const tunerWidth = 24;
-const rdsWidth = 32;
+const rdsWidth = 30;
 const heightInRows = 8;
+const rdsHeight = heightInRows + 2;
+const rowHeight = Math.max(heightInRows, rdsHeight);
 
 const tunerBox = blessed.box({
     parent: uiBox,
@@ -367,7 +369,7 @@ const rdsBox = blessed.box({
     top: 1,
     left: tunerWidth,
     width: rdsWidth,
-    height: heightInRows,
+    height: rdsHeight,
     tags: true,
     border: { type: 'line' },
     style: boxStyle,
@@ -395,7 +397,7 @@ const stationBox = blessed.box({
 // RDS Radiotext box
 const rtBox = blessed.box({
     parent: uiBox,
-    top: tunerBox.top + tunerBox.height, // below Tuner/RDS/Station row
+    top: tunerBox.top + rowHeight, // below Tuner/RDS/Station row
     left: 0,
     width: '100%',
     height: 4,
@@ -410,7 +412,7 @@ const boxHeight = 5;
 
 const signalBox = blessed.box({
     parent: uiBox,
-    top: rtBox.top + rtBox.height, // 13
+    top: rtBox.top + rtBox.height,
     left: 0,
     width: '50%',
     height: boxHeight,
@@ -435,7 +437,7 @@ const progressBar = blessed.progressbar({
 
 const statsBox = blessed.box({
     parent: uiBox,
-    top: rtBox.top + rtBox.height, // 13
+    top: rtBox.top + rtBox.height,
     left: '50%',
     width: '50%',
     height: boxHeight,
@@ -558,38 +560,37 @@ function updateRdsBox(data) {
     }
 
         const psDisplay = processStringWithErrors(data.ps.trimStart(), data.ps_errors);
-        const lines = [];
-        lines.push(`PS: ${psDisplay}`);
-        lines.push(`PI: ${data.pi}`);
+        const rows = [];
+        rows.push([`PS: ${psDisplay}`, `PI: ${data.pi}`]);
         if (data.ecc) {
-            lines.push(`ECC: ${data.ecc}`);
+            rows.push([`ECC: ${data.ecc}`, '']);
         }
         const country = data.country_name || data.country_iso;
         if (country) {
-            lines.push(`Country: ${country}`);
+            rows.push([`Country: ${country}`, '']);
         }
-        lines.push(`Flags: ${data.tp ? 'TP' : 'TP?'} ${data.ta ? 'TA' : 'TA?'} ${msshow}`);
+        rows.push([`Flags: ${data.tp ? 'TP' : 'TP?'} ${data.ta ? 'TA' : 'TA?'} ${msshow}`, '']);
         const ptyNum = data.pty !== undefined ? data.pty : 0;
-        lines.push(`PTY: ${ptyNum}/${europe_programmes[ptyNum] || 'None'}`);
+        rows.push([`PTY: ${ptyNum}/${europe_programmes[ptyNum] || 'None'}`, '']);
         if (data.dynamic_pty !== undefined || data.artificial_head !== undefined || data.compressed !== undefined) {
-            lines.push(`DI: DP:${data.dynamic_pty ? 'On' : 'Off'} AH:${data.artificial_head ? 'On' : 'Off'} C:${data.compressed ? 'On' : 'Off'} Stereo:${data.st ? 'Yes' : 'No'}`);
+            rows.push([`DI: DP:${data.dynamic_pty ? 'On' : 'Off'} AH:${data.artificial_head ? 'On' : 'Off'} C:${data.compressed ? 'On' : 'Off'} Stereo:${data.st ? 'Yes' : 'No'}`,'']);
         }
         if (Array.isArray(data.af)) {
             if (data.af.length) {
-                lines.push(`AF: ${data.af.length} frequencies detected`);
+                rows.push([`AF: ${data.af.length} frequencies detected`, '']);
             } else {
-                lines.push('AF: None');
+                rows.push(['AF: None', '']);
             }
         } else {
-            lines.push('AF: None');
+            rows.push(['AF: None', '']);
         }
 
         const boxWidth = typeof rdsBox.width === 'string' ? screen.cols : rdsBox.width;
         const colWidth = Math.floor((boxWidth - 2) / 2);
         let output = '';
-        for (let i = 0; i < lines.length; i += 2) {
-            const left = padStringWithSpaces(lines[i], 'green', padLength).padEnd(colWidth);
-            const right = lines[i + 1] ? lines[i + 1] : '';
+        for (const [leftText, rightText] of rows) {
+            const left = padStringWithSpaces(leftText, 'green', padLength).padEnd(colWidth);
+            const right = rightText || '';
             output += left + right + '\n';
         }
         rdsBox.setContent(output.trim());
@@ -612,9 +613,14 @@ function updateStationBox(txInfo) {
     if (!stationBox || !txInfo) return;
     const padLength = 10;
     if (txInfo.tx) {
+        const locParts = (txInfo.city || '').split(',');
+        const location = locParts[0] ? locParts[0].trim() : '';
+        const country = locParts.length > 1 ? locParts.slice(1).join(',').trim() : (txInfo.itu || '');
+
         stationBox.setContent(
             `${padStringWithSpaces("Name:", 'green', padLength)}${txInfo.tx}\n` +
-            `${padStringWithSpaces("Location:", 'green', padLength)}${txInfo.city + ", " + txInfo.itu}\n` +
+            `${padStringWithSpaces("Location:", 'green', padLength)}${location}\n` +
+            `${padStringWithSpaces("Country:", 'green', padLength)}${country}\n` +
             `${padStringWithSpaces("Distance:", 'green', padLength)}${txInfo.dist + " km"}\n` +
             `${padStringWithSpaces("Power:", 'green', padLength)}${txInfo.erp + " kW " + "[" + txInfo.pol + "]"}\n` +
             `${padStringWithSpaces("Azimuth:", 'green', padLength)}${txInfo.azi + "°"}`

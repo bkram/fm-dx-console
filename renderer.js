@@ -377,7 +377,8 @@ document.getElementById('spectrum-canvas').addEventListener('click', (e) => {
   const x = e.clientX - rect.left;
   const idx = Math.round(x / rect.width * (spectrumData.length - 1));
   const freq = spectrumData[Math.max(0, Math.min(idx, spectrumData.length - 1))].freq;
-  sendCmd(`T${Math.round(freq * 1000)}`);
+  const rounded = Math.round(freq * 10) / 10; // tune in 0.1 MHz steps
+  sendCmd(`T${Math.round(rounded * 1000)}`);
 });
 
 function drawSpectrum(ctx, canvas, points) {
@@ -387,18 +388,31 @@ function drawSpectrum(ctx, canvas, points) {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // vertical grid lines every 1 MHz
+  const startFreq = points.length ? points[0].freq : 83;
+  const endFreq = points.length ? points[points.length - 1].freq : 108;
+
+  // draw grid lines
   ctx.strokeStyle = 'rgba(255,255,255,0.3)';
   ctx.lineWidth = 0.5;
   ctx.setLineDash([2, 4]);
-  const startFreq = points.length ? points[0].freq : 83;
-  const endFreq = points.length ? points[points.length - 1].freq : 108;
+  const max = 130;
+  for (let s = 0; s <= max; s += 20) {
+    const y = canvas.height - (s / max) * canvas.height + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+    ctx.fillStyle = '#bbb';
+    ctx.fillText(s.toString(), 2, y - 2);
+  }
   for (let f = Math.ceil(startFreq); f <= endFreq; f += 1) {
     const x = (f - startFreq) / (endFreq - startFreq) * canvas.width + 0.5;
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, canvas.height);
     ctx.stroke();
+    ctx.fillStyle = '#bbb';
+    ctx.fillText(f.toString(), x + 2, canvas.height - 2);
   }
   ctx.setLineDash([]);
 
@@ -412,7 +426,6 @@ function drawSpectrum(ctx, canvas, points) {
   ctx.lineWidth = 2;
 
   ctx.beginPath();
-  const max = 130;
   if (points.length > 0) {
     const stepX = points.length > 1 ? canvas.width / (points.length - 1) : 0;
     points.forEach((p, i) => {

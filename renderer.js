@@ -169,8 +169,12 @@ function updateUI() {
       `C:${currentData.compressed ? 'On' : 'Off'} ` +
       `Stereo:${currentData.st ? 'Yes' : 'No'}`;
   }
-  if (Array.isArray(currentData.af) && currentData.af.length) {
-    rdsText += `\nAF: ${currentData.af.length} frequencies detected`;
+  if (Array.isArray(currentData.af)) {
+    if (currentData.af.length) {
+      rdsText += `\nAF: ${currentData.af.length} frequencies detected`;
+    } else {
+      rdsText += `\nAF:`;
+    }
   }
   rds.innerHTML = rdsText.replace(/\n/g, '<br>');
 

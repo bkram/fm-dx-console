@@ -58,6 +58,12 @@ electronAPI.onWsData((data) => {
   }
 });
 
+electronAPI.onAudioStopped(() => {
+  audioPlaying = false;
+  document.getElementById('play-btn').textContent = 'play_arrow';
+  updateStatus();
+});
+
 function updateUI() {
   if (!currentData) return;
   if (currentData.freq !== undefined && currentData.freq !== null) {
@@ -330,10 +336,16 @@ function drawSpectrum(ctx, canvas, points) {
   ctx.stroke();
 }
 
-function setBackendUrl() {
+async function setBackendUrl() {
   const url = urlInputEl.value.trim();
+  const wasPlaying = audioPlaying;
+  if (audioPlaying) {
+    await electronAPI.stopAudio();
+    audioPlaying = false;
+    document.getElementById('play-btn').textContent = 'play_arrow';
+  }
   currentUrl = url;
-  electronAPI.setUrl(url);
+  await electronAPI.setUrl(url);
   startPing();
   if (url) {
     electronAPI.getTunerInfo(url).then(info => {
@@ -346,4 +358,10 @@ function setBackendUrl() {
       }
     });
   }
+  if (wasPlaying) {
+    await electronAPI.startAudio();
+    audioPlaying = true;
+    document.getElementById('play-btn').textContent = 'stop';
+  }
+  updateStatus();
 }

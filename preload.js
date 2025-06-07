@@ -7,5 +7,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getTunerInfo: (url) => ipcRenderer.invoke('get-tuner-info', url),
   onWsData: (cb) => ipcRenderer.on('ws-data', (_e, data) => cb(data)),
   sendCommand: (cmd) => ipcRenderer.send('ws-send', cmd),
-  setUrl: (url) => ipcRenderer.invoke('set-url', url)
+  setUrl: (url) => ipcRenderer.invoke('set-url', url),
+  onAudioStopped: (cb) => ipcRenderer.on('audio-stopped', cb)
 });

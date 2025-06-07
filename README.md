@@ -71,7 +71,8 @@ npm run electron -- --url http://fm-dx-server:[port]/
 ```
 
 The server URL can also be changed at runtime using the field above the
-controls.
+controls. Changing the address automatically restarts the audio connection so it
+uses the new backend.
 
 ## Help (console version)
 

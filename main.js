@@ -79,8 +79,13 @@ function createWindow() {
     }
   });
 
-  ipcMain.handle('set-url', (_e, url) => {
+  ipcMain.handle('set-url', async (_e, url) => {
     currentUrl = url;
+    if (player) {
+      await player.stop();
+      player = null;
+      win.webContents.send('audio-stopped');
+    }
     connectWebSocket(currentUrl);
     win.webContents.send('init-args', { url: currentUrl });
   });

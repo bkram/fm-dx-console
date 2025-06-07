@@ -188,6 +188,10 @@ function updateUI() {
     `Power: ${tx ? `${tx.erp} kW [${tx.pol}]` : ''}\n` +
     `Azimuth: ${tx ? `${tx.azi}\u00B0` : ''}`;
 
+  const canvas = document.getElementById('spectrum-canvas');
+  const ctx = canvas.getContext('2d');
+  drawSpectrum(ctx, canvas, spectrumData, parseFloat(freqInputEl.value));
+
   updateStatus();
 }
 
@@ -239,6 +243,11 @@ freqInputEl.addEventListener('keydown', (e) => {
     e.preventDefault();
   }
 });
+freqInputEl.addEventListener('input', () => {
+  const canvas = document.getElementById('spectrum-canvas');
+  const ctx = canvas.getContext('2d');
+  drawSpectrum(ctx, canvas, spectrumData, parseFloat(freqInputEl.value));
+});
 
 document.getElementById('url-btn').onclick = setBackendUrl;
 urlInputEl.addEventListener('keydown', (e) => {
@@ -286,7 +295,7 @@ async function fetchSpectrumData() {
         const [f, s] = pair.split('=');
         return { freq: parseFloat((parseFloat(f) / 1000).toFixed(2)), sig: parseFloat(s) };
       });
-      drawSpectrum(ctx, canvas, spectrumData);
+      drawSpectrum(ctx, canvas, spectrumData, parseFloat(freqInputEl.value));
       return true;
     }
   }
@@ -295,7 +304,7 @@ async function fetchSpectrumData() {
       spectrumData.push({ freq: parseFloat(f.toFixed(2)), sig: 0 });
     }
   }
-  drawSpectrum(ctx, canvas, spectrumData);
+  drawSpectrum(ctx, canvas, spectrumData, parseFloat(freqInputEl.value));
   return false;
 }
 
@@ -386,7 +395,7 @@ async function runSpectrumScan() {
   const canvas = document.getElementById('spectrum-canvas');
   const ctx = canvas.getContext('2d');
   spectrumData = [];
-  drawSpectrum(ctx, canvas, spectrumData);
+  drawSpectrum(ctx, canvas, spectrumData, parseFloat(freqInputEl.value));
 
   await electronAPI.startSpectrumScan();
   const endTime = Date.now() + 10000;
@@ -411,7 +420,7 @@ document.getElementById('spectrum-canvas').addEventListener('click', (e) => {
   sendCmd(`T${Math.round(rounded * 1000)}`);
 });
 
-function drawSpectrum(ctx, canvas, points) {
+function drawSpectrum(ctx, canvas, points, highlightFreq) {
   if (canvas.width !== canvas.clientWidth) {
     canvas.width = canvas.clientWidth;
   }
@@ -470,6 +479,15 @@ function drawSpectrum(ctx, canvas, points) {
     ctx.fill();
   }
   ctx.stroke();
+
+  if (highlightFreq !== undefined && !isNaN(highlightFreq)) {
+    const hf = parseFloat(highlightFreq);
+    if (hf >= startFreq && hf <= endFreq) {
+      const x = (hf - startFreq) / (endFreq - startFreq) * canvas.width;
+      ctx.fillStyle = 'rgba(255,255,0,0.4)';
+      ctx.fillRect(x - 2, 0, 4, canvas.height);
+    }
+  }
 }
 
 async function setBackendUrl() {

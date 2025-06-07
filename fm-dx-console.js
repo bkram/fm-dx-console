@@ -582,16 +582,13 @@ function updateRdsBox(data) {
             `${msshow}`
         );
         const ptyNum = data.pty !== undefined ? data.pty : 0;
-        lines.push(`${prefix('PTY:')}${ptyNum}/${europe_programmes[ptyNum] || 'None'}`);
+        lines.push(`${prefix('PTY:')}${ptyNum}`);
+        lines.push(`${prefix('PTY text:')}${europe_programmes[ptyNum] || 'None'}`);
         if (data.dynamic_pty !== undefined || data.artificial_head !== undefined || data.compressed !== undefined) {
             lines.push(`${prefix('DI:')}DP:${data.dynamic_pty ? 'On' : 'Off'} AH:${data.artificial_head ? 'On' : 'Off'} C:${data.compressed ? 'On' : 'Off'} Stereo:${data.st ? 'Yes' : 'No'}`);
         }
-        if (Array.isArray(data.af)) {
-            if (data.af.length) {
-                lines.push(`${prefix('AF:')}${data.af.length} frequencies detected`);
-            } else {
-                lines.push(`${prefix('AF:')}None`);
-            }
+        if (Array.isArray(data.af) && data.af.length) {
+            lines.push(`${prefix('AF:')}Yes`);
         } else {
             lines.push(`${prefix('AF:')}None`);
         }

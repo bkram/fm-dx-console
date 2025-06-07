@@ -131,7 +131,7 @@ function createWindow() {
 
   ipcMain.handle('start-spectrum-scan', () => {
     if (pluginWs && pluginWs.readyState === WebSocket.OPEN) {
-      const msg = JSON.stringify({ type: 'spectrum-graph', value: { status: 'scan' } });
+      const msg = JSON.stringify({ type: 'spectrum-graph', action: 'scan' });
       pluginWs.send(msg);
     }
   });

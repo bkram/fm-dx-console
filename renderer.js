@@ -66,6 +66,7 @@ electronAPI.onInitArgs((a) => {
           srv.textContent = `${info.tunerName}\n${info.tunerDesc}`;
         }
       });
+      fetchSpectrumData();
     }
   }
 });
@@ -239,16 +240,34 @@ let scanning = false;
 let spectrumData = [];
 document.getElementById('scan-btn').onclick = runSpectrumScan;
 
-window.addEventListener('DOMContentLoaded', () => {
+async function fetchSpectrumData() {
+  if (!currentUrl) return;
+  const data = await electronAPI.getSpectrumData();
   const canvas = document.getElementById('spectrum-canvas');
   const ctx = canvas.getContext('2d');
+  if (data) {
+    let sd = data.sd;
+    if (!sd && data.ad !== undefined && data[`sd${data.ad}`]) {
+      sd = data[`sd${data.ad}`];
+    }
+    if (sd) {
+      spectrumData = sd.split(',').map(pair => {
+        const [f, s] = pair.split('=');
+        return { freq: parseFloat((parseFloat(f) / 1000).toFixed(2)), sig: parseFloat(s) };
+      });
+      drawSpectrum(ctx, canvas, spectrumData);
+      return;
+    }
+  }
   if (!spectrumData.length) {
     for (let f = 83.0; f <= 108.0; f += 0.05) {
       spectrumData.push({ freq: parseFloat(f.toFixed(2)), sig: 0 });
     }
   }
   drawSpectrum(ctx, canvas, spectrumData);
-});
+}
+
+window.addEventListener('DOMContentLoaded', fetchSpectrumData);
 
 document.getElementById('play-btn').onclick = async () => {
   if (audioPlaying) {
@@ -334,44 +353,12 @@ async function runSpectrumScan() {
   scanning = true;
   const canvas = document.getElementById('spectrum-canvas');
   const ctx = canvas.getContext('2d');
-  const points = [];
-  for (let f = 83.0; f <= 108.0; f += 0.05) {
-    points.push({ freq: parseFloat(f.toFixed(2)), sig: 0 });
-  }
-  spectrumData = points;
+  spectrumData = [];
   drawSpectrum(ctx, canvas, spectrumData);
 
-  const origFreq = currentData && currentData.freq !== undefined ? parseFloat(currentData.freq) : null;
-  const wasPlaying = audioPlaying;
-  if (wasPlaying) {
-    await electronAPI.stopAudio();
-    document.getElementById('play-btn').textContent = 'play_arrow';
-    audioPlaying = false;
-    updateStatus();
-  }
-
-  let idx = 0;
-  for (let f = 83.0; f <= 108.0; f += 0.05) {
-    sendCmd(`T${Math.round(f * 1000)}`);
-    await new Promise(r => setTimeout(r, 150));
-    const sig = currentData && currentData.sig !== undefined ? parseFloat(currentData.sig) : 0;
-    points[idx].sig = isNaN(sig) ? 0 : sig;
-    spectrumData = points;
-    drawSpectrum(ctx, canvas, spectrumData);
-    idx++;
-  }
-
-  if (origFreq !== null) {
-    sendCmd(`T${Math.round(origFreq * 1000)}`);
-    await new Promise(r => setTimeout(r, 300));
-  }
-
-  if (wasPlaying) {
-    await electronAPI.startAudio();
-    document.getElementById('play-btn').textContent = 'stop';
-    audioPlaying = true;
-    updateStatus();
-  }
+  await electronAPI.startSpectrumScan();
+  await new Promise(r => setTimeout(r, 2000));
+  await fetchSpectrumData();
 
   scanning = false;
 }
@@ -428,6 +415,7 @@ async function setBackendUrl() {
         srv.textContent = '';
       }
     });
+    fetchSpectrumData();
   }
   if (wasPlaying) {
     await electronAPI.startAudio();

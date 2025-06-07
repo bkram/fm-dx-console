@@ -4,6 +4,7 @@ const minimist = require('minimist');
 const playAudio = require('./3lasclient');
 const { getTunerInfo } = require('./tunerinfo');
 const WebSocket = require('ws');
+const axios = require('axios');
 
 // Electron refuses to start under root with sandboxing enabled. Automatically
 // disable the sandbox if running as root so the app can launch without extra
@@ -15,6 +16,7 @@ if (process.getuid && process.getuid() === 0) {
 let player;
 let currentUrl;
 let ws;
+let pluginWs;
 
 function formatWebSocketURL(url) {
   if (!url) return '';
@@ -60,7 +62,16 @@ function createWindow() {
     });
   }
 
+  function connectPluginWebSocket(url) {
+    if (pluginWs) pluginWs.close();
+    if (!url) return;
+    const wsAddr = `${formatWebSocketURL(url)}/data_plugins`;
+    const opts = { headers: { 'User-Agent': `${userAgent} (plugin)` } };
+    pluginWs = new WebSocket(wsAddr, opts);
+  }
+
   connectWebSocket(currentUrl);
+  connectPluginWebSocket(currentUrl);
 
   ipcMain.handle('audio-start', () => {
     if (!currentUrl) return;
@@ -94,12 +105,34 @@ function createWindow() {
       win.webContents.send('audio-stopped');
     }
     connectWebSocket(currentUrl);
+    connectPluginWebSocket(currentUrl);
     win.webContents.send('init-args', { url: currentUrl });
   });
 
   ipcMain.on('ws-send', (_e, cmd) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(cmd);
+    }
+  });
+
+  ipcMain.handle('get-spectrum-data', async () => {
+    if (!currentUrl) return null;
+    try {
+      const u = new URL(currentUrl);
+      u.pathname += 'spectrum-graph-plugin';
+      const res = await axios.get(u.toString(), {
+        headers: { 'X-Plugin-Name': 'SpectrumGraphPlugin' }
+      });
+      return res.data;
+    } catch {
+      return null;
+    }
+  });
+
+  ipcMain.handle('start-spectrum-scan', () => {
+    if (pluginWs && pluginWs.readyState === WebSocket.OPEN) {
+      const msg = JSON.stringify({ type: 'spectrum-graph', value: { status: 'scan' } });
+      pluginWs.send(msg);
     }
   });
 }

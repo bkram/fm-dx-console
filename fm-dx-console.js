@@ -277,6 +277,11 @@ function processStringWithErrors(str, errors) {
     return out;
 }
 
+/** Strip non-ASCII characters from a string */
+function stripUnicode(str) {
+    return (str || '').replace(/[^\x00-\x7F]/g, '');
+}
+
 /** Returns a label string with bold, colored style */
 function boxLabel(label) {
     return `{white-fg}{blue-bg}{bold}${label}{/bold}{/blue-bg}{/white-fg}`;
@@ -690,11 +695,13 @@ function updateServerBox() {
         serverBox.setContent('');
         return;
     }
+    const name = stripUnicode(tunerName);
+    const desc = stripUnicode(tunerDesc);
     if (screen.rows <= 25) {
-        serverBox.setContent(tunerName);
+        serverBox.setContent(name);
     } else {
         // Add a leading space for aesthetics
-        serverBox.setContent(` ${tunerName}\n\n${tunerDesc}`);
+        serverBox.setContent(` ${name}\n\n${desc}`);
     }
 }
 
@@ -868,7 +875,7 @@ screen.on('keypress', async (ch, key) => {
             }
             enqueueCommand(`Z${newAnt}`);
         }
-    } else if (key.full === 's') {
+    } else if (key.full.toLowerCase() === 's') {
         // Toggle server info popup
         serverBox.hidden = !serverBox.hidden;
         if (!serverBox.hidden) {

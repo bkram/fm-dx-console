@@ -203,6 +203,9 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') return; // handled separately
     return;
   }
+  if (document.activeElement === urlInputEl) {
+    return;
+  }
   switch (e.key) {
     case 'ArrowLeft':
       doTune(-100);

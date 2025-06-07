@@ -8,7 +8,7 @@
 // -----------------------------
 const argv = require('minimist')(process.argv.slice(2), {
     string: ['url'],
-    boolean: ['debug']
+    boolean: ['debug', 'auto-play']
 });
 const blessed = require('blessed');
 const fs = require('fs');
@@ -54,6 +54,7 @@ let tunerName = '';
 let websocketAudio;
 let websocketData;
 let argDebug = argv.debug;
+let argAutoPlay = argv['auto-play'];
 let argUrl;
 let pingTime = null;
 let lastRdsData = null;
@@ -237,6 +238,7 @@ function generateHelpContent() {
         "'↑'  increase 0.01 MHz",
         "'x'  increase 1 MHz",
         "'t'  set frequency",
+        "'C'  send command",
         "']'  toggle EQ",
         "'Esc'  quit",
         "'h'  toggle help",
@@ -795,6 +797,11 @@ const ws = new WebSocket(websocketData, wsOptions);
 
 ws.on('open', () => {
     debugLog('WebSocket connection established');
+    if (argAutoPlay) {
+        player.play();
+        updateStatsBox(jsonData || {});
+        renderScreen();
+    }
 });
 
 ws.on('message', (data) => {
@@ -884,6 +891,28 @@ screen.on('keypress', async (ch, key) => {
                 } else {
                     debugLog('Invalid frequency input.');
                 }
+            }
+            dialog.destroy();
+            screen.restoreFocus();
+            renderScreen();
+        });
+    } else if (key.full === 'C') {
+        // Direct command input
+        screen.saveFocus();
+        const dialog = blessed.prompt({
+            parent: uiBox,
+            top: 'center',
+            left: 'center',
+            width: 30,
+            height: 8,
+            border: 'line',
+            style: boxStyle,
+            label: boxLabel('Send Command'),
+            tags: true
+        });
+        dialog.input('\n  Enter command', '', (err, value) => {
+            if (!err && value) {
+                enqueueCommand(value.trim());
             }
             dialog.destroy();
             screen.restoreFocus();

@@ -33,14 +33,16 @@ ffplay needs to be installed, and accessible in your path.
 ### Webserver address must be used
 
 ```bash
-node fm-dx-console.js --url http://fm-dx-server:[port]/
+node fm-dx-console.js --url http://fm-dx-server:[port]/ [--auto-play]
 ```
 
 or
 
 ```bash
-node fm-dx-console.js --url https://fm-dx-server/
+node fm-dx-console.js --url https://fm-dx-server/ [--auto-play]
 ```
+
+Add `--auto-play` to begin audio playback immediately after connecting.
 
 ### FMDX App
 
@@ -112,6 +114,7 @@ General Controls
     'r' refresh
     'p' play audio
     't' set frequency
+    'C' send command
     'Esc' quit
     'h' toggle help
     's' toggle server info

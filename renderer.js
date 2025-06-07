@@ -31,6 +31,27 @@ function sendCmd(cmd) {
   electronAPI.sendCommand(cmd);
 }
 
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function processStringWithErrors(str, errors) {
+  if (!str) return '';
+  const errArr = (errors || '').split(',').map(e => parseInt(e, 10) || 0);
+  let out = '';
+  for (let i = 0; i < str.length; i++) {
+    const ch = escapeHtml(str[i]);
+    if (errArr[i] > 0) {
+      out += `<span class="text-gray">${ch}</span>`;
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
+
 electronAPI.onInitArgs((a) => {
   args = Object.assign({}, args, a);
   if (a.url !== undefined) {
@@ -94,9 +115,9 @@ function updateUI() {
   const flags = `${currentData.tp ? 'TP ' : ''}${currentData.ta ? 'TA ' : ''}${currentData.ms ? 'MS' : ''}`.trim();
   const ptyNum = currentData.pty !== undefined ? currentData.pty : 0;
   const ptyName = europe_programmes[ptyNum] || 'None';
-  const ps = currentData.ps ? currentData.ps : '';
+  const psDisplay = processStringWithErrors(currentData.ps || '', currentData.ps_errors);
   const pi = currentData.pi || '';
-  let rdsText = `PS: ${ps}\nPI: ${pi}`;
+  let rdsText = `PS: ${psDisplay}\nPI: ${pi}`;
   if (currentData.ecc) {
     rdsText += `\nECC: ${currentData.ecc}`;
   }
@@ -105,15 +126,27 @@ function updateUI() {
     rdsText += `\nCountry: ${country}`;
   }
   rdsText += `\n${flags}\nPTY: ${ptyNum}/${ptyName}`;
+  if (
+    currentData.dynamic_pty !== undefined ||
+    currentData.artificial_head !== undefined ||
+    currentData.compressed !== undefined
+  ) {
+    rdsText +=
+      `\nDI: ` +
+      `DP:${currentData.dynamic_pty ? 'On' : 'Off'} ` +
+      `AH:${currentData.artificial_head ? 'On' : 'Off'} ` +
+      `C:${currentData.compressed ? 'On' : 'Off'} ` +
+      `Stereo:${currentData.st ? 'Yes' : 'No'}`;
+  }
   if (Array.isArray(currentData.af) && currentData.af.length) {
     rdsText += `\nAF: ${currentData.af.join(',')}`;
   }
-  rds.textContent = rdsText;
+  rds.innerHTML = rdsText.replace(/\n/g, '<br>');
 
   const rt = document.getElementById('rt-info');
-  const line1 = currentData.rt0 ? currentData.rt0 : '\u00a0';
-  const line2 = currentData.rt1 ? currentData.rt1 : '\u00a0';
-  rt.textContent = `${line1}\n${line2}`;
+  const line1 = processStringWithErrors(currentData.rt0 || '\u00a0', currentData.rt0_errors);
+  const line2 = processStringWithErrors(currentData.rt1 || '\u00a0', currentData.rt1_errors);
+  rt.innerHTML = `${line1}<br>${line2}`;
 
   const station = document.getElementById('station-info');
   const tx = currentData.txInfo && currentData.txInfo.tx ? currentData.txInfo : null;

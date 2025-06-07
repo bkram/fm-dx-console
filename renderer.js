@@ -386,7 +386,31 @@ function drawSpectrum(ctx, canvas, points) {
   }
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.strokeStyle = '#0f0';
+
+  // vertical grid lines every 1 MHz
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 0.5;
+  ctx.setLineDash([2, 4]);
+  const startFreq = points.length ? points[0].freq : 83;
+  const endFreq = points.length ? points[points.length - 1].freq : 108;
+  for (let f = Math.ceil(startFreq); f <= endFreq; f += 1) {
+    const x = (f - startFreq) / (endFreq - startFreq) * canvas.width + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
+  gradient.addColorStop(0, '#0030E0');
+  gradient.addColorStop(0.25, '#10C838');
+  gradient.addColorStop(0.5, '#C0D000');
+  gradient.addColorStop(0.75, '#FF0040');
+  ctx.strokeStyle = gradient;
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.lineWidth = 2;
+
   ctx.beginPath();
   const max = 130;
   if (points.length > 0) {
@@ -397,6 +421,10 @@ function drawSpectrum(ctx, canvas, points) {
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
+    ctx.lineTo(canvas.width, canvas.height);
+    ctx.lineTo(0, canvas.height);
+    ctx.closePath();
+    ctx.fill();
   }
   ctx.stroke();
 }

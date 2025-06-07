@@ -14,10 +14,11 @@ const axios = require('axios');
  * antenna names.
  */
 async function getTunerInfo(url) {
-    const base = url.endsWith('/') ? url.slice(0, -1) : url;
+    const baseUrl = new URL(url);
+    const staticUrl = new URL('static_data', baseUrl).toString();
     try {
         // Preferred method: fetch JSON info
-        const res = await axios.get(`${base}/static_data`);
+        const res = await axios.get(staticUrl);
         const data = res.data || {};
         const tunerName = data.tunerName || '';
         const tunerDesc = data.tunerDesc || '';
@@ -30,7 +31,7 @@ async function getTunerInfo(url) {
     } catch (jsonErr) {
         try {
             // Fallback: scrape HTML
-            const response = await axios.get(base);
+            const response = await axios.get(url);
             const html = response.data;
             const $ = cheerio.load(html);
 

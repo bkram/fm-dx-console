@@ -105,7 +105,12 @@ function updateUI() {
   }
 
   const tuner = document.getElementById('tuner-info');
-  const ant = antNames[currentData.ant] || currentData.ant;
+  let ant;
+  if (antNames.length <= 1) {
+    ant = 'Default';
+  } else {
+    ant = antNames[currentData.ant] || currentData.ant;
+  }
   tuner.textContent =
     `Mode: ${currentData.st ? 'Stereo' : 'Mono'}\n` +
     `iMS: ${currentData.ims ? 'On' : 'Off'}\n` +
@@ -140,7 +145,7 @@ function updateUI() {
       `Stereo:${currentData.st ? 'Yes' : 'No'}`;
   }
   if (Array.isArray(currentData.af) && currentData.af.length) {
-    rdsText += `\nAF: ${currentData.af.join(',')}`;
+    rdsText += `\nAF: ${currentData.af.length} frequencies detected`;
   }
   rds.innerHTML = rdsText.replace(/\n/g, '<br>');
 

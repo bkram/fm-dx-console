@@ -66,7 +66,12 @@ function createWindow() {
     if (pluginWs) pluginWs.close();
     if (!url) return;
     const wsAddr = `${formatWebSocketURL(url)}/data_plugins`;
-    const opts = { headers: { 'User-Agent': `${userAgent} (plugin)` } };
+    const opts = {
+      headers: {
+        'User-Agent': `${userAgent} (plugin)`,
+        'X-Plugin-Name': 'SpectrumGraphPlugin'
+      }
+    };
     pluginWs = new WebSocket(wsAddr, opts);
   }
 

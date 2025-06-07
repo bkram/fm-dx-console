@@ -420,6 +420,49 @@ document.getElementById('spectrum-canvas').addEventListener('click', (e) => {
   sendCmd(`T${Math.round(rounded * 1000)}`);
 });
 
+let dragging = false;
+
+function handleDrag(e, final = false) {
+  const canvas = document.getElementById('spectrum-canvas');
+  const rect = canvas.getBoundingClientRect();
+  let x = e.clientX - rect.left;
+  x = Math.max(0, Math.min(x, rect.width));
+
+  const startFreq = spectrumData.length ? spectrumData[0].freq : 83;
+  const endFreq = spectrumData.length ? spectrumData[spectrumData.length - 1].freq : 108;
+  const frac = x / rect.width;
+  const freq = startFreq + frac * (endFreq - startFreq);
+  const rounded = Math.round(freq * 10) / 10;
+
+  freqInputEl.value = rounded.toFixed(1);
+  const ctx = canvas.getContext('2d');
+  drawSpectrum(ctx, canvas, spectrumData, rounded);
+
+  if (final) {
+    sendCmd(`T${Math.round(rounded * 1000)}`);
+  }
+}
+
+const spectrumCanvas = document.getElementById('spectrum-canvas');
+spectrumCanvas.addEventListener('mousedown', (e) => {
+  if (!spectrumData.length) return;
+  dragging = true;
+  handleDrag(e);
+});
+
+window.addEventListener('mousemove', (e) => {
+  if (dragging) {
+    handleDrag(e);
+  }
+});
+
+window.addEventListener('mouseup', (e) => {
+  if (dragging) {
+    dragging = false;
+    handleDrag(e, true);
+  }
+});
+
 function drawSpectrum(ctx, canvas, points, highlightFreq) {
   if (canvas.width !== canvas.clientWidth) {
     canvas.width = canvas.clientWidth;

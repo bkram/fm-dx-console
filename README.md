@@ -56,7 +56,9 @@ panels side by side, as well as the Station and Status panels, while the
 spectrum display is slightly smaller. Keyboard shortcuts from the console client
 are also supported. The window starts larger so all details fit comfortably and
 the Station section always lists its field names (Name, Location, etc.) even if
-data is missing. Launch it with:
+data is missing. Server details show the tuner name followed by the description
+on separate lines. The frequency field accepts only numeric input and the
+shortcut **t** focuses it without inserting the letter. Launch it with:
 
 The status section shows the current user count, ping time and whether audio is
 playing on separate lines.

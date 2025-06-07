@@ -42,7 +42,7 @@ electronAPI.onInitArgs((a) => {
         if (info) {
           antNames = info.antNames || [];
           const srv = document.getElementById('server-info');
-          srv.textContent = `${info.tunerName} - ${info.tunerDesc}`;
+          srv.textContent = `${info.tunerName}\n${info.tunerDesc}`;
         }
       });
     }
@@ -159,6 +159,9 @@ freqInputEl.addEventListener('keydown', (e) => {
       sendCmd(`T${f * 1000}`);
       freqInputEl.blur();
     }
+  } else if (!/[0-9.,]/.test(e.key) &&
+             !['Backspace','Delete','ArrowLeft','ArrowRight','Home','End','Tab'].includes(e.key)) {
+    e.preventDefault();
   }
 });
 
@@ -247,6 +250,7 @@ document.addEventListener('keydown', (e) => {
       document.getElementById('ant-btn').click();
       break;
     case 't':
+      e.preventDefault();
       freqInputEl.focus();
       freqInputEl.select();
       break;
@@ -352,7 +356,7 @@ async function setBackendUrl() {
       const srv = document.getElementById('server-info');
       if (info) {
         antNames = info.antNames || [];
-        srv.textContent = `${info.tunerName} - ${info.tunerDesc}`;
+        srv.textContent = `${info.tunerName}\n${info.tunerDesc}`;
       } else {
         srv.textContent = '';
       }

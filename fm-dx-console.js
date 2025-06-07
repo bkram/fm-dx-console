@@ -897,11 +897,15 @@ screen.on('keypress', async (ch, key) => {
             enqueueCommand(`G1${jsonData.ims}`);
         }
     } else if (key.full === 'y') {
-        // Toggle antenna even if names failed to load
+        // Toggle antenna even if names failed to load. Update jsonData so
+        // rapid toggling works even before the server responds.
         if (jsonData && jsonData.ant !== undefined) {
             const count = antNames.length > 0 ? antNames.length : 2;
-            let newAnt = (parseInt(jsonData.ant, 10) + 1) % count;
+            const newAnt = (parseInt(jsonData.ant, 10) + 1) % count;
             enqueueCommand(`Z${newAnt}`);
+            jsonData.ant = newAnt;
+            updateTunerBox(jsonData);
+            screen.render();
         }
     } else if (key.full.toLowerCase() === 's') {
         // Toggle server info popup

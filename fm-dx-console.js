@@ -531,7 +531,8 @@ function updateRdsBox(data) {
             `${data.tp ? "TP" : "{grey-fg}TP{/grey-fg}"} ` +
             `${data.ta ? "TA" : "{grey-fg}TA{/grey-fg}"} ` +
             `${msshow}\n` +
-            `${data.pty ? europe_programmes[data.pty] : ""}{/center}`
+            `PTY: ${data.pty !== undefined ? data.pty : 0}/` +
+            `${europe_programmes[data.pty !== undefined ? data.pty : 0] || 'None'}{/center}`
         );
     } else {
         rdsBox.setContent('');

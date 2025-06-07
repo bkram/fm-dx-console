@@ -91,13 +91,12 @@ function updateUI() {
     `ANT: ${ant}`;
 
   const rds = document.getElementById('rds-info');
-  if (currentData.ps) {
-    const flags = `${currentData.tp ? 'TP ' : ''}${currentData.ta ? 'TA ' : ''}${currentData.ms ? 'MS' : ''}`;
-    const pty = currentData.pty ? europe_programmes[currentData.pty] : '';
-    rds.textContent = `PS: ${currentData.ps}  PI: ${currentData.pi || ''}\n${flags}\n${pty}`;
-  } else {
-    rds.textContent = '';
-  }
+  const flags = `${currentData.tp ? 'TP ' : ''}${currentData.ta ? 'TA ' : ''}${currentData.ms ? 'MS' : ''}`.trim();
+  const ptyNum = currentData.pty !== undefined ? currentData.pty : 0;
+  const ptyName = europe_programmes[ptyNum] || 'None';
+  const ps = currentData.ps ? currentData.ps : '';
+  const pi = currentData.pi || '';
+  rds.textContent = `PS: ${ps}  PI: ${pi}\n${flags}\nPTY: ${ptyNum}/${ptyName}`;
 
   const rt = document.getElementById('rt-info');
   const line1 = currentData.rt0 ? currentData.rt0 : '\u00a0';

@@ -57,7 +57,9 @@ spectrum display is slightly smaller. Keyboard shortcuts from the console client
 are also supported. The window starts larger so all details fit comfortably and
 the Station section always lists its field names (Name, Location, etc.) even if
 data is missing. Server details show the tuner name followed by the description
-on separate lines. The frequency field accepts only numeric input and the
+on separate lines. RDS information lists the PS and PI codes along with
+flags and the Programme Type shown as `number/name` (displaying `0/None` when
+no PTY is available). The frequency field accepts only numeric input and the
 shortcut **t** focuses it without inserting the letter. Launch it with:
 
 The status section shows the current user count, ping time and whether audio is

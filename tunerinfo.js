@@ -24,7 +24,8 @@ async function getTunerInfo(url) {
         let tunerDesc = data.tunerDesc || '';
         const antObj = data.ant || {};
         let antNames = Object.values(antObj)
-            .map((a) => (a && typeof a.name === 'string' ? a.name : ''))
+            .filter(a => a && typeof a === 'object' && a.enabled)
+            .map(a => (typeof a.name === 'string' ? a.name : ''))
             .filter(Boolean);
 
         // If key info is missing, fall back to HTML scraping

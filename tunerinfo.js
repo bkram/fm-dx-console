@@ -54,7 +54,8 @@ async function getTunerInfo(url) {
 
         return { tunerName, tunerDesc, antNames };
     } catch (error) {
-        throw new Error('Failed to fetch content: ' + error.message);
+        console.error('tunerinfo error:', error.message);
+        return { tunerName: '', tunerDesc: '', antNames: [] };
     }
 }
 

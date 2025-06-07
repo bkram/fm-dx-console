@@ -577,7 +577,13 @@ function updateTunerBox(data) {
         `${padStringWithSpaces("Mode:", 'green', padLength)}${data.st ? "Stereo" : "Mono"}\n` +
         `${padStringWithSpaces("iMS:", 'green', padLength)}${Number(data.ims) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
         `${padStringWithSpaces("EQ:", 'green', padLength)}${Number(data.eq) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-        `${padStringWithSpaces("ANT:", 'green', padLength)}${antNames[data.ant] || 'N/A'}\n`
+        `${padStringWithSpaces("ANT:", 'green', padLength)}${
+            antNames[data.ant] !== undefined
+                ? antNames[data.ant]
+                : data.ant !== undefined
+                ? String(data.ant)
+                : 'N/A'
+        }\n`
     );
 }
 
@@ -891,12 +897,10 @@ screen.on('keypress', async (ch, key) => {
             enqueueCommand(`G1${jsonData.ims}`);
         }
     } else if (key.full === 'y') {
-        // Toggle antenna
-        if (jsonData) {
-            let newAnt = parseInt(jsonData.ant) + 1;
-            if (newAnt >= antNames.length) {
-                newAnt = 0;
-            }
+        // Toggle antenna even if names failed to load
+        if (jsonData && jsonData.ant !== undefined) {
+            const count = antNames.length > 0 ? antNames.length : 2;
+            let newAnt = (parseInt(jsonData.ant, 10) + 1) % count;
             enqueueCommand(`Z${newAnt}`);
         }
     } else if (key.full.toLowerCase() === 's') {

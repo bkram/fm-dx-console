@@ -59,7 +59,9 @@ the Station section always lists its field names (Name, Location, etc.) even if
 data is missing. Server details show the tuner name followed by the description
 on separate lines. RDS information lists the PS and PI codes along with
 flags and the Programme Type shown as `number/name` (displaying `0/None` when
-no PTY is available). The frequency field accepts only numeric input and the
+no PTY is available). If Decoder Information bits are present, the panel also
+shows whether Dynamic PTY, Artificial Head or Compression are enabled and if
+the broadcast is stereo. The frequency field accepts only numeric input and the
 shortcut **t** focuses it without inserting the letter. Launch it with:
 
 The status section shows the current user count, ping time and whether audio is

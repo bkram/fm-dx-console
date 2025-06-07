@@ -350,7 +350,9 @@ function updateTitleBar() {
 // widen tuner and RDS boxes so their content fits properly
 // keep total width within an 80-column terminal
 const tunerWidth = 22;
-const rdsWidth = 39; // wide enough for longest PTY text and DI line
+// Keep RDS panel narrow enough for 80x25 screens
+// Truncate PTY text rather than widening the box
+const rdsWidth = 30;
 const heightInRows = 8;
 const rdsHeight = heightInRows + 2;
 const rowHeight = Math.max(heightInRows, rdsHeight);
@@ -583,7 +585,13 @@ function updateRdsBox(data) {
         );
         const ptyNum = data.pty !== undefined ? data.pty : 0;
         lines.push(`${prefix('PTY:')}${ptyNum}`);
-        lines.push(`${prefix('PTY txt:')}${europe_programmes[ptyNum] || 'None'}`);
+        const fullPtyText = europe_programmes[ptyNum] || 'None';
+        const maxPtyLen = rdsBox.width - 2 - (padLength + 1);
+        const truncatedPty =
+            fullPtyText.length > maxPtyLen
+                ? fullPtyText.slice(0, maxPtyLen - 1) + '…'
+                : fullPtyText;
+        lines.push(`${prefix('PTY txt:')}${truncatedPty}`);
         if (data.dynamic_pty !== undefined || data.artificial_head !== undefined || data.compressed !== undefined) {
             lines.push(`${prefix('DI:')}DP:${data.dynamic_pty ? 'On' : 'Off'} AH:${data.artificial_head ? 'On' : 'Off'} C:${data.compressed ? 'On' : 'Off'} Stereo:${data.st ? 'Yes' : 'No'}`);
         }

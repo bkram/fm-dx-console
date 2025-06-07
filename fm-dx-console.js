@@ -348,8 +348,9 @@ function updateTitleBar() {
 // has enough room for ECC and AF data
 // Place Tuner and RDS next to each other so everything fits in 80x25
 // widen tuner and RDS boxes so their content fits properly
-const tunerWidth = 24;
-const rdsWidth = 28; // slightly smaller so overall layout fits nicely
+// keep total width within an 80-column terminal
+const tunerWidth = 22;
+const rdsWidth = 39; // wide enough for longest PTY text and DI line
 const heightInRows = 8;
 const rdsHeight = heightInRows + 2;
 const rowHeight = Math.max(heightInRows, rdsHeight);
@@ -568,13 +569,12 @@ function updateRdsBox(data) {
 
         lines.push(`${prefix('PS:')}${psDisplay}`);
         lines.push(`${prefix('PI:')}${data.pi}`);
-        if (data.ecc) {
-            lines.push(`${prefix('ECC:')}${data.ecc}`);
-        }
-        const country = data.country_name || data.country_iso;
-        if (country) {
-            lines.push(`${prefix('Country:')}${country}`);
-        }
+        lines.push(`${prefix('ECC:')}${data.ecc || ''}`);
+        const countryIso = data.country_iso;
+        const countryName = data.country_name;
+        const countryValue =
+            countryName || (countryIso && countryIso !== 'UN' ? countryIso : '');
+        lines.push(`${prefix('Country:')}${countryValue}`);
         lines.push(
             `${prefix('Flags:')}` +
             `${data.tp ? 'TP' : '{grey-fg}TP{/grey-fg}'} ` +
@@ -652,10 +652,11 @@ function updateStationBox(txInfo) {
 
 function updateStatsBox(data) {
     if (!statsBox || !data) return;
+    const padLength = 16;
     statsBox.setContent(
-        `{center}Server users: ${data.users}\n` +
-        `Server ping: ${pingTime !== null ? pingTime + ' ms' : ''}\n` +
-        `Local audio: ${player.getStatus() ? "Playing" : "Stopped"}{/center}`
+        `${padStringWithSpaces('Server users:', 'green', padLength)}${data.users}\n` +
+        `${padStringWithSpaces('Server ping:', 'green', padLength)}${pingTime !== null ? pingTime + ' ms' : ''}\n` +
+        `${padStringWithSpaces('Local audio:', 'green', padLength)}${player.getStatus() ? 'Playing' : 'Stopped'}`
     );
 }
 

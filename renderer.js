@@ -332,6 +332,9 @@ document.getElementById('spectrum-canvas').addEventListener('click', (e) => {
 });
 
 function drawSpectrum(ctx, canvas, points) {
+  if (canvas.width !== canvas.clientWidth) {
+    canvas.width = canvas.clientWidth;
+  }
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = '#0f0';

@@ -524,8 +524,10 @@ function updateRdsBox(data) {
             msshow = "M{grey-fg}S{/grey-fg}";
         }
 
+        const ps = data.ps ? data.ps.trimStart() : '';
+
         rdsBox.setContent(
-            `${padStringWithSpaces("PS:", 'green', padLength)}${data.ps.trimStart()}\n` +
+            `${padStringWithSpaces("PS:", 'green', padLength)}${ps}\n` +
             `${padStringWithSpaces("PI:", 'green', padLength)}${data.pi}\n` +
             `{center}{bold}Flags{/bold}\n` +
             `${data.tp ? "TP" : "{grey-fg}TP{/grey-fg}"} ` +

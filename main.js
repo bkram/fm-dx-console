@@ -133,6 +133,7 @@ function createWindow() {
     if (pluginWs && pluginWs.readyState === WebSocket.OPEN) {
       const msg = JSON.stringify({
         type: 'spectrum-graph',
+        action: 'scan',
         value: { status: 'scan' }
       });
       pluginWs.send(msg);

@@ -4,7 +4,8 @@
   "description": "Console client for fm-dx-webserver",
   "main": "fm-dx-console.js",
   "scripts": {
-    "start": "node fm-dx-console.js"
+    "start": "node fm-dx-console.js",
+    "test": "node test/tunerinfo.test.js"
   },
   "dependencies": {
     "axios": "^1.8.2",

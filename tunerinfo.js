@@ -61,7 +61,11 @@ async function getTunerInfo(url) {
 async function getPingTime(url) {
     try {
         const pingUrl = new URL(url);
-        pingUrl.pathname += 'ping'; // Append '/ping' to the existing path
+        // Ensure the base path ends with a single slash before appending 'ping'
+        if (!pingUrl.pathname.endsWith('/')) {
+            pingUrl.pathname += '/';
+        }
+        pingUrl.pathname += 'ping';
         const startTime = Date.now(); // Record start time
 
         // Custom headers (if needed)

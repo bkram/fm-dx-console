@@ -27,9 +27,9 @@ function cycleAntenna(currentIndex, countOverride) {
             ? countOverride
             : antNames.length > 0
             ? antNames.length
-            : 2;
+            : 1;
     const idx = parseInt(currentIndex, 10) || 0;
-    return (idx + 1) % count;
+    return count > 0 ? (idx + 1) % count : 0;
 }
 
 module.exports = { setAntNames, getAntNames, getAntLabel, cycleAntenna };

@@ -8,7 +8,7 @@
 // -----------------------------
 const argv = require('minimist')(process.argv.slice(2), {
     string: ['url'],
-    boolean: ['debug']
+    boolean: ['debug', 'auto-play', 'help']
 });
 const blessed = require('blessed');
 const fs = require('fs');
@@ -54,6 +54,7 @@ let tunerName = '';
 let websocketAudio;
 let websocketData;
 let argDebug = argv.debug;
+let argAutoPlay = argv['auto-play'];
 let argUrl;
 let pingTime = null;
 let lastRdsData = null;
@@ -74,8 +75,13 @@ function debugLog(...args) {
 // -----------------------------
 // Argument Parsing
 // -----------------------------
+if (argv.help) {
+    console.log('Usage: node fm-dx-console.js --url <fm-dx> [--debug] [--auto-play]');
+    process.exit(0);
+}
+
 if (!argv.url) {
-    console.error('Usage: node fm-dx-console.js --url <fm-dx> [--debug]');
+    console.error('Usage: node fm-dx-console.js --url <fm-dx> [--debug] [--auto-play]');
     process.exit(1);
 } else {
     argUrl = argv.url.toLowerCase().replace("#", "").replace("?", "");
@@ -228,7 +234,7 @@ function generateHelpContent() {
         "'r'  refresh",
         "'p'  play audio",
         "'['  toggle iMS",
-        "'y'  toggle antenna",
+        "'y'  cycle antenna",
         "'s'  server info",
     ];
 
@@ -237,6 +243,7 @@ function generateHelpContent() {
         "'↑'  increase 0.01 MHz",
         "'x'  increase 1 MHz",
         "'t'  set frequency",
+        "'C'  send command",
         "']'  toggle EQ",
         "'Esc'  quit",
         "'h'  toggle help",
@@ -670,6 +677,12 @@ function updateRTBox(data) {
     );
 }
 
+function resetRds() {
+    lastRdsData = null;
+    updateRdsBox({});
+    updateRTBox({});
+}
+
 function updateStationBox(txInfo) {
     if (!stationBox || !txInfo) return;
     const padLength = 10;
@@ -753,6 +766,10 @@ async function tunerInfo() {
         tunerName = result.tunerName || '';
         tunerDesc = result.tunerDesc || '';
         setAntNames(result.antNames || []);
+        if (result.activeAnt !== undefined) {
+            if (!jsonData) jsonData = {};
+            jsonData.ant = result.activeAnt;
+        }
 
         updateServerBox();
         renderScreen();
@@ -785,6 +802,11 @@ const ws = new WebSocket(websocketData, wsOptions);
 
 ws.on('open', () => {
     debugLog('WebSocket connection established');
+    if (argAutoPlay) {
+        player.play();
+        updateStatsBox(jsonData || {});
+        renderScreen();
+    }
 });
 
 ws.on('message', (data) => {
@@ -819,30 +841,37 @@ screen.on('keypress', async (ch, key) => {
     if (key.full === 'left') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000) - 100}`);
+            resetRds();
         }
     } else if (key.full === 'right') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000) + 100}`);
+            resetRds();
         }
     } else if (key.full === 'up') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000) + 10}`);
+            resetRds();
         }
     } else if (key.full === 'down') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000) - 10}`);
+            resetRds();
         }
     } else if (key.full === 'x') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000) + 1000}`);
+            resetRds();
         }
     } else if (key.full === 'z') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000) - 1000}`);
+            resetRds();
         }
     } else if (key.full === 'r') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000)}`);
+            resetRds();
         }
     } else if (key.full === 't') {
         // Direct freq input
@@ -863,9 +892,32 @@ screen.on('keypress', async (ch, key) => {
                 const newFreq = parseFloat(convertToFrequency(value)) * 1000;
                 if (!isNaN(newFreq)) {
                     enqueueCommand(`T${newFreq}`);
+                    resetRds();
                 } else {
                     debugLog('Invalid frequency input.');
                 }
+            }
+            dialog.destroy();
+            screen.restoreFocus();
+            renderScreen();
+        });
+    } else if (key.full === 'C') {
+        // Direct command input
+        screen.saveFocus();
+        const dialog = blessed.prompt({
+            parent: uiBox,
+            top: 'center',
+            left: 'center',
+            width: 30,
+            height: 8,
+            border: 'line',
+            style: boxStyle,
+            label: boxLabel('Send Command'),
+            tags: true
+        });
+        dialog.input('\n  Enter command', '', (err, value) => {
+            if (!err && value) {
+                enqueueCommand(value.trim());
             }
             dialog.destroy();
             screen.restoreFocus();
@@ -901,12 +953,12 @@ screen.on('keypress', async (ch, key) => {
             enqueueCommand(`G1${jsonData.ims}`);
         }
     } else if (key.full === 'y') {
-        // Toggle antennas in a 0-based cycle (Z0, Z1, Z0, ...).
+        // Toggle antennas in a 0-based cycle.
         // Update jsonData locally so rapid toggling works before the server responds.
         if (jsonData && jsonData.ant !== undefined) {
             const current = parseInt(jsonData.ant, 10) || 0;
-            const count = Math.max(getAntNames().length, 2);
-            const newAnt = (current + 1) % count;
+            const count = Math.max(getAntNames().length, 1);
+            const newAnt = count > 0 ? (current + 1) % count : 0;
             enqueueCommand(`Z${newAnt}`);
             jsonData.ant = newAnt;
             updateTunerBox(jsonData);

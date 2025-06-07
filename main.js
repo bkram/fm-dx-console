@@ -6,6 +6,21 @@ const { getTunerInfo } = require('./tunerinfo');
 const WebSocket = require('ws');
 const axios = require('axios');
 
+// Parse command line arguments early so sandbox flags are handled before Electron initializes.
+const argv = minimist(process.argv.slice(2), {
+  string: ['url'],
+  boolean: ['debug', 'no-sandbox', 'help']
+});
+
+if (argv.help) {
+  console.log('Usage: npm run electron -- [--no-sandbox] [--debug] [--url <fm-dx>]');
+  process.exit(0);
+}
+
+if (argv['no-sandbox']) {
+  app.commandLine.appendSwitch('no-sandbox');
+}
+
 // Electron refuses to start under root with sandboxing enabled. Automatically
 // disable the sandbox if running as root so the app can launch without extra
 // command line flags.
@@ -14,7 +29,7 @@ if (process.getuid && process.getuid() === 0) {
 }
 
 let player;
-let currentUrl;
+let currentUrl = argv.url || '';
 let ws;
 let pluginWs;
 
@@ -31,8 +46,6 @@ function formatWebSocketURL(url) {
 }
 
 function createWindow() {
-  const argv = minimist(process.argv.slice(2), { string: ['url'], boolean: ['debug'] });
-  currentUrl = argv.url || '';
   const win = new BrowserWindow({
     width: 1200,
     height: 800,

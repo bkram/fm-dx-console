@@ -142,6 +142,12 @@ const screen = blessed.screen({
 // Hide blinking terminal cursor which otherwise appears in the RDS box
 screen.program.hideCursor();
 
+/** Render the screen and keep the cursor hidden */
+function renderScreen() {
+    screen.render();
+    screen.program.hideCursor();
+}
+
 // -----------------------------
 // Throttling Queue
 // -----------------------------
@@ -181,7 +187,7 @@ function checkSizeAndToggleUI() {
         warningBox.hide();
         uiBox.show();
     }
-    screen.render();
+    renderScreen();
 }
 
 // -----------------------------
@@ -508,12 +514,12 @@ const helpBox = blessed.box({
 });
 
 // Render once
-screen.render();
+renderScreen();
 
 // Update the title bar every second (for the clock)
 setInterval(() => {
     updateTitleBar();
-    screen.render();
+    renderScreen();
 }, 1000);
 
 /**
@@ -560,7 +566,7 @@ screen.on('resize', () => {
         updateStationBox(jsonData.txInfo);
     }
 
-    screen.render();
+    renderScreen();
 });
 
 // -----------------------------
@@ -636,7 +642,7 @@ function updateRdsBox(data) {
         }
 
         rdsBox.setContent(lines.join('\n'));
-        screen.render();
+        renderScreen();
     } else {
         const prefix = (txt) => padStringWithSpaces(txt, 'green', padLength);
         const placeholders = [
@@ -749,7 +755,7 @@ async function tunerInfo() {
         setAntNames(result.antNames || []);
 
         updateServerBox();
-        screen.render();
+        renderScreen();
     } catch (error) {
         debugLog(error.message);
     }
@@ -762,7 +768,7 @@ async function doPing() {
         debugLog('Ping Time:', pingTime, 'ms');
         if (jsonData) {
             updateStatsBox(jsonData);
-            screen.render();
+            renderScreen();
         }
     } catch (error) {
         debugLog('Ping Error:', error.message);
@@ -794,7 +800,7 @@ ws.on('message', (data) => {
             updateStatsBox(jsonData);
             updateServerBox();
 
-            screen.render();
+            renderScreen();
         }
         previousJsonData = newData;
     } catch (error) {
@@ -863,12 +869,12 @@ screen.on('keypress', async (ch, key) => {
             }
             dialog.destroy();
             screen.restoreFocus();
-            screen.render();
+            renderScreen();
         });
     } else if (key.full === 'h') {
         // Toggle the help box
         helpBox.hidden = !helpBox.hidden;
-        screen.render();
+        renderScreen();
     } else if (key.full === 'p') {
         // Toggle audio
         if (player.getStatus()) {
@@ -878,7 +884,7 @@ screen.on('keypress', async (ch, key) => {
         }
         if (jsonData) {
             updateStatsBox(jsonData);
-            screen.render();
+            renderScreen();
         }
     } else if (key.full === '[') {
         // Toggle iMS
@@ -904,7 +910,7 @@ screen.on('keypress', async (ch, key) => {
             enqueueCommand(`Z${newAnt}`);
             jsonData.ant = newAnt;
             updateTunerBox(jsonData);
-            screen.render();
+            renderScreen();
         }
     } else if (key.full.toLowerCase() === 's') {
         // Toggle server info popup
@@ -916,7 +922,7 @@ screen.on('keypress', async (ch, key) => {
             serverBox.setContent('');
             screen.realloc();
         }
-        screen.render();
+        renderScreen();
     } else if (key.full === 'escape' || key.full === 'C-c') {
         process.exit(0);
     } else {

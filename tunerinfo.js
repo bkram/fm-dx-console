@@ -5,52 +5,52 @@ const cheerio = require('cheerio');
 const axios = require('axios');
 
 /**
- * Fetch tuner information from the provided URL.
+ * Fetch tuner information from the provided URL. It first tries the
+ * `/static_data` endpoint which exposes the server description in JSON.
+ * If that fails (older servers), it falls back to scraping the HTML page.
+ *
  * @param {string} url - The URL of the web server.
- * @returns {Object} An object containing tuner name and description.
- * @throws {Error} If fetching tuner information fails.
+ * @returns {Object} An object containing tuner name, description and
+ * antenna names.
  */
 async function getTunerInfo(url) {
+    const base = url.endsWith('/') ? url.slice(0, -1) : url;
     try {
-        const response = await axios.get(url); // Asynchronous HTTP request using axios
-        const html = response.data;
-        const $ = cheerio.load(html);
-
-        // Extract and clean the og:title
-        const tunerName = $('meta[property="og:title"]').attr('content')
-            .replace('FM-DX WebServer ', '')  // Remove "FM-DX WebServer "
-            // .replace('[', ' ')                 // Remove "["
-            // .replace(']', ' ');                // Remove "]"
-
-        // Extract and clean the og:description
-        let tunerDesc = $('meta[property="og:description"]').attr('content')
-            .replace('Server description: ', '')  // Remove "Server description:"
-            .trim();  // Remove leading and trailing whitespace
-
-        // Add a space to the beginning of each line in the description
-        if (tunerDesc) {
-            tunerDesc = tunerDesc;
-            // tunerDesc = tunerDesc
-            //     .split(/\r?\n/)  // Split by either \n or \r\n (handles different OS newline formats)
-            //     .map(line => ' ' + line.trim())  // Add a space and remove extra whitespace at the beginning of each line
-            //     .slice(0, 10)  // Keep only the first 3 lines
-            //     .join('\n')  // Join the lines back with \n
-            //     .replace(/\.\s*$/, '');  // Remove any trailing period followed by optional spaces
-        }
-
-        const antNames = [];
-        // Antenna names can be listed inside #data-ant or within a select box
-        $('#data-ant ul.options li, #data-ant li, select[name="ant"] option').each((_, element) => {
-            const name = $(element).text().trim();
-            if (name) antNames.push(name);
-        });
-
-        if (antNames.length === 0) {
-            antNames.push('Default');
-        }
+        // Preferred method: fetch JSON info
+        const res = await axios.get(`${base}/static_data`);
+        const data = res.data || {};
+        const tunerName = data.tunerName || '';
+        const tunerDesc = data.tunerDesc || '';
+        const antObj = data.ant || {};
+        const antNames = Object.values(antObj)
+            .map((a) => (a && typeof a.name === 'string' ? a.name : ''))
+            .filter(Boolean);
+        if (antNames.length === 0) antNames.push('Default');
         return { tunerName, tunerDesc, antNames };
-    } catch (error) {
-        throw new Error('Failed to fetch content: ' + error.message);
+    } catch (jsonErr) {
+        try {
+            // Fallback: scrape HTML
+            const response = await axios.get(base);
+            const html = response.data;
+            const $ = cheerio.load(html);
+
+            const tunerName = $('meta[property="og:title"]').attr('content')
+                .replace('FM-DX WebServer ', '');
+            let tunerDesc = $('meta[property="og:description"]').attr('content')
+                .replace('Server description: ', '')
+                .trim();
+
+            const antNames = [];
+            $('#data-ant ul.options li, #data-ant li, select[name="ant"] option').each((_, el) => {
+                const name = $(el).text().trim();
+                if (name) antNames.push(name);
+            });
+            if (antNames.length === 0) antNames.push('Default');
+
+            return { tunerName, tunerDesc, antNames };
+        } catch (error) {
+            throw new Error('Failed to fetch content: ' + error.message);
+        }
     }
 }
 

@@ -583,7 +583,7 @@ function updateRdsBox(data) {
         );
         const ptyNum = data.pty !== undefined ? data.pty : 0;
         lines.push(`${prefix('PTY:')}${ptyNum}`);
-        lines.push(`${prefix('PTY text:')}${europe_programmes[ptyNum] || 'None'}`);
+        lines.push(`${prefix('PTY txt:')}${europe_programmes[ptyNum] || 'None'}`);
         if (data.dynamic_pty !== undefined || data.artificial_head !== undefined || data.compressed !== undefined) {
             lines.push(`${prefix('DI:')}DP:${data.dynamic_pty ? 'On' : 'Off'} AH:${data.artificial_head ? 'On' : 'Off'} C:${data.compressed ? 'On' : 'Off'} Stereo:${data.st ? 'Yes' : 'No'}`);
         }
@@ -596,7 +596,19 @@ function updateRdsBox(data) {
         rdsBox.setContent(lines.join('\n'));
         screen.render();
     } else {
-        rdsBox.setContent('');
+        const prefix = (txt) => padStringWithSpaces(txt, 'green', padLength);
+        const placeholders = [
+            `${prefix('PS:')}`,
+            `${prefix('PI:')}`,
+            `${prefix('ECC:')}`,
+            `${prefix('Country:')}`,
+            `${prefix('Flags:')}{grey-fg}TP{/grey-fg} {grey-fg}TA{/grey-fg} {grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}`,
+            `${prefix('PTY:')}`,
+            `${prefix('PTY txt:')}`,
+            `${prefix('DI:')}`,
+            `${prefix('AF:')}`
+        ];
+        rdsBox.setContent(placeholders.join('\n'));
     }
 }
 
@@ -627,7 +639,14 @@ function updateStationBox(txInfo) {
             `${padStringWithSpaces("Azimuth:", 'green', padLength)}${txInfo.azi + "°"}`
         );
     } else {
-        stationBox.setContent("");
+        stationBox.setContent(
+            `${padStringWithSpaces('Name:', 'green', padLength)}\n` +
+            `${padStringWithSpaces('Location:', 'green', padLength)}\n` +
+            `${padStringWithSpaces('Country:', 'green', padLength)}\n` +
+            `${padStringWithSpaces('Distance:', 'green', padLength)}\n` +
+            `${padStringWithSpaces('Power:', 'green', padLength)}\n` +
+            `${padStringWithSpaces('Azimuth:', 'green', padLength)}`
+        );
     }
 }
 

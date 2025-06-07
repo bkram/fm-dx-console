@@ -42,9 +42,9 @@ or
 node fm-dx-console.js --url https://fm-dx-server/
 ```
 
-### Electron Application
+### FMDX App
 
-The project includes a graphical interface styled like a small audio player. It
+The FMDX App is an Electron-based interface styled like a small audio player. It
 displays the tuned frequency to three decimals. The value can be edited and will
 only update from the tuner when the input field is not focused. Material icons
 are used for the tuning controls. Buttons let you tune in 1 MHz, 0.1 MHz and 0.01
@@ -71,7 +71,7 @@ npm run electron -- --url http://fm-dx-server:[port]/
 ## Help (console version)
 
 The following keys can be used when running the command line interface. The
-Electron GUI understands these shortcuts as well:
+FMDX App understands these shortcuts as well:
 
 Frequency Adjustment
 

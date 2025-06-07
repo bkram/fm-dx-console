@@ -44,6 +44,8 @@ node fm-dx-console.js --url https://fm-dx-server/ [--auto-play]
 
 Add `--auto-play` to begin audio playback immediately after connecting.
 
+Run `node fm-dx-console.js --help` to show all available options.
+
 ### FMDX App
 
 The FMDX App is an Electron-based interface styled like a small audio player. It
@@ -83,13 +85,9 @@ directly to that frequency.
 npm run electron -- --url http://fm-dx-server:[port]/
 ```
 
-When running the app as the **root** user the sandbox is disabled
-automatically, but some environments may still require the explicit flag. If
-Electron refuses to start you can invoke the script with `--no-sandbox`:
+Run `npm run electron -- --help` to show command line options.
 
-```bash
-npm run electron -- --no-sandbox --url http://fm-dx-server:[port]/
-```
+Electron is launched with `--no-sandbox` so it also works when run as root.
 
 The server URL can also be changed at runtime using the field above the
 controls. Changing the address automatically restarts the audio connection so it

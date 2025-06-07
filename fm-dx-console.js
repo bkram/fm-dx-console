@@ -8,7 +8,7 @@
 // -----------------------------
 const argv = require('minimist')(process.argv.slice(2), {
     string: ['url'],
-    boolean: ['debug', 'auto-play']
+    boolean: ['debug', 'auto-play', 'help']
 });
 const blessed = require('blessed');
 const fs = require('fs');
@@ -75,8 +75,13 @@ function debugLog(...args) {
 // -----------------------------
 // Argument Parsing
 // -----------------------------
+if (argv.help) {
+    console.log('Usage: node fm-dx-console.js --url <fm-dx> [--debug] [--auto-play]');
+    process.exit(0);
+}
+
 if (!argv.url) {
-    console.error('Usage: node fm-dx-console.js --url <fm-dx> [--debug]');
+    console.error('Usage: node fm-dx-console.js --url <fm-dx> [--debug] [--auto-play]');
     process.exit(1);
 } else {
     argUrl = argv.url.toLowerCase().replace("#", "").replace("?", "");

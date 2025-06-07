@@ -123,13 +123,18 @@
     <button id="ims-btn" type="button">iMS</button>
     <button id="eq-btn" type="button">EQ</button>
     <button id="ant-btn" type="button">Ant</button>
-    <button id="scan-btn" type="button">Spectrum Scan</button>
+    <button id="scan-btn" type="button" style="display:none;">Spectrum Scan</button>
   </div>
 
   <div class="section" id="signal-section">
     <strong>Signal:</strong>
     <progress id="signal" value="0" max="100"></progress>
     <span id="signal-label"></span>
+    <select id="signal-units" style="margin-left:4px;">
+      <option value="dBf">dBf</option>
+      <option value="dBuV">dBµV</option>
+      <option value="dBm">dBm</option>
+    </select>
   </div>
 
   <div class="row">
@@ -160,7 +165,7 @@ Azimuth:</pre>
       <pre id="stats"></pre>
     </div>
   </div>
-  <div class="section">
+  <div class="section" id="spectrum-section" style="display:none;">
     <strong>Spectrum:</strong>
     <canvas id="spectrum-canvas" width="1000" height="80"></canvas>
     <div style="font-size: 0.9em; color: #bbb;">(click a point to tune)</div>

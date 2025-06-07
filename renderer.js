@@ -5,6 +5,16 @@ let antNames = [];
 let lastPing = null;
 let currentUrl = '';
 let pingTimer = null;
+let signalUnit = localStorage.getItem('signalUnit') || 'dBf';
+let pluginAvailable = true;
+
+const unitSelectEl = document.getElementById('signal-units');
+unitSelectEl.value = signalUnit;
+unitSelectEl.addEventListener('change', () => {
+  signalUnit = unitSelectEl.value;
+  localStorage.setItem('signalUnit', signalUnit);
+  if (currentData) updateUI();
+});
 
 const freqInputEl = document.getElementById('freq-input');
 const urlInputEl = document.getElementById('url-input');
@@ -66,6 +76,10 @@ electronAPI.onInitArgs((a) => {
           srv.textContent = `${info.tunerName}\n${info.tunerDesc}`;
         }
       });
+      pluginAvailable = true;
+      document.getElementById('scan-btn').style.display = 'none';
+      document.getElementById('spectrum-section').style.display = 'none';
+      fetchSpectrumData();
     }
   }
 });
@@ -99,7 +113,7 @@ function updateUI() {
     const sig = parseFloat(currentData.sig);
     if (!isNaN(sig)) {
       signal.value = scaleValue(sig);
-      signalLabel.textContent = `${sig.toFixed(1)} dBf`;
+      signalLabel.textContent = formatSignal(sig);
     }
   }
 
@@ -173,6 +187,16 @@ function scaleValue(value) {
   return Math.floor((value / maxvalue) * 100);
 }
 
+function formatSignal(sig) {
+  let val = sig;
+  if (signalUnit === 'dBuV') {
+    val = sig - 11.25;
+  } else if (signalUnit === 'dBm') {
+    val = sig - 120;
+  }
+  return `${val.toFixed(1)} ${signalUnit}`;
+}
+
 function doTune(delta) {
   if (currentData && currentData.freq !== undefined) {
     const freq = parseFloat(currentData.freq);
@@ -239,16 +263,44 @@ let scanning = false;
 let spectrumData = [];
 document.getElementById('scan-btn').onclick = runSpectrumScan;
 
-window.addEventListener('DOMContentLoaded', () => {
+async function fetchSpectrumData() {
+  if (!currentUrl) return;
+  const data = await electronAPI.getSpectrumData();
   const canvas = document.getElementById('spectrum-canvas');
+  const section = document.getElementById('spectrum-section');
+  const scanBtn = document.getElementById('scan-btn');
   const ctx = canvas.getContext('2d');
+  if (data) {
+    pluginAvailable = true;
+    section.style.display = '';
+    scanBtn.style.display = '';
+    let sd = data.sd;
+    if (!sd && data.ad !== undefined && data[`sd${data.ad}`]) {
+      sd = data[`sd${data.ad}`];
+    }
+    if (sd) {
+      spectrumData = sd.split(',').map(pair => {
+        const [f, s] = pair.split('=');
+        return { freq: parseFloat((parseFloat(f) / 1000).toFixed(2)), sig: parseFloat(s) };
+      });
+      drawSpectrum(ctx, canvas, spectrumData);
+      return;
+    }
+  } else {
+    pluginAvailable = false;
+    section.style.display = 'none';
+    scanBtn.style.display = 'none';
+    return;
+  }
   if (!spectrumData.length) {
     for (let f = 83.0; f <= 108.0; f += 0.05) {
       spectrumData.push({ freq: parseFloat(f.toFixed(2)), sig: 0 });
     }
   }
   drawSpectrum(ctx, canvas, spectrumData);
-});
+}
+
+window.addEventListener('DOMContentLoaded', fetchSpectrumData);
 
 document.getElementById('play-btn').onclick = async () => {
   if (audioPlaying) {
@@ -331,47 +383,16 @@ async function startPing() {
 
 async function runSpectrumScan() {
   if (scanning) return;
+  if (!pluginAvailable) return;
   scanning = true;
   const canvas = document.getElementById('spectrum-canvas');
   const ctx = canvas.getContext('2d');
-  const points = [];
-  for (let f = 83.0; f <= 108.0; f += 0.05) {
-    points.push({ freq: parseFloat(f.toFixed(2)), sig: 0 });
-  }
-  spectrumData = points;
+  spectrumData = [];
   drawSpectrum(ctx, canvas, spectrumData);
 
-  const origFreq = currentData && currentData.freq !== undefined ? parseFloat(currentData.freq) : null;
-  const wasPlaying = audioPlaying;
-  if (wasPlaying) {
-    await electronAPI.stopAudio();
-    document.getElementById('play-btn').textContent = 'play_arrow';
-    audioPlaying = false;
-    updateStatus();
-  }
-
-  let idx = 0;
-  for (let f = 83.0; f <= 108.0; f += 0.05) {
-    sendCmd(`T${Math.round(f * 1000)}`);
-    await new Promise(r => setTimeout(r, 150));
-    const sig = currentData && currentData.sig !== undefined ? parseFloat(currentData.sig) : 0;
-    points[idx].sig = isNaN(sig) ? 0 : sig;
-    spectrumData = points;
-    drawSpectrum(ctx, canvas, spectrumData);
-    idx++;
-  }
-
-  if (origFreq !== null) {
-    sendCmd(`T${Math.round(origFreq * 1000)}`);
-    await new Promise(r => setTimeout(r, 300));
-  }
-
-  if (wasPlaying) {
-    await electronAPI.startAudio();
-    document.getElementById('play-btn').textContent = 'stop';
-    audioPlaying = true;
-    updateStatus();
-  }
+  await electronAPI.startSpectrumScan();
+  await new Promise(r => setTimeout(r, 2000));
+  await fetchSpectrumData();
 
   scanning = false;
 }
@@ -428,6 +449,10 @@ async function setBackendUrl() {
         srv.textContent = '';
       }
     });
+    pluginAvailable = true;
+    document.getElementById('scan-btn').style.display = 'none';
+    document.getElementById('spectrum-section').style.display = 'none';
+    fetchSpectrumData();
   }
   if (wasPlaying) {
     await electronAPI.startAudio();

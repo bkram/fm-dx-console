@@ -15,6 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const WebSocket = require('ws');
 const { getTunerInfo, getPingTime } = require('./tunerinfo');
+const { setAntNames, getAntNames, getAntLabel, cycleAntenna } = require('./antenna');
 const playAudio = require('./3lasclient');
 
 // -----------------------------
@@ -50,7 +51,6 @@ let jsonData = null;
 let previousJsonData = null;
 let tunerDesc = '';
 let tunerName = '';
-let antNames = [];
 let websocketAudio;
 let websocketData;
 let argDebug = argv.debug;
@@ -577,13 +577,7 @@ function updateTunerBox(data) {
         `${padStringWithSpaces("Mode:", 'green', padLength)}${data.st ? "Stereo" : "Mono"}\n` +
         `${padStringWithSpaces("iMS:", 'green', padLength)}${Number(data.ims) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
         `${padStringWithSpaces("EQ:", 'green', padLength)}${Number(data.eq) ? "On" : "{grey-fg}Off{/grey-fg}"}\n` +
-        `${padStringWithSpaces("ANT:", 'green', padLength)}${
-            antNames[data.ant] !== undefined
-                ? antNames[data.ant]
-                : data.ant !== undefined
-                ? String(data.ant)
-                : 'N/A'
-        }\n`
+        `${padStringWithSpaces("ANT:", 'green', padLength)}${getAntLabel(data.ant)}\n`
     );
 }
 
@@ -748,7 +742,7 @@ async function tunerInfo() {
         const result = await getTunerInfo(argUrl);
         tunerName = result.tunerName || '';
         tunerDesc = result.tunerDesc || '';
-        antNames = result.antNames || [];
+        setAntNames(result.antNames || []);
 
         updateServerBox();
         screen.render();
@@ -900,8 +894,7 @@ screen.on('keypress', async (ch, key) => {
         // Toggle antenna even if names failed to load. Update jsonData so
         // rapid toggling works even before the server responds.
         if (jsonData && jsonData.ant !== undefined) {
-            const count = antNames.length > 0 ? antNames.length : 2;
-            const newAnt = (parseInt(jsonData.ant, 10) + 1) % count;
+            const newAnt = cycleAntenna(jsonData.ant);
             enqueueCommand(`Z${newAnt}`);
             jsonData.ant = newAnt;
             updateTunerBox(jsonData);

@@ -54,7 +54,9 @@ automatically. Pressing **Enter** in the frequency field tunes to the value and
 shows the rounded frequency again. The interface now places the Tuner and RDS
 panels side by side, as well as the Station and Status panels, while the
 spectrum display is slightly smaller. Keyboard shortcuts from the console client
-are also supported. Launch it with:
+are also supported. The window starts larger so all details fit comfortably and
+the Station section always lists its field names (Name, Location, etc.) even if
+data is missing. Launch it with:
 
 The status section shows the current user count, ping time and whether audio is
 playing on separate lines.

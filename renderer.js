@@ -92,16 +92,13 @@ function updateUI() {
   rt.textContent = `${line1}\n${line2}`;
 
   const station = document.getElementById('station-info');
-  if (currentData.txInfo && currentData.txInfo.tx) {
-    station.textContent =
-      `Name: ${currentData.txInfo.tx}\n` +
-      `Location: ${currentData.txInfo.city}, ${currentData.txInfo.itu}\n` +
-      `Distance: ${currentData.txInfo.dist} km\n` +
-      `Power: ${currentData.txInfo.erp} kW [${currentData.txInfo.pol}]\n` +
-      `Azimuth: ${currentData.txInfo.azi}\u00B0`;
-  } else {
-    station.textContent = '';
-  }
+  const tx = currentData.txInfo && currentData.txInfo.tx ? currentData.txInfo : null;
+  station.textContent =
+    `Name: ${tx ? tx.tx : ''}\n` +
+    `Location: ${tx ? `${tx.city}, ${tx.itu}` : ''}\n` +
+    `Distance: ${tx ? `${tx.dist} km` : ''}\n` +
+    `Power: ${tx ? `${tx.erp} kW [${tx.pol}]` : ''}\n` +
+    `Azimuth: ${tx ? `${tx.azi}\u00B0` : ''}`;
 
   updateStatus();
 }

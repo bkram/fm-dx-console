@@ -722,12 +722,11 @@ function updateServerBox() {
     }
     const name = stripUnicode(tunerName);
     const desc = stripUnicode(tunerDesc);
-    if (screen.rows <= 25) {
-        serverBox.setContent(name);
-    } else {
-        // Add a leading space for aesthetics
-        serverBox.setContent(` ${name}\n\n${desc}`);
+    const content = [` ${name}`];
+    if (desc) {
+        content.push('', desc);
     }
+    serverBox.setContent(content.join('\n'));
 }
 
 // -----------------------------

@@ -20,38 +20,41 @@ async function getTunerInfo(url) {
         // Preferred method: fetch JSON info
         const res = await axios.get(staticUrl);
         const data = res.data || {};
-        const tunerName = data.tunerName || '';
-        const tunerDesc = data.tunerDesc || '';
+        let tunerName = data.tunerName || '';
+        let tunerDesc = data.tunerDesc || '';
         const antObj = data.ant || {};
-        const antNames = Object.values(antObj)
+        let antNames = Object.values(antObj)
             .map((a) => (a && typeof a.name === 'string' ? a.name : ''))
             .filter(Boolean);
-        if (antNames.length === 0) antNames.push('Default');
-        return { tunerName, tunerDesc, antNames };
-    } catch (jsonErr) {
-        try {
-            // Fallback: scrape HTML
+
+        // If key info is missing, fall back to HTML scraping
+        if (!tunerDesc || antNames.length === 0) {
             const response = await axios.get(url);
             const html = response.data;
             const $ = cheerio.load(html);
 
-            const tunerName = $('meta[property="og:title"]').attr('content')
-                .replace('FM-DX WebServer ', '');
-            let tunerDesc = $('meta[property="og:description"]').attr('content')
-                .replace('Server description: ', '')
-                .trim();
-
-            const antNames = [];
-            $('#data-ant ul.options li, #data-ant li, select[name="ant"] option').each((_, el) => {
-                const name = $(el).text().trim();
-                if (name) antNames.push(name);
-            });
-            if (antNames.length === 0) antNames.push('Default');
-
-            return { tunerName, tunerDesc, antNames };
-        } catch (error) {
-            throw new Error('Failed to fetch content: ' + error.message);
+            if (!tunerName) {
+                tunerName = $('meta[property="og:title"]').attr('content')
+                    .replace('FM-DX WebServer ', '');
+            }
+            if (!tunerDesc) {
+                tunerDesc = $('meta[property="og:description"]').attr('content')
+                    .replace('Server description: ', '')
+                    .trim();
+            }
+            if (antNames.length === 0) {
+                antNames = [];
+                $('#data-ant ul.options li, #data-ant li, select[name="ant"] option').each((_, el) => {
+                    const name = $(el).text().trim();
+                    if (name) antNames.push(name);
+                });
+                if (antNames.length === 0) antNames.push('Default');
+            }
         }
+
+        return { tunerName, tunerDesc, antNames };
+    } catch (error) {
+        throw new Error('Failed to fetch content: ' + error.message);
     }
 }
 

@@ -76,6 +76,13 @@
       background: var(--accent);
     }
 
+    #signal-unit-select {
+      background: var(--control-bg);
+      color: var(--fg-color);
+      border: 1px solid var(--control-border);
+      border-radius: 4px;
+    }
+
     .section {
       border: 1px solid var(--control-border);
       padding: 8px;
@@ -130,6 +137,11 @@
     <strong>Signal:</strong>
     <progress id="signal" value="0" max="100"></progress>
     <span id="signal-label"></span>
+    <select id="signal-unit-select">
+      <option value="dbf">dBf</option>
+      <option value="dbuv">dBµV</option>
+      <option value="dbm">dBm</option>
+    </select>
   </div>
 
   <div class="row">

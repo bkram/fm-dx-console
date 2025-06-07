@@ -8,6 +8,16 @@ let pingTimer = null;
 
 const freqInputEl = document.getElementById('freq-input');
 const urlInputEl = document.getElementById('url-input');
+const unitSelectEl = document.getElementById('signal-unit-select');
+
+const savedUnit = localStorage.getItem('signalUnit');
+if (savedUnit) {
+  unitSelectEl.value = savedUnit;
+}
+unitSelectEl.addEventListener('change', () => {
+  localStorage.setItem('signalUnit', unitSelectEl.value);
+  if (currentData) updateUI();
+});
 
 const europe_programmes = [
   'No PTY', 'News', 'Current Affairs', 'Info', 'Sport', 'Education', 'Drama',
@@ -100,7 +110,19 @@ function updateUI() {
     const sig = parseFloat(currentData.sig);
     if (!isNaN(sig)) {
       signal.value = scaleValue(sig);
-      signalLabel.textContent = `${sig.toFixed(1)} dBf`;
+      let disp = sig;
+      let unit = 'dBf';
+      switch (unitSelectEl.value) {
+        case 'dbuv':
+          disp = sig - 11.25;
+          unit = 'dBµV';
+          break;
+        case 'dbm':
+          disp = sig - 120;
+          unit = 'dBm';
+          break;
+      }
+      signalLabel.textContent = `${disp.toFixed(1)} ${unit}`;
     }
   }
 

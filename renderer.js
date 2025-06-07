@@ -131,7 +131,10 @@ function updateUI() {
   if (country) {
     rdsText += `\nCountry: ${country}`;
   }
-  rdsText += `\n${flags}\nPTY: ${ptyNum}/${ptyName}`;
+  if (flags) {
+    rdsText += `\nFlags: ${flags}`;
+  }
+  rdsText += `\nPTY: ${ptyNum}/${ptyName}`;
   if (
     currentData.dynamic_pty !== undefined ||
     currentData.artificial_head !== undefined ||

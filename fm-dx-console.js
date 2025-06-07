@@ -550,54 +550,48 @@ function updateTunerBox(data) {
 
 function updateRdsBox(data) {
     if (!rdsBox || !data) return;
-    const padLength = 4;
+    const padLength = 8;
     if (data.freq >= 75 && data.pi !== "?") {
-    let msshow;
-    if (data.ms === 0) {
-        msshow = '{grey-fg}M{/grey-fg}S';
-    } else if (data.ms === -1) {
-        msshow = '{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}';
-    } else {
-        msshow = 'M{grey-fg}S{/grey-fg}';
-    }
+        let msshow;
+        if (data.ms === 0) {
+            msshow = '{grey-fg}M{/grey-fg}S';
+        } else if (data.ms === -1) {
+            msshow = '{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}';
+        } else {
+            msshow = 'M{grey-fg}S{/grey-fg}';
+        }
 
         const psDisplay = processStringWithErrors(data.ps.trimStart(), data.ps_errors);
         const prefix = (txt) => padStringWithSpaces(txt, 'green', padLength);
-        const rows = [];
+        const lines = [];
 
-        rows.push([`${prefix('PS:')}${psDisplay}`, `${prefix('PI:')}${data.pi}`]);
+        lines.push(`${prefix('PS:')}${psDisplay}`);
+        lines.push(`${prefix('PI:')}${data.pi}`);
         if (data.ecc) {
-            rows.push([`${prefix('ECC:')}${data.ecc}`, '']);
+            lines.push(`${prefix('ECC:')}${data.ecc}`);
         }
         const country = data.country_name || data.country_iso;
         if (country) {
-            rows.push([`${prefix('Country:')}${country}`, '']);
+            lines.push(`${prefix('Country:')}${country}`);
         }
-        rows.push([`${prefix('Flags:')}${data.tp ? 'TP' : 'TP?'} ${data.ta ? 'TA' : 'TA?'} ${msshow}`, '']);
+        lines.push(`${prefix('Flags:')}${data.tp ? 'TP' : 'TP?'} ${data.ta ? 'TA' : 'TA?'} ${msshow}`);
         const ptyNum = data.pty !== undefined ? data.pty : 0;
-        rows.push([`${prefix('PTY:')}${ptyNum}/${europe_programmes[ptyNum] || 'None'}`, '']);
+        lines.push(`${prefix('PTY:')}${ptyNum}/${europe_programmes[ptyNum] || 'None'}`);
         if (data.dynamic_pty !== undefined || data.artificial_head !== undefined || data.compressed !== undefined) {
-            rows.push([`${prefix('DI:')}DP:${data.dynamic_pty ? 'On' : 'Off'} AH:${data.artificial_head ? 'On' : 'Off'} C:${data.compressed ? 'On' : 'Off'} Stereo:${data.st ? 'Yes' : 'No'}`,'']);
+            lines.push(`${prefix('DI:')}DP:${data.dynamic_pty ? 'On' : 'Off'} AH:${data.artificial_head ? 'On' : 'Off'} C:${data.compressed ? 'On' : 'Off'} Stereo:${data.st ? 'Yes' : 'No'}`);
         }
         if (Array.isArray(data.af)) {
             if (data.af.length) {
-                rows.push([`${prefix('AF:')}${data.af.length} frequencies detected`, '']);
+                lines.push(`${prefix('AF:')}${data.af.length} frequencies detected`);
             } else {
-                rows.push([`${prefix('AF:')}None`, '']);
+                lines.push(`${prefix('AF:')}None`);
             }
         } else {
-            rows.push([`${prefix('AF:')}None`, '']);
+            lines.push(`${prefix('AF:')}None`);
         }
 
-        const boxWidth = typeof rdsBox.width === 'string' ? screen.cols : rdsBox.width;
-        const colWidth = Math.floor((boxWidth - 2) / 2);
-        let output = '';
-        for (const [leftText, rightText] of rows) {
-            const left = (leftText || '').padEnd(colWidth);
-            const right = rightText || '';
-            output += left + right + '\n';
-        }
-        rdsBox.setContent(output.trim());
+        rdsBox.setContent(lines.join('\n'));
+        screen.render();
     } else {
         rdsBox.setContent('');
     }

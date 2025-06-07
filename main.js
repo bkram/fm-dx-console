@@ -5,6 +5,13 @@ const playAudio = require('./3lasclient');
 const { getTunerInfo } = require('./tunerinfo');
 const WebSocket = require('ws');
 
+// Electron refuses to start under root with sandboxing enabled. Automatically
+// disable the sandbox if running as root so the app can launch without extra
+// command line flags.
+if (process.getuid && process.getuid() === 0) {
+  app.commandLine.appendSwitch('no-sandbox');
+}
+
 let player;
 let currentUrl;
 let ws;

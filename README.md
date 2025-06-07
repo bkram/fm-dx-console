@@ -73,6 +73,14 @@ directly to that frequency.
 npm run electron -- --url http://fm-dx-server:[port]/
 ```
 
+When running the app as the **root** user the sandbox is disabled
+automatically, but some environments may still require the explicit flag. If
+Electron refuses to start you can invoke the script with `--no-sandbox`:
+
+```bash
+npm run electron -- --no-sandbox --url http://fm-dx-server:[port]/
+```
+
 The server URL can also be changed at runtime using the field above the
 controls. Changing the address automatically restarts the audio connection so it
 uses the new backend.

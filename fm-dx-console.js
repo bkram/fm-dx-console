@@ -345,8 +345,9 @@ function updateTitleBar() {
 // Shrink the tuner and station boxes a little so RDS
 // has enough room for ECC and AF data
 // Place Tuner and RDS next to each other so everything fits in 80x25
-const tunerWidth = 20;
-const rdsWidth = 24;
+// widen tuner and RDS boxes so their content fits properly
+const tunerWidth = 24;
+const rdsWidth = 32;
 const heightInRows = 8;
 
 const tunerBox = blessed.box({
@@ -547,7 +548,14 @@ function updateRdsBox(data) {
     if (!rdsBox || !data) return;
     const padLength = 4;
     if (data.freq >= 75 && data.pi !== "?") {
-        const flags = `${data.tp ? 'TP ' : ''}${data.ta ? 'TA ' : ''}${data.ms ? 'MS' : ''}`.trim();
+    let msshow;
+    if (data.ms === 0) {
+        msshow = '{grey-fg}M{/grey-fg}S';
+    } else if (data.ms === -1) {
+        msshow = '{grey-fg}M{/grey-fg}{grey-fg}S{/grey-fg}';
+    } else {
+        msshow = 'M{grey-fg}S{/grey-fg}';
+    }
 
         const psDisplay = processStringWithErrors(data.ps.trimStart(), data.ps_errors);
         const lines = [];
@@ -560,9 +568,7 @@ function updateRdsBox(data) {
         if (country) {
             lines.push(`Country: ${country}`);
         }
-        if (flags) {
-            lines.push(`Flags: ${flags}`);
-        }
+        lines.push(`Flags: ${data.tp ? 'TP' : 'TP?'} ${data.ta ? 'TA' : 'TA?'} ${msshow}`);
         const ptyNum = data.pty !== undefined ? data.pty : 0;
         lines.push(`PTY: ${ptyNum}/${europe_programmes[ptyNum] || 'None'}`);
         if (data.dynamic_pty !== undefined || data.artificial_head !== undefined || data.compressed !== undefined) {
@@ -578,7 +584,8 @@ function updateRdsBox(data) {
             lines.push('AF: None');
         }
 
-        const colWidth = Math.floor((screen.cols - 4) / 2);
+        const boxWidth = typeof rdsBox.width === 'string' ? screen.cols : rdsBox.width;
+        const colWidth = Math.floor((boxWidth - 2) / 2);
         let output = '';
         for (let i = 0; i < lines.length; i += 2) {
             const left = padStringWithSpaces(lines[i], 'green', padLength).padEnd(colWidth);

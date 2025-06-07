@@ -100,7 +100,7 @@ function updateUI() {
   if (!currentData) return;
   if (currentData.freq !== undefined && currentData.freq !== null) {
     const freq = parseFloat(currentData.freq);
-    if (!isNaN(freq) && document.activeElement !== freqInputEl) {
+    if (!isNaN(freq) && document.activeElement !== freqInputEl && !dragging) {
       freqInputEl.value = freq.toFixed(3);
     }
   }

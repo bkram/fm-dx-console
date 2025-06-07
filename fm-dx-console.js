@@ -353,11 +353,13 @@ function updateTitleBar() {
 // has enough room for ECC and AF data
 // Place Tuner and RDS next to each other so everything fits in 80x25
 // widen tuner and RDS boxes so their content fits properly
-// keep total width within an 80-column terminal
-const tunerWidth = 22;
-// Keep RDS panel narrow enough for 80x25 screens
-// Truncate PTY text rather than widening the box
-const rdsWidth = 30;
+// These widths will be scaled proportionally when the terminal resizes
+let tunerWidth = 22;
+let rdsWidth = 30;
+const TUNER_RATIO = tunerWidth / 80;  // ratios based on original 80 column layout
+const RDS_RATIO = rdsWidth / 80;
+const MIN_TUNER = 16;
+const MIN_RDS = 24;
 const heightInRows = 8;
 const rdsHeight = heightInRows + 2;
 const rowHeight = Math.max(heightInRows, rdsHeight);
@@ -396,7 +398,7 @@ const stationBox = blessed.box({
     parent: uiBox,
     top: 1,
     left: tunerWidth + rdsWidth,
-    width: `100%-${tunerWidth + rdsWidth}`,
+    width: screen.cols - (tunerWidth + rdsWidth),
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
@@ -521,18 +523,41 @@ function updateProgressBarWidth() {
 }
 
 /**
+ * Adjust tuner, RDS, and station box widths based on screen size
+ */
+function applyLayout() {
+    const total = screen.cols;
+    tunerWidth = Math.max(MIN_TUNER, Math.floor(total * TUNER_RATIO));
+    rdsWidth = Math.max(MIN_RDS, Math.floor(total * RDS_RATIO));
+    const stationWidth = Math.max(20, total - tunerWidth - rdsWidth);
+
+    tunerBox.width = tunerWidth;
+    rdsBox.left = tunerWidth;
+    rdsBox.width = rdsWidth;
+    stationBox.left = tunerWidth + rdsWidth;
+    stationBox.width = stationWidth;
+}
+
+/**
  * On terminal resize, we re-check if UI is too small,
  * recalc the bottom bar, recalc the title bar, etc.
  */
 screen.on('resize', () => {
     updateProgressBarWidth();
+    applyLayout();
     checkSizeAndToggleUI();
 
     // Recompute the bottom bar text to keep "Press `h` for help" right-aligned
     bottomBox.setContent(genBottomText(argUrl));
 
     // Recompute the top bar clock spacing
-    updateTitleBar(); 
+    updateTitleBar();
+
+    if (jsonData) {
+        updateTunerBox(jsonData);
+        updateRdsBox(jsonData);
+        updateStationBox(jsonData.txInfo);
+    }
 
     screen.render();
 });
@@ -897,5 +922,7 @@ screen.on('keypress', async (ch, key) => {
 // Final Initialization
 // -----------------------------
 checkSizeAndToggleUI();
+applyLayout();
+updateProgressBarWidth();
 updateTitleBar();     // Initial top bar update
 updateServerBox();    // Fill server info if tuner info is already loaded

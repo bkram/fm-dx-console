@@ -344,15 +344,15 @@ function updateTitleBar() {
 // Layout widths for 80x25 terminals
 // Shrink the tuner and station boxes a little so RDS
 // has enough room for ECC and AF data
-const tunerWidth = 18;
-const rdsWidth = 30;
+const tunerWidth = '100%';
+const rdsWidth = '100%';
 const heightInRows = 8;
 
 const tunerBox = blessed.box({
     parent: uiBox,
     top: 1,
     left: 0,
-    width: tunerWidth,
+    width: '100%',
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
@@ -362,9 +362,9 @@ const tunerBox = blessed.box({
 
 const rdsBox = blessed.box({
     parent: uiBox,
-    top: 1,
-    left: tunerWidth,
-    width: rdsWidth,
+    top: tunerBox.top + tunerBox.height,
+    left: 0,
+    width: '100%',
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
@@ -380,9 +380,9 @@ const rdsBox = blessed.box({
 
 const stationBox = blessed.box({
     parent: uiBox,
-    top: 1,
-    left: tunerWidth + rdsWidth,
-    width: `100%-${tunerWidth + rdsWidth}`,
+    top: rdsBox.top + rdsBox.height,
+    left: 0,
+    width: '100%',
     height: heightInRows,
     tags: true,
     border: { type: 'line' },
@@ -393,7 +393,7 @@ const stationBox = blessed.box({
 // RDS Radiotext box
 const rtBox = blessed.box({
     parent: uiBox,
-    top: tunerBox.top + tunerBox.height, // 9
+    top: stationBox.top + stationBox.height,
     left: 0,
     width: '100%',
     height: 4,
@@ -480,8 +480,8 @@ const helpBox = blessed.box({
     parent: uiBox,
     top: 'center',
     left: 'center',
-    width: 60,
-    height: 18,
+    width: '80%',
+    height: '80%',
     border: { type: 'line' },
     style: boxStyle,
     label: boxLabel('Help'),
@@ -556,39 +556,34 @@ function updateRdsBox(data) {
         }
 
         const psDisplay = processStringWithErrors(data.ps.trimStart(), data.ps_errors);
-        let content =
-            `${padStringWithSpaces("PS:", 'green', padLength)}${psDisplay}\n` +
-            `${padStringWithSpaces("PI:", 'green', padLength)}${data.pi}`;
-
+        const lines = [];
+        lines.push(`PS: ${psDisplay}`);
+        lines.push(`PI: ${data.pi}`);
         if (data.ecc) {
-            content += `\n${padStringWithSpaces("ECC:", 'green', padLength)}${data.ecc}`;
+            lines.push(`ECC: ${data.ecc}`);
         }
         const country = data.country_name || data.country_iso;
         if (country) {
-            content += `\n${padStringWithSpaces("Country:", 'green', padLength)}${country}`;
+            lines.push(`Country: ${country}`);
         }
-
-        content +=
-            `\n{center}{bold}Flags{/bold}\n` +
-            `${data.tp ? "TP" : "{grey-fg}TP{/grey-fg}"} ` +
-            `${data.ta ? "TA" : "{grey-fg}TA{/grey-fg}"} ` +
-            `${msshow}\n` +
-            `PTY: ${data.pty !== undefined ? data.pty : 0}/` +
-            `${europe_programmes[data.pty !== undefined ? data.pty : 0] || 'None'}{/center}`;
-
+        lines.push(`Flags: ${data.tp ? 'TP' : 'TP?'} ${data.ta ? 'TA' : 'TA?'} ${msshow}`);
+        const ptyNum = data.pty !== undefined ? data.pty : 0;
+        lines.push(`PTY: ${ptyNum}/${europe_programmes[ptyNum] || 'None'}`);
         if (data.dynamic_pty !== undefined || data.artificial_head !== undefined || data.compressed !== undefined) {
-            content += `\nDI: ` +
-                `DP:${data.dynamic_pty ? 'On' : 'Off'} ` +
-                `AH:${data.artificial_head ? 'On' : 'Off'} ` +
-                `C:${data.compressed ? 'On' : 'Off'} ` +
-                `Stereo:${data.st ? 'Yes' : 'No'}`;
+            lines.push(`DI: DP:${data.dynamic_pty ? 'On' : 'Off'} AH:${data.artificial_head ? 'On' : 'Off'} C:${data.compressed ? 'On' : 'Off'} Stereo:${data.st ? 'Yes' : 'No'}`);
         }
-
         if (Array.isArray(data.af) && data.af.length) {
-            content += `\n${padStringWithSpaces("AF:", 'green', padLength)}${data.af.join(',')}`;
+            lines.push(`AF: ${data.af.join(',')}`);
         }
 
-        rdsBox.setContent(content);
+        const colWidth = Math.floor((screen.cols - 4) / 2);
+        let output = '';
+        for (let i = 0; i < lines.length; i += 2) {
+            const left = padStringWithSpaces(lines[i], 'green', padLength).padEnd(colWidth);
+            const right = lines[i + 1] ? lines[i + 1] : '';
+            output += left + right + '\n';
+        }
+        rdsBox.setContent(output.trim());
     } else {
         rdsBox.setContent('');
     }
@@ -735,7 +730,7 @@ ws.on('close', () => {
 // -----------------------------
 // Key Bindings
 // -----------------------------
-screen.on('keypress', (ch, key) => {
+screen.on('keypress', async (ch, key) => {
     if (key.full === 'left') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000) - 100}`);
@@ -833,6 +828,7 @@ screen.on('keypress', (ch, key) => {
         // Toggle server info popup
         serverBox.hidden = !serverBox.hidden;
         if (!serverBox.hidden) {
+            await tunerInfo();
             updateServerBox();
         } else {
             serverBox.setContent('');

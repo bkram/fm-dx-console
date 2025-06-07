@@ -550,6 +550,14 @@ function updateRdsBox(data) {
             `PTY: ${data.pty !== undefined ? data.pty : 0}/` +
             `${europe_programmes[data.pty !== undefined ? data.pty : 0] || 'None'}{/center}`;
 
+        if (data.dynamic_pty !== undefined || data.artificial_head !== undefined || data.compressed !== undefined) {
+            content += `\nDI: ` +
+                `DP:${data.dynamic_pty ? 'On' : 'Off'} ` +
+                `AH:${data.artificial_head ? 'On' : 'Off'} ` +
+                `C:${data.compressed ? 'On' : 'Off'} ` +
+                `Stereo:${data.st ? 'Yes' : 'No'}`;
+        }
+
         if (Array.isArray(data.af) && data.af.length) {
             content += `\n${padStringWithSpaces("AF:", 'green', padLength)}${data.af.join(',')}`;
         }

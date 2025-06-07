@@ -105,6 +105,18 @@ function updateUI() {
     rdsText += `\nCountry: ${country}`;
   }
   rdsText += `\n${flags}\nPTY: ${ptyNum}/${ptyName}`;
+  if (
+    currentData.dynamic_pty !== undefined ||
+    currentData.artificial_head !== undefined ||
+    currentData.compressed !== undefined
+  ) {
+    rdsText +=
+      `\nDI: ` +
+      `DP:${currentData.dynamic_pty ? 'On' : 'Off'} ` +
+      `AH:${currentData.artificial_head ? 'On' : 'Off'} ` +
+      `C:${currentData.compressed ? 'On' : 'Off'} ` +
+      `Stereo:${currentData.st ? 'Yes' : 'No'}`;
+  }
   if (Array.isArray(currentData.af) && currentData.af.length) {
     rdsText += `\nAF: ${currentData.af.join(',')}`;
   }

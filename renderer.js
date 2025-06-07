@@ -439,17 +439,17 @@ function handleDrag(e, final = false) {
   const endFreq = spectrumData.length ? spectrumData[spectrumData.length - 1].freq : 108;
   const frac = x / rect.width;
   const freq = startFreq + frac * (endFreq - startFreq);
+  const rounded = Math.round(freq * 10) / 10; // 0.1 MHz resolution
 
   const ctx = canvas.getContext('2d');
 
   if (final) {
-    const rounded = Math.round(freq * 10) / 10; // snap to 0.1 MHz when tuning
     freqInputEl.value = rounded.toFixed(1);
     drawSpectrum(ctx, canvas, spectrumData, rounded);
     sendCmd(`T${Math.round(rounded * 1000)}`);
   } else {
-    freqInputEl.value = freq.toFixed(2);
-    drawSpectrum(ctx, canvas, spectrumData, freq);
+    freqInputEl.value = rounded.toFixed(1);
+    drawSpectrum(ctx, canvas, spectrumData, rounded);
   }
 }
 

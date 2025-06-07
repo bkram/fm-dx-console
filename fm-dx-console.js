@@ -138,6 +138,8 @@ const screen = blessed.screen({
     dockBorders: true,
     style: { bg: 'blue' }
 });
+// Hide blinking terminal cursor which otherwise appears in the RDS box
+screen.program.hideCursor();
 
 // -----------------------------
 // Throttling Queue
@@ -339,9 +341,10 @@ function updateTitleBar() {
 
 // Tuner, RDS, Station sections
 // Layout widths for 80x25 terminals
-// Slightly reduce the tuner section to give RDS more space
-const tunerWidth = 20;
-const rdsWidth = 24;
+// Shrink the tuner and station boxes a little so RDS
+// has enough room for ECC and AF data
+const tunerWidth = 18;
+const rdsWidth = 30;
 const heightInRows = 8;
 
 const tunerBox = blessed.box({

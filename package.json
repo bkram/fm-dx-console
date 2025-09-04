@@ -16,6 +16,6 @@
     "minimist": "^1.2.8",
     "reblessed": "^0.2.1",
     "ws": "^8.16.0",
-    "electron": "^28.2.5"
+    "electron": "^35.7.5"
   }
 }

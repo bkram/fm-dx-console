@@ -24,7 +24,7 @@ app/android/
 └── settings.gradle.kts
 ```
 
-The Gradle wrapper jar is intentionally excluded from version control. The provided `gradlew` scripts download the matching wrapper jar automatically by reading the version from `gradle-wrapper.properties`. If the environment lacks both `curl` and `wget`, install one of them or download the jar manually from Maven Central and place it at `gradle/wrapper/gradle-wrapper.jar`. To override the download location, set the `GRADLE_WRAPPER_JAR_URL` environment variable before running the wrapper scripts.
+The Gradle wrapper jar is intentionally excluded from version control. The provided `gradlew` scripts download the matching wrapper jar automatically by reading the version from `gradle-wrapper.properties`. If the jar is unavailable at the default location, set `GRADLE_WRAPPER_JAR_URL` to an alternate download endpoint or point `GRADLE_WRAPPER_JAR_FILE` at a local jar generated via `gradle wrapper`. If the environment lacks both `curl` and `wget`, install one of them or download the jar manually from a Gradle mirror (for example `https://services.gradle.org/distributions/gradle-10.0-wrapper.jar`) and place it at `gradle/wrapper/gradle-wrapper.jar`.
 
 ## Building
 
@@ -36,7 +36,7 @@ The Gradle wrapper jar is intentionally excluded from version control. The provi
    ./gradlew --version
    ```
 
-   The first invocation downloads the wrapper jar (if missing) plus the Gradle 10 distribution referenced in `gradle-wrapper.properties`. To regenerate the wrapper metadata for a different Gradle build, run `./gradlew wrapper --gradle-version 10.0`. When Gradle 10 artifacts are not yet mirrored to Maven Central, point `GRADLE_WRAPPER_JAR_URL` at the desired artifact (for example a release candidate) before running the command.
+   The first invocation downloads the wrapper jar (if missing) plus the Gradle 10 distribution referenced in `gradle-wrapper.properties`. To regenerate the wrapper metadata for a different Gradle build, run `./gradlew wrapper --gradle-version 10.0`. When Gradle 10 artifacts are hosted outside of the default service, point `GRADLE_WRAPPER_JAR_URL` at the desired mirror or set `GRADLE_WRAPPER_JAR_FILE` to a locally generated jar before running the command.
 
 3. Build the debug APK:
 

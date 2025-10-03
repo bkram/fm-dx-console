@@ -122,17 +122,20 @@ ensure_wrapper_jar() {
     fi
 
     distribution_url=$(sed -n 's/^distributionUrl=//p' "$APP_HOME/gradle/wrapper/gradle-wrapper.properties" | tail -n 1)
+    distribution_url=$(printf '%s\n' "$distribution_url" | sed 's#\\:#:#g')
     if [ -z "$distribution_url" ]; then
         die "Could not determine Gradle distribution URL from gradle-wrapper.properties."
     fi
 
-    distribution_version=$(printf '%s' "$distribution_url" | sed -n 's/.*gradle-\([^-]*\)-.*/\1/p')
+    distribution_version=$(printf '%s' "$distribution_url" |
+        sed -n 's#.*/gradle-\(.*\)-\(bin\|all\)\.zip#\1#p')
     if [ -z "$distribution_version" ]; then
         die "Unable to extract Gradle version from distribution URL '$distribution_url'."
     fi
 
-    jar_url_default="https://repo.maven.apache.org/maven2/org/gradle/gradle-wrapper/${distribution_version}/gradle-wrapper-${distribution_version}.jar"
+    jar_url_default="https://services.gradle.org/distributions/gradle-${distribution_version}-wrapper.jar"
     jar_url=${GRADLE_WRAPPER_JAR_URL:-$jar_url_default}
+    jar_file=${GRADLE_WRAPPER_JAR_FILE:-}
 
     downloader=""
     if command -v curl >/dev/null 2>&1; then
@@ -145,6 +148,15 @@ ensure_wrapper_jar() {
         die "Neither curl nor wget is available to download the Gradle wrapper jar."
     fi
 
+    if [ -n "$jar_file" ]; then
+        if [ ! -f "$jar_file" ]; then
+            die "GRADLE_WRAPPER_JAR_FILE is set to '$jar_file' but the file does not exist."
+        fi
+        mkdir -p "$(dirname "$WRAPPER_JAR_PATH")" || die "Could not create Gradle wrapper directory."
+        cp "$jar_file" "$WRAPPER_JAR_PATH" || die "Could not copy Gradle wrapper jar from '$jar_file'."
+        return
+    fi
+
     temp_file=$(mktemp "${TMPDIR:-/tmp}/gradle-wrapper-jar.XXXXXX") || die "Could not create temporary file for Gradle wrapper jar download."
     cleanup() {
         rm -f "$temp_file"
@@ -152,7 +164,7 @@ ensure_wrapper_jar() {
     trap cleanup EXIT
 
     if ! $downloader "$temp_file" "$jar_url"; then
-        die "Failed to download Gradle wrapper jar from $jar_url"
+        die "Failed to obtain Gradle wrapper jar from $jar_url. Provide a reachable URL via GRADLE_WRAPPER_JAR_URL or point GRADLE_WRAPPER_JAR_FILE at a local jar generated with 'gradle wrapper'."
     fi
 
     mkdir -p "$(dirname "$WRAPPER_JAR_PATH")" || die "Could not create Gradle wrapper directory."

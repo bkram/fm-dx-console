@@ -33,10 +33,10 @@ The Gradle wrapper jar is intentionally excluded from version control. Use the c
 
    ```bash
    cd app/android
-   gradle wrapper --gradle-version 8.7
+   gradle wrapper --gradle-version 10.0
    ```
 
-   This requires a local Gradle installation (8.0 or newer). Once the wrapper has been created you can rely on the checked-in `gradlew` scripts for subsequent commands.
+   This requires a local Gradle installation (10.0 or newer). Once the wrapper has been created you can rely on the checked-in `gradlew` scripts for subsequent commands.
 
 3. Build the debug APK:
 

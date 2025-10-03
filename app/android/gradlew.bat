@@ -85,8 +85,14 @@ if not defined DISTRIBUTION_URL (
 powershell -NoLogo -NoProfile -Command ^
   "$ErrorActionPreference = 'Stop';" ^
   "$distUrl = '%DISTRIBUTION_URL%' -replace '\\:', ':';" ^
-  "if ($distUrl -notmatch 'gradle-(?<ver>.+?)-(bin|all)\\.zip') { throw 'Unable to extract Gradle version from distribution URL.' }" ^
-  "$version = $Matches['ver'];" ^
+  "$fileName = [System.IO.Path]::GetFileName($distUrl);" ^
+  "if ($fileName -and $fileName.StartsWith('gradle-') -and $fileName.EndsWith('-bin.zip')) {" ^
+  "  $version = $fileName.Substring(7, $fileName.Length - 7 - 8);" ^
+  "} elseif ($fileName -and $fileName.StartsWith('gradle-') -and $fileName.EndsWith('-all.zip')) {" ^
+  "  $version = $fileName.Substring(7, $fileName.Length - 7 - 8);" ^
+  "} else {" ^
+  "  throw 'Unable to extract Gradle version from distribution URL.'" ^
+  "}" ^
   "$jarUrl = if ($env:GRADLE_WRAPPER_JAR_URL) { $env:GRADLE_WRAPPER_JAR_URL } else { 'https://services.gradle.org/distributions/gradle-' + $version + '-wrapper.jar' };" ^
   "$jarFile = $env:GRADLE_WRAPPER_JAR_FILE;" ^
   "$distributionOverride = if ($env:GRADLE_WRAPPER_DISTRIBUTION_URL) { $env:GRADLE_WRAPPER_DISTRIBUTION_URL } else { $distUrl };" ^

@@ -127,11 +127,20 @@ ensure_wrapper_jar() {
         die "Could not determine Gradle distribution URL from gradle-wrapper.properties."
     fi
 
-    distribution_version=$(printf '%s' "$distribution_url" |
-        sed -n 's#.*/gradle-\(.*\)-\(bin\|all\)\.zip#\1#p')
-    if [ -z "$distribution_version" ]; then
-        die "Unable to extract Gradle version from distribution URL '$distribution_url'."
-    fi
+    distribution_filename=${distribution_url##*/}
+    case "$distribution_filename" in
+        gradle-*-bin.zip)
+            distribution_version=${distribution_filename#gradle-}
+            distribution_version=${distribution_version%-bin.zip}
+            ;;
+        gradle-*-all.zip)
+            distribution_version=${distribution_filename#gradle-}
+            distribution_version=${distribution_version%-all.zip}
+            ;;
+        *)
+            die "Unable to extract Gradle version from distribution URL '$distribution_url'."
+            ;;
+    esac
 
     jar_url_default="https://services.gradle.org/distributions/gradle-${distribution_version}-wrapper.jar"
     jar_url=${GRADLE_WRAPPER_JAR_URL:-$jar_url_default}

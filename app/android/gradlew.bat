@@ -97,10 +97,30 @@ powershell -NoLogo -NoProfile -Command ^
   "  Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue;" ^
   "  $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath);" ^
   "  try {" ^
-  "    $entry = $zip.Entries | Where-Object { $_.FullName -like 'gradle-*/lib/gradle-wrapper-*.jar' } | Select-Object -First 1;" ^
-  "    if (-not $entry) { throw 'Gradle wrapper jar not found in distribution archive.' }" ^
   "    $targetDir = Split-Path -Parent $targetPath;" ^
   "    if ($targetDir) { New-Item -ItemType Directory -Force -Path $targetDir | Out-Null }" ^
+  "    $pluginEntry = $zip.Entries | Where-Object { $_.FullName -like 'gradle-*/lib/plugins/gradle-wrapper-main-*.jar' } | Select-Object -First 1;" ^
+  "    if ($pluginEntry) {" ^
+  "      $memory = New-Object System.IO.MemoryStream;" ^
+  "      try {" ^
+  "        $pluginStream = $pluginEntry.Open();" ^
+  "        try { $pluginStream.CopyTo($memory) } finally { $pluginStream.Dispose() }" ^
+  "        $memory.Seek(0, [System.IO.SeekOrigin]::Begin) | Out-Null;" ^
+  "        $nestedZip = New-Object System.IO.Compression.ZipArchive($memory, [System.IO.Compression.ZipArchiveMode]::Read, $false);" ^
+  "        try {" ^
+  "          $nestedEntry = $nestedZip.GetEntry('gradle-wrapper.jar');" ^
+  "          if (-not $nestedEntry) { throw 'gradle-wrapper.jar missing inside gradle-wrapper-main archive.' }" ^
+  "          $fileStream = [System.IO.File]::Open($targetPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write);" ^
+  "          try {" ^
+  "            $nestedStream = $nestedEntry.Open();" ^
+  "            try { $nestedStream.CopyTo($fileStream) } finally { $nestedStream.Dispose() }" ^
+  "          } finally { $fileStream.Dispose() }" ^
+  "        } finally { $nestedZip.Dispose() }" ^
+  "      } finally { $memory.Dispose() }" ^
+  "      return" ^
+  "    }" ^
+  "    $entry = $zip.Entries | Where-Object { $_.FullName -like 'gradle-*/lib/gradle-wrapper-*.jar' -and $_.FullName -notlike '*-shared-*' } | Select-Object -First 1;" ^
+  "    if (-not $entry) { throw 'Gradle wrapper jar not found in distribution archive.' }" ^
   "    $entryStream = $entry.Open();" ^
   "    try {" ^
   "      $fileStream = [System.IO.File]::Open($targetPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write);" ^

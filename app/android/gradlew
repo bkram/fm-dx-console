@@ -177,28 +177,55 @@ ensure_wrapper_jar() {
 
         if command -v python3 >/dev/null 2>&1; then
             python_code=$(cat <<'PY'
+import io
 import sys
 import zipfile
 import fnmatch
 
 archive, destination = sys.argv[1], sys.argv[2]
 
+def extract_from_zip(zip_file, pattern, dest):
+    for name in zip_file.namelist():
+        if fnmatch.fnmatch(name, pattern):
+            with zip_file.open(name) as src, open(dest, 'wb') as dst:
+                dst.write(src.read())
+            return True
+    return False
+
 with zipfile.ZipFile(archive) as zf:
     for name in zf.namelist():
-        if fnmatch.fnmatch(name, 'gradle-*/lib/gradle-wrapper-*.jar'):
-            with zf.open(name) as src, open(destination, 'wb') as dst:
-                dst.write(src.read())
-            break
+        if fnmatch.fnmatch(name, 'gradle-*/lib/plugins/gradle-wrapper-main-*.jar'):
+            nested_bytes = zf.read(name)
+            with zipfile.ZipFile(io.BytesIO(nested_bytes)) as nested:
+                if extract_from_zip(nested, 'gradle-wrapper.jar', destination):
+                    break
+                raise SystemExit('gradle-wrapper.jar missing inside gradle-wrapper-main archive')
     else:
-        raise SystemExit('gradle-wrapper jar not found in distribution')
+        for name in zf.namelist():
+            if fnmatch.fnmatch(name, 'gradle-*/lib/gradle-wrapper-*.jar') and '-shared-' not in name:
+                with zf.open(name) as src, open(destination, 'wb') as dst:
+                    dst.write(src.read())
+                break
+        else:
+            raise SystemExit('gradle-wrapper jar not found in distribution')
 PY
 )
             if ! python3 -c "$python_code" "$dist_tmp" "$temp_file"; then
                 die "Failed to extract gradle-wrapper.jar from the distribution archive $distribution_override."
             fi
         elif command -v unzip >/dev/null 2>&1; then
-            if ! unzip -p "$dist_tmp" 'gradle-*/lib/gradle-wrapper-*.jar' > "$temp_file"; then
-                die "Failed to extract gradle-wrapper.jar from the distribution archive $distribution_override."
+            plugin_tmp=$(mktemp "${TMPDIR:-/tmp}/gradle-wrapper-plugin.XXXXXX") || die "Could not create temporary file for nested gradle-wrapper extraction."
+            if unzip -p "$dist_tmp" 'gradle-*/lib/plugins/gradle-wrapper-main-*.jar' > "$plugin_tmp" 2>/dev/null; then
+                if ! unzip -p "$plugin_tmp" 'gradle-wrapper.jar' > "$temp_file"; then
+                    rm -f "$plugin_tmp"
+                    die "Failed to extract gradle-wrapper.jar from the distribution archive $distribution_override."
+                fi
+                rm -f "$plugin_tmp"
+            else
+                rm -f "$plugin_tmp"
+                if ! unzip -p "$dist_tmp" 'gradle-*/lib/gradle-wrapper-*.jar' > "$temp_file" 2>/dev/null; then
+                    die "Failed to extract gradle-wrapper.jar from the distribution archive $distribution_override."
+                fi
             fi
         else
             die "python3 or unzip is required to extract gradle-wrapper.jar when direct download fails."

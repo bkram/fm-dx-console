@@ -30,7 +30,7 @@ The Gradle wrapper jar is intentionally excluded from version control. The provi
 - `GRADLE_WRAPPER_JAR_FILE`: copy a previously generated jar from a local path.
 - `GRADLE_WRAPPER_DISTRIBUTION_URL`: override the fallback distribution download (defaults to the `distributionUrl` property).
 
-If the environment lacks both `curl` and `wget`, install one of them or download `https://services.gradle.org/distributions/gradle-8.10.2-bin.zip`, extract `gradle-8.10.2/lib/plugins/gradle-wrapper-main-8.10.2.jar`, and copy the embedded `gradle-wrapper.jar` into `gradle/wrapper/`.
+If the environment lacks both `curl` and `wget`, install one of them or download `https://services.gradle.org/distributions/gradle-8.14.3-bin.zip`, extract `gradle-8.14.3/lib/plugins/gradle-wrapper-main-8.14.3.jar`, and copy the embedded `gradle-wrapper.jar` into `gradle/wrapper/`.
 
 ## Building
 
@@ -42,13 +42,13 @@ If the environment lacks both `curl` and `wget`, install one of them or download
    ./gradlew --version
    ```
 
-   The first invocation downloads the wrapper jar (if missing) plus the Gradle 8.10.2 distribution referenced in `gradle-wrapper.properties`. To regenerate the wrapper metadata for a different Gradle build without relying on Gradle's version lookup service, run:
+   The first invocation downloads the wrapper jar (if missing) plus the Gradle 8.14.3 distribution referenced in `gradle-wrapper.properties`. To regenerate the wrapper metadata for a different Gradle build without relying on Gradle's version lookup service, run:
 
    ```bash
-   ./gradlew wrapper --gradle-distribution-url "https://services.gradle.org/distributions/gradle-8.10.2-bin.zip"
+   ./gradlew wrapper --gradle-distribution-url "https://services.gradle.org/distributions/gradle-8.14.3-bin.zip"
    ```
 
-   When Gradle 8.10.2 artifacts are hosted outside of the default service, adjust `GRADLE_WRAPPER_JAR_URL`, `GRADLE_WRAPPER_JAR_FILE`, or `GRADLE_WRAPPER_DISTRIBUTION_URL` before running the command so the wrapper scripts can fetch the required files.
+   When Gradle 8.14.3 artifacts are hosted outside of the default service, adjust `GRADLE_WRAPPER_JAR_URL`, `GRADLE_WRAPPER_JAR_FILE`, or `GRADLE_WRAPPER_DISTRIBUTION_URL` before running the command so the wrapper scripts can fetch the required files.
 
 3. Build the debug APK:
 

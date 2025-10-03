@@ -18,10 +18,10 @@ This directory contains a native Android application that offers the same contro
 ```
 app/android/
 ├── app/                 # Android application module
-├── build.gradle.kts     # Root build configuration
+├── build.gradle         # Root build configuration
 ├── gradle/              # Gradle wrapper configuration (binary jar intentionally excluded)
 ├── gradlew, gradlew.bat # Wrapper scripts (auto-download the wrapper jar on first run)
-└── settings.gradle.kts
+└── settings.gradle
 ```
 
 The Gradle wrapper jar is intentionally excluded from version control. The provided `gradlew` scripts download the matching wrapper jar automatically by reading the version from `gradle-wrapper.properties`. When the jar is unavailable at the default location, the scripts fall back to downloading the configured Gradle distribution ZIP and extracting `gradle-wrapper.jar` from it. You can influence this behaviour with the following environment variables:
@@ -49,6 +49,8 @@ If the environment lacks both `curl` and `wget`, install one of them or download
    ```
 
    When Gradle 8.14.3 artifacts are hosted outside of the default service, adjust `GRADLE_WRAPPER_JAR_URL`, `GRADLE_WRAPPER_JAR_FILE`, or `GRADLE_WRAPPER_DISTRIBUTION_URL` before running the command so the wrapper scripts can fetch the required files.
+
+   The build now uses Groovy-based Gradle scripts, so invoking `./gradlew` succeeds even on newer macOS distributions that ship JDK 25 by default. No additional Kotlin DSL compatibility flags are required.
 
 3. Build the debug APK:
 

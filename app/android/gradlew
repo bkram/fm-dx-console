@@ -136,6 +136,7 @@ ensure_wrapper_jar() {
     jar_url_default="https://services.gradle.org/distributions/gradle-${distribution_version}-wrapper.jar"
     jar_url=${GRADLE_WRAPPER_JAR_URL:-$jar_url_default}
     jar_file=${GRADLE_WRAPPER_JAR_FILE:-}
+    distribution_override=${GRADLE_WRAPPER_DISTRIBUTION_URL:-$distribution_url}
 
     downloader=""
     if command -v curl >/dev/null 2>&1; then
@@ -158,13 +159,50 @@ ensure_wrapper_jar() {
     fi
 
     temp_file=$(mktemp "${TMPDIR:-/tmp}/gradle-wrapper-jar.XXXXXX") || die "Could not create temporary file for Gradle wrapper jar download."
+    dist_tmp=""
     cleanup() {
         rm -f "$temp_file"
+        if [ -n "$dist_tmp" ]; then
+            rm -f "$dist_tmp"
+        fi
     }
     trap cleanup EXIT
 
     if ! $downloader "$temp_file" "$jar_url"; then
-        die "Failed to obtain Gradle wrapper jar from $jar_url. Provide a reachable URL via GRADLE_WRAPPER_JAR_URL or point GRADLE_WRAPPER_JAR_FILE at a local jar generated with 'gradle wrapper'."
+        warn "Failed to obtain Gradle wrapper jar from $jar_url. Falling back to the distribution archive at $distribution_override."
+        dist_tmp=$(mktemp "${TMPDIR:-/tmp}/gradle-distribution.XXXXXX") || die "Could not create temporary file for Gradle distribution download."
+        if ! $downloader "$dist_tmp" "$distribution_override"; then
+            die "Failed to download Gradle distribution from $distribution_override. Provide reachable resources via GRADLE_WRAPPER_JAR_URL, GRADLE_WRAPPER_JAR_FILE, or GRADLE_WRAPPER_DISTRIBUTION_URL."
+        fi
+
+        if command -v python3 >/dev/null 2>&1; then
+            python_code=$(cat <<'PY'
+import sys
+import zipfile
+import fnmatch
+
+archive, destination = sys.argv[1], sys.argv[2]
+
+with zipfile.ZipFile(archive) as zf:
+    for name in zf.namelist():
+        if fnmatch.fnmatch(name, 'gradle-*/lib/gradle-wrapper-*.jar'):
+            with zf.open(name) as src, open(destination, 'wb') as dst:
+                dst.write(src.read())
+            break
+    else:
+        raise SystemExit('gradle-wrapper jar not found in distribution')
+PY
+)
+            if ! python3 -c "$python_code" "$dist_tmp" "$temp_file"; then
+                die "Failed to extract gradle-wrapper.jar from the distribution archive $distribution_override."
+            fi
+        elif command -v unzip >/dev/null 2>&1; then
+            if ! unzip -p "$dist_tmp" 'gradle-*/lib/gradle-wrapper-*.jar' > "$temp_file"; then
+                die "Failed to extract gradle-wrapper.jar from the distribution archive $distribution_override."
+            fi
+        else
+            die "python3 or unzip is required to extract gradle-wrapper.jar when direct download fails."
+        fi
     fi
 
     mkdir -p "$(dirname "$WRAPPER_JAR_PATH")" || die "Could not create Gradle wrapper directory."

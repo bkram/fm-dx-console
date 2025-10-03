@@ -24,7 +24,13 @@ app/android/
 └── settings.gradle.kts
 ```
 
-The Gradle wrapper jar is intentionally excluded from version control. The provided `gradlew` scripts download the matching wrapper jar automatically by reading the version from `gradle-wrapper.properties`. If the jar is unavailable at the default location, set `GRADLE_WRAPPER_JAR_URL` to an alternate download endpoint or point `GRADLE_WRAPPER_JAR_FILE` at a local jar generated via `gradle wrapper`. If the environment lacks both `curl` and `wget`, install one of them or download the jar manually from a Gradle mirror (for example `https://services.gradle.org/distributions/gradle-10.0-wrapper.jar`) and place it at `gradle/wrapper/gradle-wrapper.jar`.
+The Gradle wrapper jar is intentionally excluded from version control. The provided `gradlew` scripts download the matching wrapper jar automatically by reading the version from `gradle-wrapper.properties`. When the jar is unavailable at the default location, the scripts fall back to downloading the configured Gradle distribution ZIP and extracting `gradle-wrapper.jar` from it. You can influence this behaviour with the following environment variables:
+
+- `GRADLE_WRAPPER_JAR_URL`: override the direct jar download location.
+- `GRADLE_WRAPPER_JAR_FILE`: copy a previously generated jar from a local path.
+- `GRADLE_WRAPPER_DISTRIBUTION_URL`: override the fallback distribution download (defaults to the `distributionUrl` property).
+
+If the environment lacks both `curl` and `wget`, install one of them or download the jar manually from a Gradle mirror (for example `https://services.gradle.org/distributions/gradle-10.0-wrapper.jar`) and place it at `gradle/wrapper/gradle-wrapper.jar`.
 
 ## Building
 
@@ -36,7 +42,13 @@ The Gradle wrapper jar is intentionally excluded from version control. The provi
    ./gradlew --version
    ```
 
-   The first invocation downloads the wrapper jar (if missing) plus the Gradle 10 distribution referenced in `gradle-wrapper.properties`. To regenerate the wrapper metadata for a different Gradle build, run `./gradlew wrapper --gradle-version 10.0`. When Gradle 10 artifacts are hosted outside of the default service, point `GRADLE_WRAPPER_JAR_URL` at the desired mirror or set `GRADLE_WRAPPER_JAR_FILE` to a locally generated jar before running the command.
+   The first invocation downloads the wrapper jar (if missing) plus the Gradle 10 distribution referenced in `gradle-wrapper.properties`. To regenerate the wrapper metadata for a different Gradle build without relying on Gradle's version lookup service, run:
+
+   ```bash
+   ./gradlew wrapper --gradle-distribution-url "https://services.gradle.org/distributions/gradle-10.0-bin.zip"
+   ```
+
+   When Gradle 10 artifacts are hosted outside of the default service, adjust `GRADLE_WRAPPER_JAR_URL`, `GRADLE_WRAPPER_JAR_FILE`, or `GRADLE_WRAPPER_DISTRIBUTION_URL` before running the command so the wrapper scripts can fetch the required files.
 
 3. Build the debug APK:
 

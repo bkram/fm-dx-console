@@ -83,19 +83,53 @@ if not defined DISTRIBUTION_URL (
 )
 
 powershell -NoLogo -NoProfile -Command ^
+  "$ErrorActionPreference = 'Stop';" ^
   "$distUrl = '%DISTRIBUTION_URL%' -replace '\\:', ':';" ^
-  "if ($distUrl -notmatch 'gradle-(?<ver>.+?)-(bin|all)\\.zip') { Write-Error 'Unable to extract Gradle version from distribution URL.'; exit 1 }" ^
+  "if ($distUrl -notmatch 'gradle-(?<ver>.+?)-(bin|all)\\.zip') { throw 'Unable to extract Gradle version from distribution URL.' }" ^
   "$version = $Matches['ver'];" ^
   "$jarUrl = if ($env:GRADLE_WRAPPER_JAR_URL) { $env:GRADLE_WRAPPER_JAR_URL } else { 'https://services.gradle.org/distributions/gradle-' + $version + '-wrapper.jar' };" ^
   "$jarFile = $env:GRADLE_WRAPPER_JAR_FILE;" ^
+  "$distributionOverride = if ($env:GRADLE_WRAPPER_DISTRIBUTION_URL) { $env:GRADLE_WRAPPER_DISTRIBUTION_URL } else { $distUrl };" ^
   "$destination = '%WRAPPER_JAR%';" ^
   "New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null;" ^
+  "function Get-WebClient { $client = New-Object System.Net.WebClient; return $client }" ^
+  "function Extract-JarFromDistribution([string] $zipPath, [string] $targetPath) {" ^
+  "  Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue;" ^
+  "  $zip = [System.IO.Compression.ZipFile]::OpenRead($zipPath);" ^
+  "  try {" ^
+  "    $entry = $zip.Entries | Where-Object { $_.FullName -like 'gradle-*/lib/gradle-wrapper-*.jar' } | Select-Object -First 1;" ^
+  "    if (-not $entry) { throw 'Gradle wrapper jar not found in distribution archive.' }" ^
+  "    $targetDir = Split-Path -Parent $targetPath;" ^
+  "    if ($targetDir) { New-Item -ItemType Directory -Force -Path $targetDir | Out-Null }" ^
+  "    $entryStream = $entry.Open();" ^
+  "    try {" ^
+  "      $fileStream = [System.IO.File]::Open($targetPath, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write);" ^
+  "      try { $entryStream.CopyTo($fileStream) } finally { $fileStream.Dispose() }" ^
+  "    } finally { $entryStream.Dispose() }" ^
+  "  } finally { $zip.Dispose() }" ^
+  "}" ^
   "if ($jarFile) {" ^
   "  if (-not (Test-Path $jarFile)) { throw (\"GRADLE_WRAPPER_JAR_FILE is set to '{0}' but the file does not exist.\" -f $jarFile) }" ^
   "  Copy-Item -Force $jarFile $destination" ^
   "} else {" ^
-  "  $client = [System.Net.WebClient]::new();" ^
-  "  try { $client.DownloadFile($jarUrl, $destination) } catch { throw (\"Failed to obtain Gradle wrapper jar from {0}. Provide GRADLE_WRAPPER_JAR_URL or GRADLE_WRAPPER_JAR_FILE.\" -f $jarUrl) } finally { $client.Dispose() }" ^
+  "  $client = Get-WebClient;" ^
+  "  try {" ^
+  "    try {" ^
+  "      $client.DownloadFile($jarUrl, $destination)" ^
+  "    } catch {" ^
+  "      $tempZip = [System.IO.Path]::GetTempFileName();" ^
+  "      try {" ^
+  "        $client.DownloadFile($distributionOverride, $tempZip);" ^
+  "        Extract-JarFromDistribution $tempZip $destination" ^
+  "      } catch {" ^
+  "        throw (\"Failed to obtain Gradle wrapper jar from {0} or distribution {1}. {2}\" -f $jarUrl, $distributionOverride, $_.Exception.Message)" ^
+  "      } finally {" ^
+  "        Remove-Item -Force $tempZip" ^
+  "      }" ^
+  "    }" ^
+  "  } finally {" ^
+  "    $client.Dispose()" ^
+  "  }" ^
   "}"
 
 if %ERRORLEVEL% neq 0 goto fail

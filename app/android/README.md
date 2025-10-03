@@ -20,23 +20,23 @@ app/android/
 ├── app/                 # Android application module
 ├── build.gradle.kts     # Root build configuration
 ├── gradle/              # Gradle wrapper configuration (binary jar intentionally excluded)
-├── gradlew, gradlew.bat # Wrapper scripts (requires generating the jar locally)
+├── gradlew, gradlew.bat # Wrapper scripts (auto-download the wrapper jar on first run)
 └── settings.gradle.kts
 ```
 
-The Gradle wrapper jar is intentionally excluded from version control. Use the commands below (or let Android Studio regenerate it) to create the binary before building from the command line.
+The Gradle wrapper jar is intentionally excluded from version control. The provided `gradlew` scripts download the matching wrapper jar automatically by reading the version from `gradle-wrapper.properties`. If the environment lacks both `curl` and `wget`, install one of them or download the jar manually from Maven Central and place it at `gradle/wrapper/gradle-wrapper.jar`. To override the download location, set the `GRADLE_WRAPPER_JAR_URL` environment variable before running the wrapper scripts.
 
 ## Building
 
 1. Install the Android SDK (API level 34 or later) and ensure `ANDROID_HOME`/`ANDROID_SDK_ROOT` is set.
-2. Generate the Gradle wrapper jar (skip if Android Studio already synced the project):
+2. Bootstrap the Gradle wrapper (skip if Android Studio already synced the project):
 
    ```bash
    cd app/android
-   gradle wrapper --gradle-version 10.0
+   ./gradlew --version
    ```
 
-   This requires a local Gradle installation (10.0 or newer). Once the wrapper has been created you can rely on the checked-in `gradlew` scripts for subsequent commands.
+   The first invocation downloads the wrapper jar (if missing) plus the Gradle 10 distribution referenced in `gradle-wrapper.properties`. To regenerate the wrapper metadata for a different Gradle build, run `./gradlew wrapper --gradle-version 10.0`. When Gradle 10 artifacts are not yet mirrored to Maven Central, point `GRADLE_WRAPPER_JAR_URL` at the desired artifact (for example a release candidate) before running the command.
 
 3. Build the debug APK:
 

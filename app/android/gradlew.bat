@@ -68,7 +68,34 @@ goto fail
 :execute
 @rem Setup the command line
 
-set CLASSPATH=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
+set WRAPPER_JAR=%APP_HOME%\gradle\wrapper\gradle-wrapper.jar
+if exist "%WRAPPER_JAR%" goto wrapperJarReady
+
+for /f "usebackq tokens=1,* delims==" %%A in ("%APP_HOME%\gradle\wrapper\gradle-wrapper.properties") do (
+    if "%%A"=="distributionUrl" set DISTRIBUTION_URL=%%B
+)
+
+if not defined DISTRIBUTION_URL (
+    echo.
+    echo ERROR: Could not determine Gradle distribution URL from gradle-wrapper.properties.
+    echo.
+    goto fail
+)
+
+powershell -NoLogo -NoProfile -Command ^
+  "$distUrl = '%DISTRIBUTION_URL%' -replace '\\:', ':';" ^
+  "if ($distUrl -notmatch 'gradle-(?<ver>[^-]+)-') { Write-Error 'Unable to extract Gradle version from distribution URL.'; exit 1 }" ^
+  "$version = $Matches['ver'];" ^
+  "$jarUrl = if ($env:GRADLE_WRAPPER_JAR_URL) { $env:GRADLE_WRAPPER_JAR_URL } else { 'https://repo.maven.apache.org/maven2/org/gradle/gradle-wrapper/' + $version + '/gradle-wrapper-' + $version + '.jar' };" ^
+  "$destination = '%WRAPPER_JAR%';" ^
+  "New-Item -ItemType Directory -Force -Path (Split-Path -Parent $destination) | Out-Null;" ^
+  "$client = [System.Net.WebClient]::new();" ^
+  "try { $client.DownloadFile($jarUrl, $destination) } finally { $client.Dispose() }"
+
+if %ERRORLEVEL% neq 0 goto fail
+
+:wrapperJarReady
+set CLASSPATH=%WRAPPER_JAR%
 
 
 @rem Execute Gradle

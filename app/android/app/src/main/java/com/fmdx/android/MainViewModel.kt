@@ -218,7 +218,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(errorMessage = ex.message) }
             null
         }
-        _uiState.update { it.copy(spectrum = ensureSpectrum(points ?: it.spectrum)) }
+        if (points != null) {
+            _uiState.update { it.copy(spectrum = ensureSpectrum(points)) }
+        }
     }
 
     private fun startControlConnection(url: String) {

@@ -17,13 +17,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,6 +46,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -54,17 +57,16 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fmdx.android.model.SignalUnit
 import com.fmdx.android.model.SpectrumPoint
 import com.fmdx.android.model.TunerState
 import com.fmdx.android.ui.theme.FmDxTheme
-import com.fmdx.android.R
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -101,6 +103,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FmDxApp(
     state: UiState,
@@ -164,7 +167,7 @@ private fun FmDxApp(
             ServerSection(state, onUpdateUrl, onConnect, onDisconnect)
             FrequencySection(state, onTuneStep, onTuneDirect, onRefresh)
             StatusSection(state, formatSignal, onSignalUnitChange)
-            ControlButtons(onToggleEq, onToggleIms, onCycleAntenna, antennaLabel)
+            ControlButtons(state, onToggleEq, onToggleIms, onCycleAntenna, antennaLabel)
             RdsSection(state, currentPty)
             StationSection(state)
             SpectrumSection(state, onScan, onRefreshSpectrum)
@@ -313,6 +316,7 @@ private fun SignalUnitSelector(
 
 @Composable
 private fun ControlButtons(
+    state: UiState,
     onToggleEq: () -> Unit,
     onToggleIms: () -> Unit,
     onCycleAntenna: () -> Unit,
@@ -324,7 +328,9 @@ private fun ControlButtons(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(onClick = onToggleIms) { Text(text = stringResource(id = R.string.toggle_ims)) }
                 Button(onClick = onToggleEq) { Text(text = stringResource(id = R.string.toggle_eq)) }
-                Button(onClick = onCycleAntenna) { Text(text = stringResource(id = R.string.antenna_label, antennaLabel())) }
+                Button(onClick = onCycleAntenna, enabled = state.tunerInfo?.canSwitchAntenna() == true) {
+                    Text(text = stringResource(id = R.string.antenna_label, antennaLabel()))
+                }
             }
         }
     }
@@ -364,17 +370,15 @@ private fun RdsSection(
 
 @Composable
 private fun AnnotatedErrorText(text: String, errors: List<Int>) {
-    val annotated = remember(text, errors) {
-        buildAnnotatedString {
-            text.forEachIndexed { index, c ->
-                val hasError = errors.getOrNull(index)?.let { it > 0 } ?: false
-                if (hasError) {
-                    withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))) {
-                        append(c)
-                    }
-                } else {
+    val annotated = buildAnnotatedString {
+        text.forEachIndexed { index, c ->
+            val hasError = errors.getOrNull(index)?.let { it > 0 } ?: false
+            if (hasError) {
+                withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))) {
                     append(c)
                 }
+            } else {
+                append(c)
             }
         }
     }
@@ -409,7 +413,7 @@ private fun SpectrumSection(
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(text = stringResource(id = R.string.spectrum), style = MaterialTheme.typography.titleLarge)
                 if (state.isScanning) {
-                    LinearProgressIndicator(modifier = Modifier.size(24.dp))
+                    LinearProgressIndicator()
                 }
             }
             SpectrumGraph(points = state.spectrum, highlightFreq = state.tunerState?.freqMHz ?: 0.0)
@@ -435,15 +439,21 @@ private fun SpectrumGraph(points: List<SpectrumPoint>, highlightFreq: Double) {
     val maxFreq = points.last().frequencyMHz
     val freqSpan = (maxFreq - minFreq).coerceAtLeast(0.01)
     val maxSig = points.maxOfOrNull { it.signalDbf }?.coerceAtLeast(130.0) ?: 130.0
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val secondaryColor = MaterialTheme.colorScheme.secondary
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val strokeWidthPx = with(LocalDensity.current) { 2.dp.toPx() }
+
     Card {
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(220.dp)
-        ) {
+        ) { 
             val width = size.width
             val height = size.height
-            drawRect(color = MaterialTheme.colorScheme.surface)
+
+            drawRect(color = surfaceColor)
             val path = Path()
             points.forEachIndexed { index, point ->
                 val x = ((point.frequencyMHz - minFreq) / freqSpan).toFloat().coerceIn(0f, 1f) * width
@@ -455,14 +465,14 @@ private fun SpectrumGraph(points: List<SpectrumPoint>, highlightFreq: Double) {
                     path.lineTo(x, y)
                 }
             }
-            drawPath(path, color = MaterialTheme.colorScheme.secondary, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx()))
+            drawPath(path, color = secondaryColor, style = Stroke(width = strokeWidthPx))
             if (highlightFreq in minFreq..maxFreq) {
                 val x = ((highlightFreq - minFreq) / freqSpan).toFloat().coerceIn(0f, 1f) * width
                 drawLine(
-                    color = MaterialTheme.colorScheme.primary,
+                    color = primaryColor,
                     start = androidx.compose.ui.geometry.Offset(x, 0f),
                     end = androidx.compose.ui.geometry.Offset(x, height),
-                    strokeWidth = 2.dp.toPx()
+                    strokeWidth = strokeWidthPx
                 )
             }
         }

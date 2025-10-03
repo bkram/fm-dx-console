@@ -1,6 +1,7 @@
 package com.fmdx.android.audio
 
 import android.content.Context
+import android.net.Uri
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
@@ -19,8 +20,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import okhttp3.internal.closeQuietly
-import okio.ByteString
+import okio.ByteString.Companion.toByteString
 import java.io.IOException
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
@@ -98,8 +98,10 @@ private class WebSocketStreamDataSource(
     private var webSocket: WebSocket? = null
     private var closed = false
     private var failure: Throwable? = null
+    private var dataSpec: DataSpec? = null
 
     override fun open(dataSpec: DataSpec): Long {
+        this.dataSpec = dataSpec
         transferInitializing(dataSpec)
         transferStarted(dataSpec)
         val request = Request.Builder()
@@ -108,10 +110,10 @@ private class WebSocketStreamDataSource(
             .build()
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                webSocket.send("{""type"":""fallback"",""data"":""mp3""}")
+                webSocket.send("{\"type\":\"fallback\",\"data\":\"mp3\"}".encodeToByteArray().toByteString())
             }
 
-            override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+            override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
                 queue.offer(bytes.toByteArray())
             }
 
@@ -125,7 +127,11 @@ private class WebSocketStreamDataSource(
                 queue.offer(endMarker)
             }
         })
-        return C.LENGTH_UNSET
+        return C.LENGTH_UNSET.toLong()
+    }
+
+    override fun getUri(): Uri? {
+        return dataSpec?.uri
     }
 
     override fun read(buffer: ByteArray, offset: Int, readLength: Int): Int {
@@ -151,7 +157,7 @@ private class WebSocketStreamDataSource(
     override fun close() {
         if (closed) return
         closed = true
-        webSocket?.closeQuietly(1000, null)
+        webSocket?.close(1000, null)
         queue.offer(endMarker)
         currentBuffer = null
         bufferPosition = 0

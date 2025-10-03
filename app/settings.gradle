@@ -15,3 +15,4 @@ dependencyResolutionManagement {repositoriesMode.set(org.gradle.api.initializati
 
 rootProject.name = "FmDxAndroid"
 include(":app")
+project(':app').projectDir = new File('android/app')

@@ -13,7 +13,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import okhttp3.internal.closeQuietly
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.json.JSONObject
@@ -93,14 +92,9 @@ class FmDxRepository(
 
     suspend fun fetchTunerInfo(url: String, userAgent: String): TunerInfo {
         val httpUrl = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid URL")
-        val staticUrl = httpUrl.newBuilder().apply {
-            if (encodedPath.endsWith('/')) {
-                addPathSegment("static_data")
-            } else {
-                addPathSegment("")
-                addPathSegment("static_data")
-            }
-        }.build()
+        val staticUrl = httpUrl.newBuilder()
+            .addPathSegments("static_data")
+            .build()
 
         var tunerName = ""
         var tunerDesc = ""
@@ -183,12 +177,9 @@ class FmDxRepository(
 
     suspend fun ping(url: String, userAgent: String): Long {
         val httpUrl = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid URL")
-        val pingUrl = httpUrl.newBuilder().apply {
-            if (!encodedPath.endsWith('/')) {
-                addPathSegment("")
-            }
-            addPathSegment("ping")
-        }.build()
+        val pingUrl = httpUrl.newBuilder()
+            .addPathSegments("ping")
+            .build()
         val request = Request.Builder().url(pingUrl).header("User-Agent", userAgent).build()
         val start = System.nanoTime()
         client.newCall(request).execute().use { response ->
@@ -202,12 +193,9 @@ class FmDxRepository(
 
     suspend fun fetchSpectrumData(url: String, userAgent: String): List<SpectrumPoint>? {
         val httpUrl = url.toHttpUrlOrNull() ?: return null
-        val spectrumUrl = httpUrl.newBuilder().apply {
-            if (!encodedPath.endsWith('/')) {
-                addPathSegment("")
-            }
-            addPathSegment("spectrum-graph-plugin")
-        }.build()
+        val spectrumUrl = httpUrl.newBuilder()
+            .addPathSegments("spectrum-graph-plugin")
+            .build()
         val request = Request.Builder()
             .url(spectrumUrl)
             .header("User-Agent", userAgent)
@@ -252,7 +240,7 @@ class ControlConnection internal constructor(
 
     fun close() {
         channel.close()
-        webSocket.closeQuietly(1000, null)
+        webSocket.close(1000, null)
     }
 }
 
@@ -265,7 +253,7 @@ class PluginConnection internal constructor(
     }
 
     fun close() {
-        webSocket.closeQuietly(1000, null)
+        webSocket.close(1000, null)
     }
 }
 

@@ -4,9 +4,11 @@ import com.fmdx.android.model.SpectrumPoint
 import com.fmdx.android.model.TunerInfo
 import com.fmdx.android.model.TunerState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -90,7 +92,7 @@ class FmDxRepository(
         return PluginConnection(webSocket)
     }
 
-    suspend fun fetchTunerInfo(url: String, userAgent: String): TunerInfo {
+    suspend fun fetchTunerInfo(url: String, userAgent: String): TunerInfo = withContext(Dispatchers.IO) {
         val httpUrl = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid URL")
         val staticUrl = httpUrl.newBuilder()
             .addPathSegments("static_data")
@@ -167,7 +169,7 @@ class FmDxRepository(
             antennaNames += "Default"
         }
         val active = activeAnt ?: 0
-        return TunerInfo(
+        TunerInfo(
             tunerName = tunerName,
             tunerDescription = tunerDesc,
             antennaNames = antennaNames,
@@ -175,7 +177,7 @@ class FmDxRepository(
         )
     }
 
-    suspend fun ping(url: String, userAgent: String): Long {
+    suspend fun ping(url: String, userAgent: String): Long = withContext(Dispatchers.IO) {
         val httpUrl = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid URL")
         val pingUrl = httpUrl.newBuilder()
             .addPathSegments("ping")
@@ -188,11 +190,11 @@ class FmDxRepository(
             }
         }
         val end = System.nanoTime()
-        return TimeUnit.NANOSECONDS.toMillis(end - start)
+        TimeUnit.NANOSECONDS.toMillis(end - start)
     }
 
-    suspend fun fetchSpectrumData(url: String, userAgent: String): List<SpectrumPoint>? {
-        val httpUrl = url.toHttpUrlOrNull() ?: return null
+    suspend fun fetchSpectrumData(url: String, userAgent: String): List<SpectrumPoint>? = withContext(Dispatchers.IO) {
+        val httpUrl = url.toHttpUrlOrNull() ?: return@withContext null
         val spectrumUrl = httpUrl.newBuilder()
             .addPathSegments("spectrum-graph-plugin")
             .build()
@@ -202,8 +204,8 @@ class FmDxRepository(
             .header("X-Plugin-Name", "SpectrumGraphPlugin")
             .build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return null
-            val body = response.body?.string() ?: return null
+            if (!response.isSuccessful) return@use null
+            val body = response.body?.string() ?: return@use null
             val json = JSONObject(body)
             val dataset = when {
                 json.optString("sd").isNotBlank() -> json.optString("sd")
@@ -212,8 +214,8 @@ class FmDxRepository(
                     json.optString("sd$ad")
                 }
                 else -> null
-            } ?: return null
-            return dataset.split(',')
+            } ?: return@use null
+            dataset.split(',')
                 .mapNotNull { pair ->
                     val parts = pair.split('=')
                     if (parts.size != 2) return@mapNotNull null

@@ -20,13 +20,15 @@
     <string name="signal_unit">Signal unit</string>
     <string name="toggle_ims">Toggle iMS</string>
     <string name="toggle_eq">Toggle EQ</string>
-    <string name="antenna_label">Antenna: %1$s</string>
     <string name="audio_playing">Audio playing</string>
     <string name="connected">Connected</string>
     <string name="disconnected">Disconnected</string>
+    <string name="connecting">Connecting</string>
     <string name="signal_label">Signal: %1$s</string>
     <string name="ping_label">Ping: %1$s</string>
     <string name="users_label">Users: %1$s</string>
     <string name="audio_label">Audio: %1$s</string>
     <string name="spectrum_unavailable">Spectrum data unavailable</string>
+    <string name="antenna_switch">Cycle antenna</string>
+    <string name="antenna_current">Current: %1$s</string>
 </resources>

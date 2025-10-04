@@ -63,7 +63,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun connect() {
-        val rawUrl = _uiState.value.serverUrl
+        val current = _uiState.value
+        if (current.isConnecting) return
+        val rawUrl = current.serverUrl
         if (rawUrl.isBlank()) {
             _uiState.update { it.copy(errorMessage = "Server URL is required") }
             return
@@ -75,10 +77,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
         persistServerUrl(sanitized)
-        _uiState.update { it.copy(serverUrl = sanitized) }
+        val connectingMessage = "Connecting to $sanitized…"
+        _uiState.update {
+            it.copy(
+                serverUrl = sanitized,
+                isConnecting = true,
+                errorMessage = null,
+                statusMessage = connectingMessage
+            )
+        }
         viewModelScope.launch {
             try {
                 val info = repository.fetchTunerInfo(sanitized, BuildConfig.USER_AGENT)
+                val connectionName = info.tunerName.takeIf { it.isNotBlank() } ?: sanitized
                 _uiState.update {
                     it.copy(
                         serverUrl = sanitized,
@@ -86,7 +97,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         antennas = info.antennaNames,
                         tunerState = it.tunerState,
                         errorMessage = null,
-                        isConnected = true
+                        isConnected = true,
+                        isConnecting = false,
+                        statusMessage = "Connected to $connectionName"
                     )
                 }
                 startControlConnection(sanitized)
@@ -94,7 +107,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 startPing(sanitized)
                 refreshSpectrum(sanitized)
             } catch (ex: Exception) {
-                _uiState.update { it.copy(errorMessage = ex.message, isConnected = false) }
+                _uiState.update {
+                    it.copy(
+                        errorMessage = ex.message,
+                        isConnected = false,
+                        isConnecting = false,
+                        statusMessage = ex.message ?: "Connection failed"
+                    )
+                }
             }
         }
     }
@@ -112,6 +132,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update {
             it.copy(
                 isConnected = false,
+                isConnecting = false,
                 audioPlaying = false,
                 statusMessage = "Disconnected"
             )
@@ -119,24 +140,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleAudio() {
-        val url = _uiState.value.serverUrl
-        if (url.isBlank()) return
+        val state = _uiState.value
+        if (state.serverUrl.isBlank()) return
+        if (!state.isConnected && !state.isConnecting) {
+            connect()
+        }
         viewModelScope.launch {
+            val url = _uiState.value.serverUrl
+            if (url.isBlank()) return@launch
             if (audioPlayer.isPlaying()) {
                 audioPlayer.stop()
-                _uiState.update { it.copy(audioPlaying = false) }
+                _uiState.update { it.copy(audioPlaying = false, statusMessage = "Audio stopped") }
             } else {
                 try {
                     audioPlayer.play(url, BuildConfig.USER_AGENT) { error ->
                         viewModelScope.launch {
                             _uiState.update {
-                                it.copy(errorMessage = error.message, audioPlaying = false)
+                                it.copy(
+                                    errorMessage = error.message,
+                                    audioPlaying = false,
+                                    statusMessage = error.message
+                                )
                             }
                         }
                     }
                     _uiState.update { it.copy(audioPlaying = true, statusMessage = "Audio playing") }
                 } catch (ex: Exception) {
-                    _uiState.update { it.copy(errorMessage = ex.message, audioPlaying = false) }
+                    _uiState.update {
+                        it.copy(
+                            errorMessage = ex.message,
+                            audioPlaying = false,
+                            statusMessage = ex.message
+                        )
+                    }
                 }
             }
         }
@@ -249,16 +285,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.update {
                     it.copy(
                         tunerState = state,
-                        statusMessage = "Updated ${System.currentTimeMillis()}",
                         antennas = if (it.antennas.isEmpty() && it.tunerInfo != null) it.tunerInfo.antennaNames else it.antennas
                     )
                 }
             },
             onClosed = {
-                _uiState.update { it.copy(isConnected = false) }
+                _uiState.update {
+                    it.copy(
+                        isConnected = false,
+                        isConnecting = false,
+                        statusMessage = "Connection closed"
+                    )
+                }
             },
             onError = { error ->
-                _uiState.update { it.copy(errorMessage = error.message) }
+                _uiState.update {
+                    it.copy(
+                        errorMessage = error.message,
+                        statusMessage = error.message
+                    )
+                }
             }
         )
         controlConnection = connection
@@ -400,6 +446,7 @@ data class UiState(
     val pingMs: Long? = null,
     val audioPlaying: Boolean = false,
     val isConnected: Boolean = false,
+    val isConnecting: Boolean = false,
     val antennas: List<String> = emptyList(),
     val spectrum: List<SpectrumPoint> = emptyList(),
     val isScanning: Boolean = false,

@@ -2,8 +2,10 @@ package com.fmdx.android
 
 import android.app.Application
 import android.content.Context
+import androidx.annotation.OptIn
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.util.UnstableApi
 import com.fmdx.android.audio.WebSocketAudioPlayer
 import com.fmdx.android.data.ControlConnection
 import com.fmdx.android.data.FmDxRepository
@@ -25,6 +27,7 @@ import okhttp3.OkHttpClient
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
+@OptIn(UnstableApi::class)
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val okHttpClient = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
@@ -402,7 +405,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val rebuilt = httpUrl.newBuilder().build()
         val asString = rebuilt.toString()
-        return if (rebuilt.encodedPath() == "/") {
+        return if (rebuilt.encodedPath == "/") {
             asString.trimEnd('/')
         } else {
             asString

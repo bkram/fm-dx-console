@@ -7,6 +7,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.BaseDataSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
@@ -26,6 +27,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
+@UnstableApi
 class WebSocketAudioPlayer(
     private val context: Context,
     private val client: OkHttpClient
@@ -85,6 +87,7 @@ class WebSocketAudioPlayer(
     }
 }
 
+@UnstableApi
 private class WebSocketStreamDataSource(
     private val client: OkHttpClient,
     private val url: String,

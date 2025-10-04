@@ -267,7 +267,7 @@ fun buildWebSocketUrl(url: String, vararg pathSegments: String): String {
     }
     val built = builder.build()
     val httpString = built.toString()
-    val normalized = if (pathSegments.isEmpty() && built.encodedPath() == "/") {
+    val normalized = if (pathSegments.isEmpty() && built.encodedPath == "/") {
         httpString.removeSuffix("/")
     } else {
         httpString

@@ -1,6 +1,5 @@
 package com.fmdx.android.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
@@ -17,7 +16,6 @@ private val DarkColorScheme = darkColorScheme(
 
 @Composable
 fun FmDxTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
     MaterialTheme(

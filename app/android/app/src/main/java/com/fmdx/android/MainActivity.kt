@@ -395,7 +395,10 @@ private fun StatusSection(
             if (state.isConnecting) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             } else {
-                LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
+                LinearProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
             Text(text = stringResource(id = R.string.signal_label, formatSignal(state.tunerState, state.signalUnit)))
             Text(text = stringResource(id = R.string.ping_label, state.pingMs?.let { "$it ms" } ?: "--"))

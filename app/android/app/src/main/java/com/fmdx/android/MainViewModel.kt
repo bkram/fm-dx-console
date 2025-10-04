@@ -222,12 +222,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(tunerState = it.tunerState?.copy(antennaIndex = next)) }
     }
 
-    fun refresh() {
-        val current = _uiState.value.tunerState?.freqKHz ?: return
-        sendCommand("T$current")
-        resetRds()
-    }
-
     fun setSignalUnit(unit: SignalUnit) {
         _uiState.update { it.copy(signalUnit = unit) }
     }

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -43,6 +44,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -75,6 +77,7 @@ import com.fmdx.android.model.SpectrumPoint
 import com.fmdx.android.model.TunerState
 import com.fmdx.android.ui.theme.FmDxTheme
 import java.util.Locale
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
@@ -103,7 +106,6 @@ class MainActivity : ComponentActivity() {
                     onToggleEq = viewModel::toggleEq,
                     onToggleIms = viewModel::toggleIms,
                     onCycleAntenna = viewModel::cycleAntenna,
-                    onRefresh = viewModel::refresh,
                     onScan = viewModel::requestSpectrumScan,
                     onRefreshSpectrum = viewModel::refreshSpectrum,
                     onSignalUnitChange = viewModel::setSignalUnit,
@@ -129,7 +131,6 @@ private fun FmDxApp(
     onToggleEq: () -> Unit,
     onToggleIms: () -> Unit,
     onCycleAntenna: () -> Unit,
-    onRefresh: () -> Unit,
     onScan: () -> Unit,
     onRefreshSpectrum: () -> Unit,
     onSignalUnitChange: (SignalUnit) -> Unit,
@@ -140,7 +141,7 @@ private fun FmDxApp(
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf(
         SectionTab(R.string.server) { ServerSection(state, onUpdateUrl, onConnect, onDisconnect) },
-        SectionTab(R.string.frequency) { FrequencySection(state, onTuneDirect, onRefresh) },
+        SectionTab(R.string.frequency) { FrequencySection(state, onTuneDirect) },
         SectionTab(R.string.status) { StatusSection(state, formatSignal, onSignalUnitChange) },
         SectionTab(R.string.controls) { ControlButtons(state, onToggleEq, onToggleIms, onCycleAntenna, antennaLabel) },
         SectionTab(R.string.rds) { RdsSection(state, currentPty) },
@@ -314,35 +315,61 @@ private fun ServerSection(
 @Composable
 private fun FrequencySection(
     state: UiState,
-    onTuneDirect: (Double) -> Unit,
-    onRefresh: () -> Unit
+    onTuneDirect: (Double) -> Unit
 ) {
-    val minFreqTenth = 875
-    val maxFreqTenth = 1080
-    val displayValues = remember {
-        (minFreqTenth..maxFreqTenth).map { freqValue ->
-            String.format(Locale.getDefault(), "%.1f", freqValue / 10.0)
-        }.toTypedArray()
+    val stateMinKHz = state.tunerState?.minFreqMHz?.times(1000)?.roundToInt()
+    val stateMaxKHz = state.tunerState?.maxFreqMHz?.times(1000)?.roundToInt()
+    val stepKHz = state.tunerState?.stepKHz?.takeIf { it > 0 } ?: DEFAULT_FREQUENCY_STEP_KHZ
+    val minKHz = stateMinKHz?.takeIf { it > 0 } ?: DEFAULT_MIN_FREQUENCY_KHZ
+    val provisionalMaxKHz = stateMaxKHz?.takeIf { it >= minKHz } ?: DEFAULT_MAX_FREQUENCY_KHZ
+    val maxKHz = max(provisionalMaxKHz, minKHz)
+    val stepsCount = ((maxKHz - minKHz) / stepKHz).coerceAtLeast(0)
+    val frequencyPattern = remember(stepKHz) { frequencyFormatPattern(stepKHz) }
+    val displayValues = remember(minKHz, maxKHz, stepKHz) {
+        Array(stepsCount + 1) { index ->
+            formatFrequencyLabel(minKHz + index * stepKHz, frequencyPattern)
+        }
     }
-    val rangeSize = maxFreqTenth - minFreqTenth
-    val currentIndex = state.tunerState?.freqMHz?.times(10)?.roundToInt()?.minus(minFreqTenth)
-    var selectedIndex by rememberSaveable { mutableIntStateOf(currentIndex?.coerceIn(0, rangeSize) ?: 0) }
-    LaunchedEffect(currentIndex) {
+    val currentIndex = state.tunerState?.freqKHz?.let { freq ->
+        ((freq - minKHz).toDouble() / stepKHz).roundToInt()
+    }
+    var selectedIndex by rememberSaveable(minKHz, maxKHz, stepKHz) {
+        mutableIntStateOf(currentIndex?.coerceIn(0, stepsCount) ?: 0)
+    }
+    var pendingTuneIndex by rememberSaveable { mutableIntStateOf(-1) }
+    LaunchedEffect(stepsCount) {
+        val bounded = selectedIndex.coerceIn(0, stepsCount)
+        if (bounded != selectedIndex) {
+            selectedIndex = bounded
+        }
+    }
+    LaunchedEffect(currentIndex, minKHz, maxKHz, stepKHz) {
         currentIndex?.let {
-            val bounded = it.coerceIn(0, rangeSize)
+            val bounded = it.coerceIn(0, stepsCount)
             if (bounded != selectedIndex) {
                 selectedIndex = bounded
             }
         }
     }
-    val selectedFrequency = (minFreqTenth + selectedIndex) / 10.0
+    val selectedFrequencyKHz = minKHz + selectedIndex * stepKHz
+    val frequencyLabel = formatFrequencyLabel(selectedFrequencyKHz, frequencyPattern)
+    val isControlReady = state.isConnected
+    LaunchedEffect(pendingTuneIndex, isControlReady, minKHz, stepKHz) {
+        if (pendingTuneIndex >= 0 && isControlReady) {
+            val freqMHz = (minKHz + pendingTuneIndex * stepKHz) / 1000.0
+            onTuneDirect(freqMHz)
+            pendingTuneIndex = -1
+        } else if (!isControlReady) {
+            pendingTuneIndex = -1
+        }
+    }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(text = stringResource(id = R.string.frequency), style = MaterialTheme.typography.titleLarge)
             Text(
                 text = stringResource(
                     id = R.string.selected_frequency_label,
-                    String.format(Locale.getDefault(), "%.1f", selectedFrequency)
+                    frequencyLabel
                 )
             )
             AndroidView(
@@ -351,34 +378,51 @@ private fun FrequencySection(
                     NumberPicker(context).apply {
                         descendantFocusability = NumberPicker.FOCUS_BLOCK_DESCENDANTS
                         wrapSelectorWheel = false
-                        minValue = 0
-                        maxValue = rangeSize
-                        value = selectedIndex
-                        displayedValues = displayValues
-                        setOnValueChangedListener { _, _, newVal ->
-                            selectedIndex = newVal
-                        }
                     }
                 },
                 update = { picker ->
-                    if (picker.displayedValues?.contentEquals(displayValues) != true) {
-                        picker.displayedValues = displayValues
+                    val maxValue = stepsCount
+                    if (picker.minValue != 0 || picker.maxValue != maxValue) {
+                        picker.displayedValues = null
+                        picker.minValue = 0
+                        picker.maxValue = maxValue
                     }
+                    val values = displayValues
+                    if (picker.displayedValues?.contentEquals(values) != true) {
+                        picker.displayedValues = values
+                    }
+                    picker.isEnabled = isControlReady
                     if (picker.value != selectedIndex) {
                         picker.value = selectedIndex
                     }
+                    picker.setOnValueChangedListener { _, _, newVal ->
+                        val bounded = newVal.coerceIn(0, stepsCount)
+                        selectedIndex = bounded
+                        pendingTuneIndex = bounded
+                    }
                 }
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = { onTuneDirect(selectedFrequency) }) {
-                    Text(text = stringResource(id = R.string.tune))
-                }
-                OutlinedButton(onClick = onRefresh, enabled = state.isConnected) {
-                    Text(text = stringResource(id = R.string.refresh))
-                }
-            }
         }
     }
+}
+
+private const val DEFAULT_MIN_FREQUENCY_KHZ = 87_500
+private const val DEFAULT_MAX_FREQUENCY_KHZ = 108_000
+private const val DEFAULT_FREQUENCY_STEP_KHZ = 100
+
+private fun frequencyFormatPattern(stepKHz: Int): String {
+    val decimals = when {
+        stepKHz % 1000 == 0 -> 0
+        stepKHz % 100 == 0 -> 1
+        stepKHz % 10 == 0 -> 2
+        else -> 3
+    }
+    return String.format(Locale.ROOT, "%%.%df", decimals)
+}
+
+private fun formatFrequencyLabel(freqKHz: Int, pattern: String): String {
+    val frequencyMHz = freqKHz / 1000.0
+    return String.format(Locale.getDefault(), pattern, frequencyMHz)
 }
 
 @Composable
@@ -444,6 +488,8 @@ private fun ControlButtons(
     antennaLabel: () -> String
 ) {
     val canSwitchAntenna = state.tunerInfo?.canSwitchAntenna() == true
+    val imsActive = state.tunerState?.ims == true
+    val eqActive = state.tunerState?.eq == true
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(text = stringResource(id = R.string.controls), style = MaterialTheme.typography.titleLarge)
@@ -451,20 +497,20 @@ private fun ControlButtons(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Button(
+                ControlToggleButton(
+                    text = stringResource(id = if (imsActive) R.string.ims_on else R.string.ims_off),
+                    pressed = imsActive,
                     onClick = onToggleIms,
-                    modifier = Modifier.weight(1f),
-                    enabled = state.isConnected
-                ) {
-                    Text(text = stringResource(id = R.string.toggle_ims))
-                }
-                Button(
+                    enabled = state.isConnected,
+                    modifier = Modifier.weight(1f)
+                )
+                ControlToggleButton(
+                    text = stringResource(id = if (eqActive) R.string.eq_on else R.string.eq_off),
+                    pressed = eqActive,
                     onClick = onToggleEq,
-                    modifier = Modifier.weight(1f),
-                    enabled = state.isConnected
-                ) {
-                    Text(text = stringResource(id = R.string.toggle_eq))
-                }
+                    enabled = state.isConnected,
+                    modifier = Modifier.weight(1f)
+                )
             }
             Button(
                 onClick = onCycleAntenna,
@@ -479,6 +525,28 @@ private fun ControlButtons(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+@Composable
+private fun ControlToggleButton(
+    text: String,
+    pressed: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val colors = ButtonDefaults.filledTonalButtonColors(
+        containerColor = if (pressed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (pressed) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    FilledTonalButton(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        colors = colors
+    ) {
+        Text(text = text)
     }
 }
 

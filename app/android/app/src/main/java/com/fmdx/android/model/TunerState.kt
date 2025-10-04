@@ -6,6 +6,9 @@ import kotlin.math.roundToInt
 
 data class TunerState(
     val freqMHz: Double?,
+    val minFreqMHz: Double?,
+    val maxFreqMHz: Double?,
+    val stepKHz: Int?,
     val signalDbf: Double?,
     val stereo: Boolean,
     val ims: Boolean,
@@ -66,9 +69,37 @@ data class TunerState(
             val obj = JSONObject(json)
             val freq = obj.optDoubleOrNull("freq")
             val sig = obj.optDoubleOrNull("sig")
+            val freqObject = obj.optJSONObject("freq")
+            val freqMin = obj.optDoubleOrNull("freq_min")
+                ?: obj.optDoubleOrNull("freqMin")
+                ?: freqObject?.optDoubleOrNull("min")
+            val freqMax = obj.optDoubleOrNull("freq_max")
+                ?: obj.optDoubleOrNull("freqMax")
+                ?: freqObject?.optDoubleOrNull("max")
+            val stepCandidate = obj.optDoubleOrNull("freq_step")
+                ?: obj.optDoubleOrNull("freqStep")
+                ?: obj.optDoubleOrNull("freq_step_khz")
+                ?: obj.optDoubleOrNull("step_khz")
+                ?: freqObject?.optDoubleOrNull("step")
+            val stepFromInt = obj.optIntOrNull("step")
+            val stepKHz = when {
+                stepCandidate != null -> {
+                    val value = stepCandidate
+                    when {
+                        value >= 10.0 -> value.roundToInt()
+                        value <= 0.0 -> null
+                        else -> (value * 1000).roundToInt()
+                    }
+                }
+                stepFromInt != null -> stepFromInt
+                else -> null
+            }
             val txInfo = obj.optJSONObject("txInfo")?.let { TxInfo.fromJson(it) }
             return TunerState(
                 freqMHz = freq,
+                minFreqMHz = freqMin,
+                maxFreqMHz = freqMax,
+                stepKHz = stepKHz,
                 signalDbf = sig,
                 stereo = obj.optBooleanFromInt("st"),
                 ims = obj.optBooleanFromInt("ims"),

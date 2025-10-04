@@ -11,6 +11,7 @@
     <string name="refresh_spectrum">Refresh Spectrum</string>
     <string name="server">Server</string>
     <string name="frequency">Frequency</string>
+    <string name="selected_frequency_label">Selected frequency: %1$s MHz</string>
     <string name="status">Status</string>
     <string name="controls">Controls</string>
     <string name="rds">RDS</string>

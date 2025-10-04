@@ -1,11 +1,14 @@
 package com.fmdx.android
 
 import android.os.Bundle
+import android.widget.NumberPicker
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
+import androidx.annotation.StringRes
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,7 +28,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -33,22 +35,25 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -57,11 +62,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fmdx.android.model.SignalUnit
 import com.fmdx.android.model.SpectrumPoint
 import com.fmdx.android.model.TunerState
 import com.fmdx.android.ui.theme.FmDxTheme
+import java.util.Locale
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
@@ -85,7 +93,6 @@ class MainActivity : ComponentActivity() {
                     onConnect = viewModel::connect,
                     onDisconnect = viewModel::disconnect,
                     onToggleAudio = viewModel::toggleAudio,
-                    onTuneStep = viewModel::tuneStep,
                     onTuneDirect = viewModel::tuneToFrequency,
                     onToggleEq = viewModel::toggleEq,
                     onToggleIms = viewModel::toggleIms,
@@ -112,7 +119,6 @@ private fun FmDxApp(
     onConnect: () -> Unit,
     onDisconnect: () -> Unit,
     onToggleAudio: () -> Unit,
-    onTuneStep: (Int) -> Unit,
     onTuneDirect: (Double) -> Unit,
     onToggleEq: () -> Unit,
     onToggleIms: () -> Unit,
@@ -125,7 +131,16 @@ private fun FmDxApp(
     currentPty: (TunerState?) -> String,
     antennaLabel: () -> String
 ) {
-    val scrollState = rememberScrollState()
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    val tabs = listOf(
+        SectionTab(R.string.server) { ServerSection(state, onUpdateUrl, onConnect, onDisconnect) },
+        SectionTab(R.string.frequency) { FrequencySection(state, onTuneDirect, onRefresh) },
+        SectionTab(R.string.status) { StatusSection(state, formatSignal, onSignalUnitChange) },
+        SectionTab(R.string.controls) { ControlButtons(state, onToggleEq, onToggleIms, onCycleAntenna, antennaLabel) },
+        SectionTab(R.string.rds) { RdsSection(state, currentPty) },
+        SectionTab(R.string.station) { StationSection(state) },
+        SectionTab(R.string.spectrum) { SpectrumSection(state, onScan, onRefreshSpectrum) }
+    )
     Scaffold(
         topBar = {
             TopAppBar(
@@ -159,21 +174,41 @@ private fun FmDxApp(
         Column(
             modifier = Modifier
                 .padding(padding)
-                .padding(16.dp)
                 .fillMaxSize()
-                .verticalScroll(scrollState),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            ServerSection(state, onUpdateUrl, onConnect, onDisconnect)
-            FrequencySection(state, onTuneStep, onTuneDirect, onRefresh)
-            StatusSection(state, formatSignal, onSignalUnitChange)
-            ControlButtons(state, onToggleEq, onToggleIms, onCycleAntenna, antennaLabel)
-            RdsSection(state, currentPty)
-            StationSection(state)
-            SpectrumSection(state, onScan, onRefreshSpectrum)
+            ScrollableTabRow(selectedTabIndex = selectedTab) {
+                tabs.forEachIndexed { index, tab ->
+                    Tab(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        text = { Text(text = stringResource(id = tab.titleRes)) }
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                val scrollState = rememberScrollState()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    tabs[selectedTab].content()
+                }
+            }
         }
     }
 }
+
+private data class SectionTab(
+    @StringRes val titleRes: Int,
+    val content: @Composable () -> Unit
+)
 
 @Composable
 private fun ServerSection(
@@ -212,56 +247,58 @@ private fun ServerSection(
 @Composable
 private fun FrequencySection(
     state: UiState,
-    onTuneStep: (Int) -> Unit,
     onTuneDirect: (Double) -> Unit,
     onRefresh: () -> Unit
 ) {
-    val focusManager = LocalFocusManager.current
-    var text by remember(state.tunerState?.freqMHz) {
-        mutableStateOf(state.tunerState?.freqMHz?.let { String.format("%.3f", it) } ?: "")
+    val minFreq = 875
+    val maxFreq = 1080
+    val displayValues = remember { (minFreq..maxFreq).map { String.format(Locale.getDefault(), "%.2f", it / 100.0) }.toTypedArray() }
+    val currentIndex = state.tunerState?.freqMHz?.times(100)?.roundToInt()?.minus(minFreq)
+    var selectedIndex by rememberSaveable { mutableIntStateOf(currentIndex?.coerceIn(0, maxFreq - minFreq) ?: 0) }
+    LaunchedEffect(currentIndex) {
+        currentIndex?.let {
+            val bounded = it.coerceIn(0, maxFreq - minFreq)
+            if (bounded != selectedIndex) {
+                selectedIndex = bounded
+            }
+        }
     }
+    val selectedFrequency = (minFreq + selectedIndex) / 100.0
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(text = stringResource(id = R.string.frequency), style = MaterialTheme.typography.titleLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { value ->
-                        if (value.all { it.isDigit() || it == '.' || it == ',' }) {
-                            text = value
+            Text(text = stringResource(id = R.string.selected_frequency_label, String.format(Locale.getDefault(), "%.2f", selectedFrequency)))
+            AndroidView(
+                modifier = Modifier.fillMaxWidth(),
+                factory = { context ->
+                    NumberPicker(context).apply {
+                        descendantFocusability = NumberPicker.FOCUS_BLOCK_DESCENDANTS
+                        wrapSelectorWheel = false
+                        minValue = 0
+                        maxValue = displayValues.size - 1
+                        value = selectedIndex
+                        displayedValues = displayValues
+                        setOnValueChangedListener { _, _, newVal ->
+                            selectedIndex = newVal
                         }
-                    },
-                    label = { Text("MHz") },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal, imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        text.toFrequency()?.let(onTuneDirect)
-                        focusManager.clearFocus()
-                    })
-                )
-                Button(
-                    onClick = {
-                        text.toFrequency()?.let(onTuneDirect)
-                        focusManager.clearFocus()
-                    },
-                    enabled = text.toFrequency() != null
-                ) {
+                    }
+                },
+                update = { picker ->
+                    if (picker.displayedValues?.contentEquals(displayValues) != true) {
+                        picker.displayedValues = displayValues
+                    }
+                    if (picker.value != selectedIndex) {
+                        picker.value = selectedIndex
+                    }
+                }
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(onClick = { onTuneDirect(selectedFrequency) }) {
                     Text(text = stringResource(id = R.string.tune))
                 }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = { onTuneStep(-1000) }) { Text(text = "-1 MHz") }
-                FilledTonalButton(onClick = { onTuneStep(-100) }) { Text(text = "-0.1 MHz") }
-                FilledTonalButton(onClick = { onTuneStep(-10) }) { Text(text = "-0.01 MHz") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = { onTuneStep(10) }) { Text(text = "+0.01 MHz") }
-                FilledTonalButton(onClick = { onTuneStep(100) }) { Text(text = "+0.1 MHz") }
-                FilledTonalButton(onClick = { onTuneStep(1000) }) { Text(text = "+1 MHz") }
-            }
-            OutlinedButton(onClick = onRefresh, enabled = state.isConnected) {
-                Text(text = stringResource(id = R.string.refresh))
+                OutlinedButton(onClick = onRefresh, enabled = state.isConnected) {
+                    Text(text = stringResource(id = R.string.refresh))
+                }
             }
         }
     }
@@ -477,9 +514,4 @@ private fun SpectrumGraph(points: List<SpectrumPoint>, highlightFreq: Double) {
             }
         }
     }
-}
-
-private fun String.toFrequency(): Double? {
-    val normalized = replace(',', '.')
-    return normalized.toDoubleOrNull()
 }

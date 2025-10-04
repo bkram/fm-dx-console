@@ -1,6 +1,7 @@
 package com.fmdx.android
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.fmdx.android.audio.WebSocketAudioPlayer
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -29,6 +31,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .build()
     private val repository = FmDxRepository(okHttpClient)
     private val audioPlayer = WebSocketAudioPlayer(application, okHttpClient)
+
+    private val preferences = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     private val _uiState = MutableStateFlow(UiState(spectrum = baselineSpectrum()))
     val uiState: StateFlow<UiState> = _uiState
@@ -50,6 +54,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
     )
 
+    init {
+        restorePersistedServerUrl()
+    }
+
     fun updateServerUrl(url: String) {
         _uiState.update { it.copy(serverUrl = url) }
     }
@@ -60,7 +68,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(errorMessage = "Server URL is required") }
             return
         }
-        val sanitized = sanitizeUrl(rawUrl)
+        val sanitized = try {
+            sanitizeUrl(rawUrl)
+        } catch (ex: IllegalArgumentException) {
+            _uiState.update { it.copy(errorMessage = ex.message ?: "Invalid URL") }
+            return
+        }
+        persistServerUrl(sanitized)
+        _uiState.update { it.copy(serverUrl = sanitized) }
         viewModelScope.launch {
             try {
                 val info = repository.fetchTunerInfo(sanitized, BuildConfig.USER_AGENT)
@@ -323,7 +338,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun sanitizeUrl(input: String): String {
-        return input.trim().lowercase(Locale.US).replace("#", "").replace("?", "")
+        val trimmed = input.trim()
+        if (trimmed.isEmpty()) {
+            throw IllegalArgumentException("Server URL is required")
+        }
+        val withScheme = if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
+            trimmed
+        } else {
+            "http://$trimmed"
+        }
+        val httpUrl = withScheme.toHttpUrlOrNull()
+            ?: throw IllegalArgumentException("Invalid server URL")
+        val normalised = httpUrl.newBuilder().build().toString()
+        return if (normalised.endsWith("/")) normalised.dropLast(1) else normalised
     }
 
     private fun ensureSpectrum(points: List<SpectrumPoint>): List<SpectrumPoint> {
@@ -331,6 +358,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     companion object {
+        private const val PREFS_NAME = "fm_dx_prefs"
+        private const val KEY_LAST_SERVER_URL = "last_server_url"
+
         private fun baselineSpectrum(): List<SpectrumPoint> {
             val list = mutableListOf<SpectrumPoint>()
             var freq = 83.0
@@ -340,6 +370,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             return list
         }
+    }
+
+    private fun persistServerUrl(url: String) {
+        preferences.edit().putString(KEY_LAST_SERVER_URL, url).apply()
+    }
+
+    private fun restorePersistedServerUrl() {
+        val persisted = preferences.getString(KEY_LAST_SERVER_URL, null) ?: return
+        val sanitized = runCatching { sanitizeUrl(persisted) }.getOrNull() ?: persisted
+        _uiState.update { it.copy(serverUrl = sanitized) }
     }
 }
 

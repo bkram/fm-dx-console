@@ -12,6 +12,7 @@ import androidx.media3.datasource.BaseDataSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import com.fmdx.android.data.buildWebSocketUrl
 import kotlinx.coroutines.sync.Mutex
@@ -54,7 +55,17 @@ class WebSocketAudioPlayer(
                 .setMimeType(MimeTypes.AUDIO_MPEG)
                 .build()
             val mediaSource = ProgressiveMediaSource.Factory(factory).createMediaSource(mediaItem)
-            val exoPlayer = ExoPlayer.Builder(context).build()
+            val loadControl = DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    /* minBufferMs = */ 500,
+                    /* maxBufferMs = */ 2000,
+                    /* bufferForPlaybackMs = */ 250,
+                    /* bufferForPlaybackAfterRebufferMs = */ 500
+                )
+                .build()
+            val exoPlayer = ExoPlayer.Builder(context)
+                .setLoadControl(loadControl)
+                .build()
             exoPlayer.addListener(object : Player.Listener {
                 override fun onPlayerError(error: PlaybackException) {
                     onError(error)
@@ -94,7 +105,7 @@ private class WebSocketStreamDataSource(
     private val userAgent: String,
     private val onError: (Throwable) -> Unit
 ) : BaseDataSource(true) {
-    private val queue = LinkedBlockingQueue<ByteArray>()
+    private val queue = LinkedBlockingQueue<ByteArray>(MAX_QUEUE_CHUNKS)
     private val endMarker = ByteArray(0)
     private var currentBuffer: ByteArray? = null
     private var bufferPosition = 0
@@ -117,17 +128,24 @@ private class WebSocketStreamDataSource(
             }
 
             override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
-                queue.offer(bytes.toByteArray())
+                val packet = bytes.toByteArray()
+                while (!queue.offer(packet)) {
+                    queue.poll()
+                }
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                queue.offer(endMarker)
+                while (!queue.offer(endMarker)) {
+                    queue.poll()
+                }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 failure = t
                 onError(t)
-                queue.offer(endMarker)
+                while (!queue.offer(endMarker)) {
+                    queue.poll()
+                }
             }
         })
         return C.LENGTH_UNSET.toLong()
@@ -161,7 +179,9 @@ private class WebSocketStreamDataSource(
         if (closed) return
         closed = true
         webSocket?.close(1000, null)
-        queue.offer(endMarker)
+        while (!queue.offer(endMarker)) {
+            queue.poll()
+        }
         currentBuffer = null
         bufferPosition = 0
         transferEnded()
@@ -169,5 +189,9 @@ private class WebSocketStreamDataSource(
 
     fun shutdown() {
         close()
+    }
+
+    companion object {
+        private const val MAX_QUEUE_CHUNKS = 8
     }
 }

@@ -342,15 +342,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (trimmed.isEmpty()) {
             throw IllegalArgumentException("Server URL is required")
         }
-        val withScheme = if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
-            trimmed
-        } else {
-            "http://$trimmed"
+
+        val withHttpScheme = when {
+            trimmed.startsWith("http://", ignoreCase = true) -> trimmed
+            trimmed.startsWith("https://", ignoreCase = true) -> trimmed
+            trimmed.startsWith("ws://", ignoreCase = true) -> "http://" + trimmed.substringAfter("://")
+            trimmed.startsWith("wss://", ignoreCase = true) -> "https://" + trimmed.substringAfter("://")
+            else -> "http://$trimmed"
         }
-        val httpUrl = withScheme.toHttpUrlOrNull()
+
+        val httpUrl = withHttpScheme.toHttpUrlOrNull()
             ?: throw IllegalArgumentException("Invalid server URL")
-        val normalised = httpUrl.newBuilder().build().toString()
-        return if (normalised.endsWith("/")) normalised.dropLast(1) else normalised
+
+        val rebuilt = httpUrl.newBuilder().build()
+        val asString = rebuilt.toString()
+        return if (rebuilt.encodedPath() == "/") {
+            asString.trimEnd('/')
+        } else {
+            asString
+        }
     }
 
     private fun ensureSpectrum(points: List<SpectrumPoint>): List<SpectrumPoint> {

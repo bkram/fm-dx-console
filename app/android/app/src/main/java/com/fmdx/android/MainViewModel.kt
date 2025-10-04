@@ -52,7 +52,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var controlConnection: ControlConnection? = null
     private var pluginConnection: PluginConnection? = null
     private var commandJob: Job? = null
-    private var pingJob: Job? = null
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private val controller: MediaController? get() = controllerFuture?.let { if (it.isDone) it.get() else null }
 
@@ -150,7 +149,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 startControlConnection(sanitized)
                 startPluginConnection(sanitized)
-                startPing(sanitized)
                 refreshSpectrum(sanitized)
             } catch (ex: Exception) {
                 logDebug("connect(): failed", ex)
@@ -173,14 +171,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         pluginConnection = null
         commandJob?.cancel()
         commandJob = null
-        pingJob?.cancel()
-        pingJob = null
         controller?.stop()
-        _uiState.update {
-            it.copy(
-                isConnected = false,
-                isConnecting = false,
-                audioPlaying = false,
+        controller?.clearMediaItems()
+        _uiState.update { currentState ->
+            UiState(
+                serverUrl = currentState.serverUrl,
+                signalUnit = currentState.signalUnit,
+                networkBuffer = currentState.networkBuffer,
+                playerBuffer = currentState.playerBuffer,
+                restartAudioOnTune = currentState.restartAudioOnTune,
+                spectrum = baselineSpectrum(),
                 statusMessage = "Disconnected"
             )
         }
@@ -188,21 +188,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleAudio() {
         val state = _uiState.value
+        if (!state.isConnected) return
+
         val player = controller ?: return
 
         if (player.isPlaying) {
             player.pause()
         } else {
-            if (player.currentMediaItem == null) {
-                val mediaItem = MediaItem.Builder()
-                    .setMediaId(state.serverUrl)
-                    .build()
-                player.setMediaItem(mediaItem)
-            }
-            player.prepare()
-            player.play()
+            refreshAudioStream(forcePlay = true)
         }
-
     }
 
     fun tuneStep(stepHz: Int) {
@@ -223,18 +217,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun refreshAudioStream() {
+    private fun refreshAudioStream(forcePlay: Boolean = false) {
         val player = controller ?: return
-        if (player.mediaItemCount == 0) return
-
         val wasPlaying = player.isPlaying
         val state = _uiState.value
+
         val mediaItem = MediaItem.Builder()
             .setMediaId(state.serverUrl)
             .build()
         player.setMediaItem(mediaItem)
         player.prepare()
-        if (wasPlaying) {
+        if (wasPlaying || forcePlay) {
             player.play()
         }
     }
@@ -332,13 +325,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             },
             onClosed = {
                 logDebug("control socket: closed")
-                _uiState.update {
-                    it.copy(
-                        isConnected = false,
-                        isConnecting = false,
-                        statusMessage = "Connection closed"
-                    )
-                }
+                viewModelScope.launch { disconnect() }
             },
             onError = { error ->
                 logDebug("control socket: error", error)
@@ -365,28 +352,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         pluginConnection = repository.connectPlugin(url, BuildConfig.USER_AGENT) { error ->
             logDebug("plugin socket: error", error)
             _uiState.update { it.copy(errorMessage = error.message) }
-        }
-    }
-
-    private fun startPing(url: String) {
-        logDebug("startPing(): scheduling ping job")
-        pingJob?.cancel()
-        pingJob = viewModelScope.launch {
-            while (true) {
-                val ping = try {
-                    logDebug("startPing(): sending ping request")
-                    repository.ping(url, BuildConfig.USER_AGENT)
-                } catch (ex: Exception) {
-                    logDebug("startPing(): ping failed", ex)
-                    _uiState.update { it.copy(errorMessage = ex.message) }
-                    null
-                }
-                ping?.let { value ->
-                    logDebug("startPing(): ping=${'$'}value ms")
-                    _uiState.update { it.copy(pingMs = value) }
-                }
-                delay(5000)
-            }
         }
     }
 
@@ -474,7 +439,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private const val KEY_RESTART_AUDIO_ON_TUNE = "restart_audio_on_tune"
         private const val TAG = "MainViewModel"
 
-        private fun baselineSpectrum(): List<SpectrumPoint> {
+        fun baselineSpectrum(): List<SpectrumPoint> {
             val list = mutableListOf<SpectrumPoint>()
             var freq = 83.0
             while (freq <= 108.0 + 1e-6) {
@@ -534,7 +499,6 @@ data class UiState(
     val serverUrl: String = "",
     val tunerInfo: TunerInfo? = null,
     val tunerState: TunerState? = null,
-    val pingMs: Long? = null,
     val audioPlaying: Boolean = false,
     val isConnected: Boolean = false,
     val isConnecting: Boolean = false,

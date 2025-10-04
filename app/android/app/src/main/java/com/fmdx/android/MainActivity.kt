@@ -26,7 +26,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -227,7 +227,7 @@ private fun MainScreen(
                             isConnecting = state.isConnecting
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        IconButton(onClick = onToggleAudio) {
+                        IconButton(onClick = onToggleAudio, enabled = state.isConnected) {
                             val playing = state.audioPlaying
                             val icon = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow
                             Icon(
@@ -291,7 +291,7 @@ private fun SettingsScreen(
                 title = { Text(stringResource(id = R.string.settings)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(id = R.string.back))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(id = R.string.back))
                     }
                 }
             )
@@ -417,29 +417,21 @@ private fun FrequencySection(
 
     val currentFreqKHz = state.tunerState?.freqKHz ?: minKHz
 
-    val currentMHz = currentFreqKHz / 1000
-    val currentDecimalIndex = (currentFreqKHz % 1000) / stepKHz
+    var selectedMHz by rememberSaveable { mutableIntStateOf(0) }
+    var selectedDecimalIndex by rememberSaveable { mutableIntStateOf(0) }
 
-    var selectedMHz by rememberSaveable(currentMHz) { mutableIntStateOf(currentMHz) }
-    var selectedDecimalIndex by rememberSaveable(currentFreqKHz) { mutableIntStateOf(currentDecimalIndex) }
+    LaunchedEffect(Unit) {
+        val mhz = currentFreqKHz / 1000
+        val decimalIndex = (currentFreqKHz % 1000) / stepKHz
+        selectedMHz = mhz
+        selectedDecimalIndex = decimalIndex
+    }
 
     // Debounced tuning
     LaunchedEffect(selectedMHz, selectedDecimalIndex) {
         delay(400) // Debounce delay
         val freqMHz = selectedMHz + (selectedDecimalIndex * stepKHz / 1000.0)
         onTuneDirect(freqMHz)
-    }
-
-    // Update pickers if frequency changes externally (e.g. RDS AF)
-    LaunchedEffect(currentFreqKHz) {
-        val newMHz = currentFreqKHz / 1000
-        val newDecimalIndex = (currentFreqKHz % 1000) / stepKHz
-        if (newMHz != selectedMHz) {
-            selectedMHz = newMHz
-        }
-        if (newDecimalIndex != selectedDecimalIndex) {
-            selectedDecimalIndex = newDecimalIndex
-        }
     }
 
     val minMhz = minKHz / 1000
@@ -513,7 +505,12 @@ private fun FrequencySection(
                         picker.displayedValues = decimalDisplayValues
                         picker.value = selectedDecimalIndex.coerceIn(0, decimalSteps - 1)
                         picker.isEnabled = isControlReady
-                        picker.setOnValueChangedListener { _, _, newVal ->
+                        picker.setOnValueChangedListener { _, oldVal, newVal ->
+                            if (oldVal == decimalSteps - 1 && newVal == 0) {
+                                selectedMHz = (selectedMHz + 1).coerceAtMost(maxMhz)
+                            } else if (oldVal == 0 && newVal == decimalSteps - 1) {
+                                selectedMHz = (selectedMHz - 1).coerceAtLeast(minMhz)
+                            }
                             selectedDecimalIndex = newVal
                         }
                     }
@@ -546,7 +543,6 @@ private fun StatusSection(
                 )
             }
             Text(text = stringResource(id = R.string.signal_label, formatSignal(state.tunerState, state.signalUnit)))
-            Text(text = stringResource(id = R.string.ping_label, state.pingMs?.let { "$it ms" } ?: "--"))
             Text(text = stringResource(id = R.string.users_label, state.tunerState?.users?.toString() ?: "--"))
             val audioStatus = if (state.audioPlaying) stringResource(id = R.string.audio_playing) else stringResource(id = R.string.audio_stopped)
             Text(text = stringResource(id = R.string.audio_label, audioStatus))

@@ -1,5 +1,7 @@
 package com.fmdx.android.data
 
+import android.util.Log
+import com.fmdx.android.BuildConfig
 import com.fmdx.android.model.SpectrumPoint
 import com.fmdx.android.model.TunerInfo
 import com.fmdx.android.model.TunerState
@@ -31,6 +33,7 @@ class FmDxRepository(
         onError: (Throwable) -> Unit
     ): ControlConnection {
         val wsUrl = buildWebSocketUrl(baseUrl, "text")
+        logDebug("connectControl(): opening $wsUrl")
         val request = Request.Builder()
             .url(wsUrl)
             .header("User-Agent", "$userAgent (control)")
@@ -38,24 +41,33 @@ class FmDxRepository(
         val commandChannel = Channel<String>(capacity = Channel.UNLIMITED)
         lateinit var connection: ControlConnection
         val webSocket = client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                logDebug("control socket: open with response=${response.code}")
+            }
+
             override fun onMessage(webSocket: WebSocket, text: String) {
+                logDebug("control socket: message length=${text.length}")
                 try {
                     val state = TunerState.fromJson(text)
                     onState(state)
                 } catch (t: Throwable) {
+                    logDebug("control socket: failed to parse message", t)
                     onError(t)
                 }
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                logDebug("control socket: closing code=$code reason=$reason")
                 webSocket.close(code, reason)
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                logDebug("control socket: closed code=$code reason=$reason")
                 onClosed()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                logDebug("control socket: failure code=${response?.code}", t)
                 onError(t)
                 onClosed()
             }
@@ -63,7 +75,9 @@ class FmDxRepository(
         connection = ControlConnection(webSocket, commandChannel)
         scope.launch {
             for (command in commandChannel) {
+                logDebug("control socket: sending queued command=$command")
                 if (!webSocket.send(command)) {
+                    logDebug("control socket: command send failed")
                     break
                 }
                 delay(COMMAND_THROTTLE_MS)
@@ -78,12 +92,18 @@ class FmDxRepository(
         onError: (Throwable) -> Unit
     ): PluginConnection {
         val wsUrl = buildWebSocketUrl(baseUrl, "data_plugins")
+        logDebug("connectPlugin(): opening $wsUrl")
         val request = Request.Builder()
             .url(wsUrl)
             .header("User-Agent", "$userAgent (plugin)")
             .build()
         val webSocket = client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
+                logDebug("plugin socket: open with response=${response.code}")
+            }
+
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                logDebug("plugin socket: failure code=${response?.code}", t)
                 onError(t)
             }
         })
@@ -91,6 +111,7 @@ class FmDxRepository(
     }
 
     suspend fun fetchTunerInfo(url: String, userAgent: String): TunerInfo {
+        logDebug("fetchTunerInfo(): requesting metadata from $url")
         val httpUrl = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid URL")
         val staticUrl = httpUrl.newBuilder()
             .addPathSegments("static_data")
@@ -133,6 +154,7 @@ class FmDxRepository(
             // ignore static data fetch errors
         }
 
+        logDebug("fetchTunerInfo(): scraping fallback HTML")
         val document: Document = Jsoup.connect(url)
             .userAgent(userAgent)
             .timeout(TIMEOUT_MS.toInt())
@@ -176,6 +198,7 @@ class FmDxRepository(
     }
 
     suspend fun ping(url: String, userAgent: String): Long {
+        logDebug("ping(): sending request to $url")
         val httpUrl = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid URL")
         val pingUrl = httpUrl.newBuilder()
             .addPathSegments("ping")
@@ -192,6 +215,7 @@ class FmDxRepository(
     }
 
     suspend fun fetchSpectrumData(url: String, userAgent: String): List<SpectrumPoint>? {
+        logDebug("fetchSpectrumData(): requesting data from $url")
         val httpUrl = url.toHttpUrlOrNull() ?: return null
         val spectrumUrl = httpUrl.newBuilder()
             .addPathSegments("spectrum-graph-plugin")
@@ -202,7 +226,10 @@ class FmDxRepository(
             .header("X-Plugin-Name", "SpectrumGraphPlugin")
             .build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return null
+            if (!response.isSuccessful) {
+                logDebug("fetchSpectrumData(): request failed code=${response.code}")
+                return null
+            }
             val body = response.body?.string() ?: return null
             val json = JSONObject(body)
             val dataset = when {
@@ -227,6 +254,16 @@ class FmDxRepository(
     companion object {
         private const val COMMAND_THROTTLE_MS = 125L
         private const val TIMEOUT_MS = 10000L
+        private const val TAG = "FmDxRepository"
+    }
+
+    private fun logDebug(message: String, throwable: Throwable? = null) {
+        if (!BuildConfig.DEBUG) return
+        if (throwable != null) {
+            Log.d(TAG, message, throwable)
+        } else {
+            Log.d(TAG, message)
+        }
     }
 }
 

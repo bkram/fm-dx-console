@@ -2,6 +2,7 @@ package com.fmdx.android
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -79,6 +80,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update { it.copy(errorMessage = ex.message ?: "Invalid URL") }
             return
         }
+        logDebug("connect(): sanitized server URL=$sanitized")
         persistServerUrl(sanitized)
         val connectingMessage = "Connecting to $sanitized…"
         _uiState.update {
@@ -91,8 +93,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             try {
+                logDebug("connect(): fetching tuner info")
                 val info = repository.fetchTunerInfo(sanitized, BuildConfig.USER_AGENT)
                 val connectionName = info.tunerName.takeIf { it.isNotBlank() } ?: sanitized
+                logDebug("connect(): tuner info resolved -> name=${info.tunerName}, description=${info.tunerDescription}")
                 _uiState.update {
                     it.copy(
                         serverUrl = sanitized,
@@ -110,6 +114,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 startPing(sanitized)
                 refreshSpectrum(sanitized)
             } catch (ex: Exception) {
+                logDebug("connect(): failed", ex)
                 _uiState.update {
                     it.copy(
                         errorMessage = ex.message,
@@ -278,6 +283,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun startControlConnection(url: String) {
+        logDebug("startControlConnection(): opening control socket")
         controlConnection?.close()
         commandJob?.cancel()
         val connection = repository.connectControl(
@@ -285,6 +291,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             BuildConfig.USER_AGENT,
             viewModelScope,
             onState = { state ->
+                logDebug("control socket: state update freq=${state.freqKHz} users=${state.users}")
                 _uiState.update {
                     it.copy(
                         tunerState = state,
@@ -293,6 +300,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             },
             onClosed = {
+                logDebug("control socket: closed")
                 _uiState.update {
                     it.copy(
                         isConnected = false,
@@ -302,6 +310,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             },
             onError = { error ->
+                logDebug("control socket: error", error)
                 _uiState.update {
                     it.copy(
                         errorMessage = error.message,
@@ -313,29 +322,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         controlConnection = connection
         commandJob = viewModelScope.launch {
             commandFlow.collect { cmd ->
+                logDebug("control socket: sending command=$cmd")
                 connection.send(cmd)
             }
         }
     }
 
     private fun startPluginConnection(url: String) {
+        logDebug("startPluginConnection(): opening plugin socket")
         pluginConnection?.close()
         pluginConnection = repository.connectPlugin(url, BuildConfig.USER_AGENT) { error ->
+            logDebug("plugin socket: error", error)
             _uiState.update { it.copy(errorMessage = error.message) }
         }
     }
 
     private fun startPing(url: String) {
+        logDebug("startPing(): scheduling ping job")
         pingJob?.cancel()
         pingJob = viewModelScope.launch {
             while (true) {
                 val ping = try {
+                    logDebug("startPing(): sending ping request")
                     repository.ping(url, BuildConfig.USER_AGENT)
                 } catch (ex: Exception) {
+                    logDebug("startPing(): ping failed", ex)
                     _uiState.update { it.copy(errorMessage = ex.message) }
                     null
                 }
                 ping?.let { value ->
+                    logDebug("startPing(): ping=${'$'}value ms")
                     _uiState.update { it.copy(pingMs = value) }
                 }
                 delay(5000)
@@ -405,11 +421,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         val rebuilt = httpUrl.newBuilder().build()
         val asString = rebuilt.toString()
-        return if (rebuilt.encodedPath == "/") {
+        val sanitized = if (rebuilt.encodedPath == "/") {
             asString.trimEnd('/')
         } else {
             asString
         }
+        logDebug("sanitizeUrl(): input=${'$'}input resolved=${'$'}sanitized")
+        return sanitized
     }
 
     private fun ensureSpectrum(points: List<SpectrumPoint>): List<SpectrumPoint> {
@@ -419,6 +437,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val PREFS_NAME = "fm_dx_prefs"
         private const val KEY_LAST_SERVER_URL = "last_server_url"
+        private const val TAG = "MainViewModel"
 
         private fun baselineSpectrum(): List<SpectrumPoint> {
             val list = mutableListOf<SpectrumPoint>()
@@ -439,6 +458,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val persisted = preferences.getString(KEY_LAST_SERVER_URL, null) ?: return
         val sanitized = runCatching { sanitizeUrl(persisted) }.getOrNull() ?: persisted
         _uiState.update { it.copy(serverUrl = sanitized) }
+    }
+
+    private fun logDebug(message: String, throwable: Throwable? = null) {
+        if (!BuildConfig.DEBUG) return
+        if (throwable != null) {
+            Log.d(TAG, message, throwable)
+        } else {
+            Log.d(TAG, message)
+        }
     }
 }
 

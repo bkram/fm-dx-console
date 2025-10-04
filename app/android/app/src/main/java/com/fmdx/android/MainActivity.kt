@@ -250,28 +250,34 @@ private fun FrequencySection(
     onTuneDirect: (Double) -> Unit,
     onRefresh: () -> Unit
 ) {
-    val minFreq = 8_750
-    val maxFreq = 10_800
+    val minFreqTenth = 875
+    val maxFreqTenth = 1080
     val displayValues = remember {
-        (minFreq..maxFreq).map { freqValue ->
-            String.format(Locale.getDefault(), "%.2f", freqValue / 100.0)
+        (minFreqTenth..maxFreqTenth).map { freqValue ->
+            String.format(Locale.getDefault(), "%.1f", freqValue / 10.0)
         }.toTypedArray()
     }
-    val currentIndex = state.tunerState?.freqMHz?.times(100)?.roundToInt()?.minus(minFreq)
-    var selectedIndex by rememberSaveable { mutableIntStateOf(currentIndex?.coerceIn(0, maxFreq - minFreq) ?: 0) }
+    val rangeSize = maxFreqTenth - minFreqTenth
+    val currentIndex = state.tunerState?.freqMHz?.times(10)?.roundToInt()?.minus(minFreqTenth)
+    var selectedIndex by rememberSaveable { mutableIntStateOf(currentIndex?.coerceIn(0, rangeSize) ?: 0) }
     LaunchedEffect(currentIndex) {
         currentIndex?.let {
-            val bounded = it.coerceIn(0, maxFreq - minFreq)
+            val bounded = it.coerceIn(0, rangeSize)
             if (bounded != selectedIndex) {
                 selectedIndex = bounded
             }
         }
     }
-    val selectedFrequency = (minFreq + selectedIndex) / 100.0
+    val selectedFrequency = (minFreqTenth + selectedIndex) / 10.0
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(text = stringResource(id = R.string.frequency), style = MaterialTheme.typography.titleLarge)
-            Text(text = stringResource(id = R.string.selected_frequency_label, String.format(Locale.getDefault(), "%.2f", selectedFrequency)))
+            Text(
+                text = stringResource(
+                    id = R.string.selected_frequency_label,
+                    String.format(Locale.getDefault(), "%.1f", selectedFrequency)
+                )
+            )
             AndroidView(
                 modifier = Modifier.fillMaxWidth(),
                 factory = { context ->
@@ -279,7 +285,7 @@ private fun FrequencySection(
                         descendantFocusability = NumberPicker.FOCUS_BLOCK_DESCENDANTS
                         wrapSelectorWheel = false
                         minValue = 0
-                        maxValue = displayValues.size - 1
+                        maxValue = rangeSize
                         value = selectedIndex
                         displayedValues = displayValues
                         setOnValueChangedListener { _, _, newVal ->

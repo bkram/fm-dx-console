@@ -12,7 +12,7 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import com.fmdx.android.data.formatWebSocketUrl
+import com.fmdx.android.data.buildWebSocketUrl
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
@@ -41,7 +41,7 @@ class WebSocketAudioPlayer(
     ) {
         mutex.withLock {
             stopLocked()
-            val wsUrl = "${formatWebSocketUrl(baseUrl)}/audio"
+            val wsUrl = buildWebSocketUrl(baseUrl, "audio")
             val factory = DataSource.Factory {
                 WebSocketStreamDataSource(client, wsUrl, userAgent, onError).also {
                     currentDataSource = it

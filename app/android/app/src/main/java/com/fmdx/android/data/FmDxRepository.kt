@@ -30,7 +30,7 @@ class FmDxRepository(
         onClosed: () -> Unit,
         onError: (Throwable) -> Unit
     ): ControlConnection {
-        val wsUrl = "${formatWebSocketUrl(baseUrl)}/text"
+        val wsUrl = buildWebSocketUrl(baseUrl, "text")
         val request = Request.Builder()
             .url(wsUrl)
             .header("User-Agent", "$userAgent (control)")
@@ -77,7 +77,7 @@ class FmDxRepository(
         userAgent: String,
         onError: (Throwable) -> Unit
     ): PluginConnection {
-        val wsUrl = "${formatWebSocketUrl(baseUrl)}/data_plugins"
+        val wsUrl = buildWebSocketUrl(baseUrl, "data_plugins")
         val request = Request.Builder()
             .url(wsUrl)
             .header("User-Agent", "$userAgent (plugin)")
@@ -257,14 +257,24 @@ class PluginConnection internal constructor(
     }
 }
 
-fun formatWebSocketUrl(url: String): String {
-    var trimmed = url.trim()
-    if (trimmed.endsWith('/')) trimmed = trimmed.dropLast(1)
-    return when {
-        trimmed.startsWith("http://", ignoreCase = true) ->
-            "ws://" + trimmed.removePrefix("http://")
-        trimmed.startsWith("https://", ignoreCase = true) ->
-            "wss://" + trimmed.removePrefix("https://")
-        else -> trimmed
+fun buildWebSocketUrl(url: String, vararg pathSegments: String): String {
+    val httpUrl = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid server URL")
+    val builder = httpUrl.newBuilder()
+    pathSegments.forEach { segment ->
+        if (segment.isNotEmpty()) {
+            builder.addPathSegment(segment.trim('/'))
+        }
     }
+    val built = builder.build()
+    val httpString = built.toString()
+    val normalized = if (pathSegments.isEmpty() && built.encodedPath() == "/") {
+        httpString.removeSuffix("/")
+    } else {
+        httpString
+    }
+    val httpScheme = built.scheme
+    val wsScheme = if (httpScheme.equals("https", ignoreCase = true)) "wss" else "ws"
+    return normalized.replaceFirst("$httpScheme://", "$wsScheme://")
 }
+
+fun formatWebSocketUrl(url: String): String = buildWebSocketUrl(url)

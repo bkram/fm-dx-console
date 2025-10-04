@@ -22,6 +22,7 @@
     <string name="toggle_eq">Toggle EQ</string>
     <string name="antenna_label">Antenna: %1$s</string>
     <string name="audio_playing">Audio playing</string>
+    <string name="connected">Connected</string>
     <string name="disconnected">Disconnected</string>
     <string name="signal_label">Signal: %1$s</string>
     <string name="ping_label">Ping: %1$s</string>

@@ -8,15 +8,19 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.annotation.StringRes
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -63,6 +67,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.draw.clip
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fmdx.android.model.SignalUnit
 import com.fmdx.android.model.SpectrumPoint
@@ -158,13 +163,17 @@ private fun FmDxApp(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onToggleAudio) {
-                        val playing = state.audioPlaying
-                        val icon = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = if (playing) stringResource(id = R.string.stop_audio) else stringResource(id = R.string.play_audio)
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ConnectionStatusIndicator(isConnected = state.isConnected)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        IconButton(onClick = onToggleAudio) {
+                            val playing = state.audioPlaying
+                            val icon = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = if (playing) stringResource(id = R.string.stop_audio) else stringResource(id = R.string.play_audio)
+                            )
+                        }
                     }
                 }
             )
@@ -209,6 +218,34 @@ private data class SectionTab(
     @StringRes val titleRes: Int,
     val content: @Composable () -> Unit
 )
+
+@Composable
+private fun ConnectionStatusIndicator(isConnected: Boolean) {
+    val label = if (isConnected) {
+        stringResource(id = R.string.connected)
+    } else {
+        stringResource(id = R.string.disconnected)
+    }
+    val indicatorColor = if (isConnected) {
+        MaterialTheme.colorScheme.tertiary
+    } else {
+        MaterialTheme.colorScheme.error
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(indicatorColor)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
 
 @Composable
 private fun ServerSection(

@@ -1,10 +1,12 @@
 package com.fmdx.android.audio
 
+import android.content.Context
 import android.content.Intent
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -19,12 +21,25 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        val preferences = getSharedPreferences("fm_dx_prefs", Context.MODE_PRIVATE)
+        val networkBuffer = preferences.getInt("network_buffer", 2)
+        val playerBuffer = preferences.getInt("player_buffer", 2000)
+
         val client = OkHttpClient.Builder().build()
-        val webSocketMediaSourceFactory = WebSocketMediaSourceFactory(client, BuildConfig.USER_AGENT) { error ->
+        val webSocketMediaSourceFactory = WebSocketMediaSourceFactory(client, BuildConfig.USER_AGENT, networkBuffer) { error ->
             // TODO: Handle error
         }
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ playerBuffer,
+                /* maxBufferMs = */ playerBuffer * 2,
+                /* bufferForPlaybackMs = */ playerBuffer / 2,
+                /* bufferForPlaybackAfterRebufferMs = */ playerBuffer
+            )
+            .build()
         val player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(webSocketMediaSourceFactory)
+            .setLoadControl(loadControl)
             .build()
         mediaSession = MediaSession.Builder(this, player)
             .setCallback(PlaybackCallback())

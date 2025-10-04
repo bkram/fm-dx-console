@@ -76,6 +76,7 @@ import com.fmdx.android.model.SignalUnit
 import com.fmdx.android.model.SpectrumPoint
 import com.fmdx.android.model.TunerState
 import com.fmdx.android.ui.theme.FmDxTheme
+import kotlinx.coroutines.delay
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -111,7 +112,8 @@ class MainActivity : ComponentActivity() {
                     onSignalUnitChange = viewModel::setSignalUnit,
                     formatSignal = { s, unit -> viewModel.formatSignal(s, unit) },
                     currentPty = viewModel::currentPty,
-                    antennaLabel = viewModel::antennaLabel
+                    antennaLabel = viewModel::antennaLabel,
+                    onUpdateSettings = viewModel::updateSettings
                 )
             }
         }
@@ -136,17 +138,19 @@ private fun FmDxApp(
     onSignalUnitChange: (SignalUnit) -> Unit,
     formatSignal: (TunerState?, SignalUnit) -> String,
     currentPty: (TunerState?) -> String,
-    antennaLabel: () -> String
+    antennaLabel: () -> String,
+    onUpdateSettings: (signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int) -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf(
         SectionTab(R.string.server) { ServerSection(state, onUpdateUrl, onConnect, onDisconnect) },
         SectionTab(R.string.frequency) { FrequencySection(state, onTuneDirect) },
-        SectionTab(R.string.status) { StatusSection(state, formatSignal, onSignalUnitChange) },
+        SectionTab(R.string.status) { StatusSection(state, formatSignal) },
         SectionTab(R.string.controls) { ControlButtons(state, onToggleEq, onToggleIms, onCycleAntenna, antennaLabel) },
         SectionTab(R.string.rds) { RdsSection(state, currentPty) },
         SectionTab(R.string.station) { StationSection(state) },
-        SectionTab(R.string.spectrum) { SpectrumSection(state, onScan, onRefreshSpectrum) }
+        SectionTab(R.string.spectrum) { SpectrumSection(state, onScan, onRefreshSpectrum) },
+        SectionTab(R.string.settings) { SettingsSection(state, onUpdateSettings) }
     )
     Scaffold(
         topBar = {
@@ -323,113 +327,123 @@ private fun FrequencySection(
     val minKHz = stateMinKHz?.takeIf { it > 0 } ?: DEFAULT_MIN_FREQUENCY_KHZ
     val provisionalMaxKHz = stateMaxKHz?.takeIf { it >= minKHz } ?: DEFAULT_MAX_FREQUENCY_KHZ
     val maxKHz = max(provisionalMaxKHz, minKHz)
-    val stepsCount = ((maxKHz - minKHz) / stepKHz).coerceAtLeast(0)
-    val frequencyPattern = remember(stepKHz) { frequencyFormatPattern(stepKHz) }
-    val displayValues = remember(minKHz, maxKHz, stepKHz) {
-        Array(stepsCount + 1) { index ->
-            formatFrequencyLabel(minKHz + index * stepKHz, frequencyPattern)
+
+    val currentFreqKHz = state.tunerState?.freqKHz ?: minKHz
+
+    val currentMHz = currentFreqKHz / 1000
+    val currentDecimalIndex = (currentFreqKHz % 1000) / stepKHz
+
+    var selectedMHz by rememberSaveable(currentMHz) { mutableIntStateOf(currentMHz) }
+    var selectedDecimalIndex by rememberSaveable(currentFreqKHz) { mutableIntStateOf(currentDecimalIndex) }
+
+    // Debounced tuning
+    LaunchedEffect(selectedMHz, selectedDecimalIndex) {
+        delay(400) // Debounce delay
+        val freqMHz = selectedMHz + (selectedDecimalIndex * stepKHz / 1000.0)
+        onTuneDirect(freqMHz)
+    }
+
+    // Update pickers if frequency changes externally (e.g. RDS AF)
+    LaunchedEffect(currentFreqKHz) {
+        val newMHz = currentFreqKHz / 1000
+        val newDecimalIndex = (currentFreqKHz % 1000) / stepKHz
+        if (newMHz != selectedMHz) {
+            selectedMHz = newMHz
+        }
+        if (newDecimalIndex != selectedDecimalIndex) {
+            selectedDecimalIndex = newDecimalIndex
         }
     }
-    val currentIndex = state.tunerState?.freqKHz?.let { freq ->
-        ((freq - minKHz).toDouble() / stepKHz).roundToInt()
+
+    val minMhz = minKHz / 1000
+    val maxMhz = maxKHz / 1000
+    val mhzSteps = maxMhz - minMhz + 1
+    val decimalSteps = 1000 / stepKHz
+
+    val mhzDisplayValues = remember(minMhz, maxMhz) {
+        Array(mhzSteps) { index -> (minMhz + index).toString() }
     }
-    var selectedIndex by rememberSaveable(minKHz, maxKHz, stepKHz) {
-        mutableIntStateOf(currentIndex?.coerceIn(0, stepsCount) ?: 0)
-    }
-    var pendingTuneIndex by rememberSaveable { mutableIntStateOf(-1) }
-    LaunchedEffect(stepsCount) {
-        val bounded = selectedIndex.coerceIn(0, stepsCount)
-        if (bounded != selectedIndex) {
-            selectedIndex = bounded
+
+    val decimalDisplayValues = remember(stepKHz) {
+        Array(decimalSteps) { index ->
+            String.format(Locale.ROOT, ".%02d", (index * stepKHz) / 10)
         }
     }
-    LaunchedEffect(currentIndex, minKHz, maxKHz, stepKHz) {
-        currentIndex?.let {
-            val bounded = it.coerceIn(0, stepsCount)
-            if (bounded != selectedIndex) {
-                selectedIndex = bounded
+
+    val isControlReady = state.isConnected
+
+    val selectedFrequencyLabel = remember(selectedMHz, selectedDecimalIndex, stepKHz) {
+        val freqMHz = selectedMHz + (selectedDecimalIndex * stepKHz / 1000.0)
+        String.format(Locale.getDefault(), "%.2f MHz", freqMHz)
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(text = stringResource(id = R.string.frequency), style = MaterialTheme.typography.titleLarge)
+            Text(text = selectedFrequencyLabel, style = MaterialTheme.typography.headlineMedium)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // MHz Picker
+                AndroidView(
+                    modifier = Modifier.width(100.dp),
+                    factory = { context ->
+                        NumberPicker(context).apply {
+                            descendantFocusability = NumberPicker.FOCUS_BLOCK_DESCENDANTS
+                            wrapSelectorWheel = false
+                        }
+                    },
+                    update = { picker ->
+                        picker.minValue = 0
+                        picker.maxValue = mhzSteps - 1
+                        picker.displayedValues = mhzDisplayValues
+                        picker.value = (selectedMHz - minMhz).coerceIn(0, mhzSteps - 1)
+                        picker.isEnabled = isControlReady
+                        picker.setOnValueChangedListener { _, _, newVal ->
+                            selectedMHz = newVal + minMhz
+                        }
+                    }
+                )
+                Text(text = ".", style = MaterialTheme.typography.headlineMedium)
+                // Decimal Picker
+                AndroidView(
+                    modifier = Modifier.width(100.dp),
+                    factory = { context ->
+                        NumberPicker(context).apply {
+                            descendantFocusability = NumberPicker.FOCUS_BLOCK_DESCENDANTS
+                            wrapSelectorWheel = false
+                        }
+                    },
+                    update = { picker ->
+                        picker.minValue = 0
+                        picker.maxValue = decimalSteps - 1
+                        picker.displayedValues = decimalDisplayValues
+                        picker.value = selectedDecimalIndex.coerceIn(0, decimalSteps - 1)
+                        picker.isEnabled = isControlReady
+                        picker.setOnValueChangedListener { _, _, newVal ->
+                            selectedDecimalIndex = newVal
+                        }
+                    }
+                )
             }
         }
     }
-    val selectedFrequencyKHz = minKHz + selectedIndex * stepKHz
-    val frequencyLabel = formatFrequencyLabel(selectedFrequencyKHz, frequencyPattern)
-    val isControlReady = state.isConnected
-    LaunchedEffect(pendingTuneIndex, isControlReady, minKHz, stepKHz) {
-        if (pendingTuneIndex >= 0 && isControlReady) {
-            val freqMHz = (minKHz + pendingTuneIndex * stepKHz) / 1000.0
-            onTuneDirect(freqMHz)
-            pendingTuneIndex = -1
-        } else if (!isControlReady) {
-            pendingTuneIndex = -1
-        }
-    }
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(text = stringResource(id = R.string.frequency), style = MaterialTheme.typography.titleLarge)
-            Text(
-                text = stringResource(
-                    id = R.string.selected_frequency_label,
-                    frequencyLabel
-                )
-            )
-            AndroidView(
-                modifier = Modifier.fillMaxWidth(),
-                factory = { context ->
-                    NumberPicker(context).apply {
-                        descendantFocusability = NumberPicker.FOCUS_BLOCK_DESCENDANTS
-                        wrapSelectorWheel = false
-                    }
-                },
-                update = { picker ->
-                    val maxValue = stepsCount
-                    if (picker.minValue != 0 || picker.maxValue != maxValue) {
-                        picker.displayedValues = null
-                        picker.minValue = 0
-                        picker.maxValue = maxValue
-                    }
-                    val values = displayValues
-                    if (picker.displayedValues?.contentEquals(values) != true) {
-                        picker.displayedValues = values
-                    }
-                    picker.isEnabled = isControlReady
-                    if (picker.value != selectedIndex) {
-                        picker.value = selectedIndex
-                    }
-                    picker.setOnValueChangedListener { _, _, newVal ->
-                        val bounded = newVal.coerceIn(0, stepsCount)
-                        selectedIndex = bounded
-                        pendingTuneIndex = bounded
-                    }
-                }
-            )
-        }
-    }
 }
 
-private const val DEFAULT_MIN_FREQUENCY_KHZ = 87_500
+private const val DEFAULT_MIN_FREQUENCY_KHZ = 65000
 private const val DEFAULT_MAX_FREQUENCY_KHZ = 108_000
 private const val DEFAULT_FREQUENCY_STEP_KHZ = 100
-
-private fun frequencyFormatPattern(stepKHz: Int): String {
-    val decimals = when {
-        stepKHz % 1000 == 0 -> 0
-        stepKHz % 100 == 0 -> 1
-        stepKHz % 10 == 0 -> 2
-        else -> 3
-    }
-    return String.format(Locale.ROOT, "%%.%df", decimals)
-}
-
-private fun formatFrequencyLabel(freqKHz: Int, pattern: String): String {
-    val frequencyMHz = freqKHz / 1000.0
-    return String.format(Locale.getDefault(), pattern, frequencyMHz)
-}
 
 @Composable
 private fun StatusSection(
     state: UiState,
-    formatSignal: (TunerState?, SignalUnit) -> String,
-    onSignalUnitChange: (SignalUnit) -> Unit
+    formatSignal: (TunerState?, SignalUnit) -> String
 ) {
     val signalValue = state.tunerState?.signalDbf ?: 0.0
     val progress = (signalValue.coerceIn(0.0, 130.0) / 130.0).toFloat()
@@ -449,7 +463,40 @@ private fun StatusSection(
             Text(text = stringResource(id = R.string.users_label, state.tunerState?.users?.toString() ?: "--"))
             val audioStatus = if (state.audioPlaying) stringResource(id = R.string.audio_playing) else stringResource(id = R.string.audio_stopped)
             Text(text = stringResource(id = R.string.audio_label, audioStatus))
-            SignalUnitSelector(state.signalUnit, onSignalUnitSelected = onSignalUnitChange)
+        }
+    }
+}
+
+@Composable
+private fun SettingsSection(
+    state: UiState,
+    onUpdateSettings: (signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int) -> Unit
+) {
+    var signalUnit by remember(state.signalUnit) { mutableStateOf(state.signalUnit) }
+    var networkBuffer by remember(state.networkBuffer) { mutableStateOf(state.networkBuffer.toString()) }
+    var playerBuffer by remember(state.playerBuffer) { mutableStateOf(state.playerBuffer.toString()) }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(text = stringResource(id = R.string.settings), style = MaterialTheme.typography.titleLarge)
+            SignalUnitSelector(selected = signalUnit, onSignalUnitSelected = { signalUnit = it })
+            OutlinedTextField(
+                value = networkBuffer,
+                onValueChange = { networkBuffer = it },
+                label = { Text("Network Buffer (chunks)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+            OutlinedTextField(
+                value = playerBuffer,
+                onValueChange = { playerBuffer = it },
+                label = { Text("Player Buffer (ms)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            )
+            Button(onClick = { 
+                onUpdateSettings(signalUnit, networkBuffer.toInt(), playerBuffer.toInt())
+            }) {
+                Text(text = stringResource(id = R.string.apply_settings))
+            }
         }
     }
 }

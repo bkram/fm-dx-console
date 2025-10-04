@@ -29,6 +29,7 @@ import kotlin.math.min
 class WebSocketMediaSourceFactory(
     private val client: OkHttpClient,
     private val userAgent: String,
+    private val networkBuffer: Int,
     private val onError: (Throwable) -> Unit
 ) : MediaSource.Factory {
 
@@ -44,11 +45,16 @@ class WebSocketMediaSourceFactory(
         val baseUrl = mediaItem.mediaId ?: throw IllegalArgumentException("mediaId must be set to the base URL")
         val wsUrl = buildWebSocketUrl(baseUrl, "audio")
         val dataSourceFactory = DataSource.Factory {
-            WebSocketStreamDataSource(client, wsUrl, userAgent, onError)
+            WebSocketStreamDataSource(client, wsUrl, userAgent, networkBuffer, onError)
         }
         val richMediaItem = mediaItem.buildUpon()
             .setUri(wsUrl)
             .setMimeType(MimeTypes.AUDIO_MPEG)
+            .setLiveConfiguration(
+                MediaItem.LiveConfiguration.Builder()
+                    .setTargetOffsetMs(500)
+                    .build()
+            )
             .build()
         return ProgressiveMediaSource.Factory(dataSourceFactory)
             .createMediaSource(richMediaItem)
@@ -64,9 +70,10 @@ private class WebSocketStreamDataSource(
     private val client: OkHttpClient,
     private val url: String,
     private val userAgent: String,
+    private val networkBuffer: Int,
     private val onError: (Throwable) -> Unit
 ) : BaseDataSource(true) {
-    private val queue = LinkedBlockingQueue<ByteArray>(MAX_QUEUE_CHUNKS)
+    private val queue = LinkedBlockingQueue<ByteArray>(networkBuffer)
     private val endMarker = ByteArray(0)
     private var currentBuffer: ByteArray? = null
     private var bufferPosition = 0
@@ -150,9 +157,5 @@ private class WebSocketStreamDataSource(
 
     fun shutdown() {
         close()
-    }
-
-    companion object {
-        private const val MAX_QUEUE_CHUNKS = 8
     }
 }

@@ -69,6 +69,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         restorePersistedServerUrl()
+        restorePersistedSettings()
         initializeMediaController()
     }
 
@@ -90,6 +91,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateServerUrl(url: String) {
         _uiState.update { it.copy(serverUrl = url) }
+    }
+
+    fun updateSettings(signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int) {
+        _uiState.update {
+            it.copy(
+                signalUnit = signalUnit,
+                networkBuffer = networkBuffer,
+                playerBuffer = playerBuffer
+            )
+        }
+        persistSettings(signalUnit, networkBuffer, playerBuffer)
     }
 
     fun connect() {
@@ -196,12 +208,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val current = _uiState.value.tunerState?.freqKHz ?: return
         sendCommand("T${current + stepHz}")
         resetRds()
+        refreshAudioStream()
     }
 
     fun tuneToFrequency(valueMHz: Double) {
         val kHz = (valueMHz * 1000).toInt()
         sendCommand("T$kHz")
         resetRds()
+        refreshAudioStream()
+    }
+
+    private fun refreshAudioStream() {
+        val player = controller ?: return
+        if (player.mediaItemCount == 0) return
+
+        val wasPlaying = player.isPlaying
+        val state = _uiState.value
+        val mediaItem = MediaItem.Builder()
+            .setMediaId(state.serverUrl)
+            .build()
+        player.setMediaItem(mediaItem)
+        player.prepare()
+        if (wasPlaying) {
+            player.play()
+        }
     }
 
     fun toggleIms() {
@@ -437,6 +467,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val PREFS_NAME = "fm_dx_prefs"
         private const val KEY_LAST_SERVER_URL = "last_server_url"
+        private const val KEY_SIGNAL_UNIT = "signal_unit"
+        private const val KEY_NETWORK_BUFFER = "network_buffer"
+        private const val KEY_PLAYER_BUFFER = "player_buffer"
         private const val TAG = "MainViewModel"
 
         private fun baselineSpectrum(): List<SpectrumPoint> {
@@ -460,6 +493,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(serverUrl = sanitized) }
     }
 
+    private fun persistSettings(signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int) {
+        preferences.edit()
+            .putString(KEY_SIGNAL_UNIT, signalUnit.name)
+            .putInt(KEY_NETWORK_BUFFER, networkBuffer)
+            .putInt(KEY_PLAYER_BUFFER, playerBuffer)
+            .apply()
+    }
+
+    private fun restorePersistedSettings() {
+        val signalUnitName = preferences.getString(KEY_SIGNAL_UNIT, SignalUnit.DBF.name)
+        val signalUnit = SignalUnit.entries.firstOrNull { it.name == signalUnitName } ?: SignalUnit.DBF
+        val networkBuffer = preferences.getInt(KEY_NETWORK_BUFFER, 2)
+        val playerBuffer = preferences.getInt(KEY_PLAYER_BUFFER, 2000)
+        _uiState.update {
+            it.copy(
+                signalUnit = signalUnit,
+                networkBuffer = networkBuffer,
+                playerBuffer = playerBuffer
+            )
+        }
+    }
+	
     private fun logDebug(message: String, throwable: Throwable? = null) {
         if (!BuildConfig.DEBUG) return
         if (throwable != null) {
@@ -483,5 +538,7 @@ data class UiState(
     val isScanning: Boolean = false,
     val errorMessage: String? = null,
     val signalUnit: SignalUnit = SignalUnit.DBF,
+    val networkBuffer: Int = 2,
+    val playerBuffer: Int = 2000,
     val statusMessage: String? = null
 )

@@ -138,3 +138,5 @@ tests/
 console.log
 3lasclient.log
 package-lock.json
+# Android Gradle wrapper binary
+gradle-wrapper.jar

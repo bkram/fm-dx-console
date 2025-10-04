@@ -1,22 +1,19 @@
 package com.fmdx.android.audio
 
-import android.content.Context
 import android.net.Uri
+import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
-import androidx.media3.common.PlaybackException
-import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.BaseDataSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
+import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import com.fmdx.android.data.buildWebSocketUrl
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -29,72 +26,36 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.min
 
 @UnstableApi
-class WebSocketAudioPlayer(
-    private val context: Context,
-    private val client: OkHttpClient
-) {
-    private val mutex = Mutex()
-    private var player: ExoPlayer? = null
-    private var currentDataSource: WebSocketStreamDataSource? = null
+class WebSocketMediaSourceFactory(
+    private val client: OkHttpClient,
+    private val userAgent: String,
+    private val onError: (Throwable) -> Unit
+) : MediaSource.Factory {
 
-    suspend fun play(
-        baseUrl: String,
-        userAgent: String,
-        onError: (Throwable) -> Unit
-    ) {
-        mutex.withLock {
-            stopLocked()
-            val wsUrl = buildWebSocketUrl(baseUrl, "audio")
-            val factory = DataSource.Factory {
-                WebSocketStreamDataSource(client, wsUrl, userAgent, onError).also {
-                    currentDataSource = it
-                }
-            }
-            val mediaItem = MediaItem.Builder()
-                .setUri(wsUrl)
-                .setMimeType(MimeTypes.AUDIO_MPEG)
-                .build()
-            val mediaSource = ProgressiveMediaSource.Factory(factory).createMediaSource(mediaItem)
-            val loadControl = DefaultLoadControl.Builder()
-                .setBufferDurationsMs(
-                    /* minBufferMs = */ 500,
-                    /* maxBufferMs = */ 2000,
-                    /* bufferForPlaybackMs = */ 250,
-                    /* bufferForPlaybackAfterRebufferMs = */ 500
-                )
-                .build()
-            val exoPlayer = ExoPlayer.Builder(context)
-                .setLoadControl(loadControl)
-                .build()
-            exoPlayer.addListener(object : Player.Listener {
-                override fun onPlayerError(error: PlaybackException) {
-                    onError(error)
-                }
-            })
-            exoPlayer.setMediaSource(mediaSource)
-            exoPlayer.prepare()
-            exoPlayer.playWhenReady = true
-            player = exoPlayer
+    override fun setDrmSessionManagerProvider(drmSessionManagerProvider: DrmSessionManagerProvider): MediaSource.Factory {
+        return this
+    }
+
+    override fun setLoadErrorHandlingPolicy(loadErrorHandlingPolicy: LoadErrorHandlingPolicy): MediaSource.Factory {
+        return this
+    }
+
+    override fun createMediaSource(mediaItem: MediaItem): MediaSource {
+        val baseUrl = mediaItem.mediaId ?: throw IllegalArgumentException("mediaId must be set to the base URL")
+        val wsUrl = buildWebSocketUrl(baseUrl, "audio")
+        val dataSourceFactory = DataSource.Factory {
+            WebSocketStreamDataSource(client, wsUrl, userAgent, onError)
         }
+        val richMediaItem = mediaItem.buildUpon()
+            .setUri(wsUrl)
+            .setMimeType(MimeTypes.AUDIO_MPEG)
+            .build()
+        return ProgressiveMediaSource.Factory(dataSourceFactory)
+            .createMediaSource(richMediaItem)
     }
 
-    suspend fun stop() {
-        mutex.withLock {
-            stopLocked()
-        }
-    }
-
-    fun isPlaying(): Boolean = player?.isPlaying == true
-
-    private fun stopLocked() {
-        player?.release()
-        player = null
-        currentDataSource?.shutdown()
-        currentDataSource = null
-    }
-
-    suspend fun release() {
-        stop()
+    override fun getSupportedTypes(): IntArray {
+        return intArrayOf(C.TYPE_OTHER)
     }
 }
 

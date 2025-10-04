@@ -1,13 +1,18 @@
 package com.fmdx.android
 
 import android.app.Application
+import android.content.ComponentName
 import android.content.Context
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import com.fmdx.android.audio.WebSocketAudioPlayer
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.fmdx.android.audio.PlaybackService
 import com.fmdx.android.data.ControlConnection
 import com.fmdx.android.data.FmDxRepository
 import com.fmdx.android.data.PluginConnection
@@ -15,6 +20,8 @@ import com.fmdx.android.model.SignalUnit
 import com.fmdx.android.model.SpectrumPoint
 import com.fmdx.android.model.TunerInfo
 import com.fmdx.android.model.TunerState
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
@@ -34,7 +41,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .build()
     private val repository = FmDxRepository(okHttpClient)
-    private val audioPlayer = WebSocketAudioPlayer(application, okHttpClient)
 
     private val preferences = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -47,6 +53,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var pluginConnection: PluginConnection? = null
     private var commandJob: Job? = null
     private var pingJob: Job? = null
+    private var controllerFuture: ListenableFuture<MediaController>? = null
+    private val controller: MediaController? get() = controllerFuture?.let { if (it.isDone) it.get() else null }
+
 
     private val europeProgrammes = listOf(
         "No PTY", "News", "Current Affairs", "Info",
@@ -60,7 +69,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         restorePersistedServerUrl()
+        initializeMediaController()
     }
+
+    private fun initializeMediaController() {
+        val sessionToken = SessionToken(getApplication(), ComponentName(getApplication(), PlaybackService::class.java))
+        controllerFuture = MediaController.Builder(getApplication(), sessionToken).buildAsync()
+        controllerFuture?.addListener(
+            {
+                controller?.addListener(object : Player.Listener {
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        _uiState.update { it.copy(audioPlaying = isPlaying) }
+                    }
+                })
+            },
+            MoreExecutors.directExecutor()
+        )
+    }
+
 
     fun updateServerUrl(url: String) {
         _uiState.update { it.copy(serverUrl = url) }
@@ -136,7 +162,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         commandJob = null
         pingJob?.cancel()
         pingJob = null
-        viewModelScope.launch { audioPlayer.stop() }
+        controller?.stop()
         _uiState.update {
             it.copy(
                 isConnected = false,
@@ -149,41 +175,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleAudio() {
         val state = _uiState.value
-        if (state.serverUrl.isBlank()) return
-        if (!state.isConnected && !state.isConnecting) {
-            connect()
-        }
-        viewModelScope.launch {
-            val url = _uiState.value.serverUrl
-            if (url.isBlank()) return@launch
-            if (audioPlayer.isPlaying()) {
-                audioPlayer.stop()
-                _uiState.update { it.copy(audioPlaying = false, statusMessage = "Audio stopped") }
-            } else {
-                try {
-                    audioPlayer.play(url, BuildConfig.USER_AGENT) { error ->
-                        viewModelScope.launch {
-                            _uiState.update {
-                                it.copy(
-                                    errorMessage = error.message,
-                                    audioPlaying = false,
-                                    statusMessage = error.message
-                                )
-                            }
-                        }
-                    }
-                    _uiState.update { it.copy(audioPlaying = true, statusMessage = "Audio playing") }
-                } catch (ex: Exception) {
-                    _uiState.update {
-                        it.copy(
-                            errorMessage = ex.message,
-                            audioPlaying = false,
-                            statusMessage = ex.message
-                        )
-                    }
-                }
+        val player = controller ?: return
+
+        if (player.isPlaying) {
+            player.pause()
+        } else {
+            if (player.currentMediaItem == null) {
+                val mediaItem = MediaItem.Builder()
+                    .setMediaId(state.serverUrl)
+                    .build()
+                player.setMediaItem(mediaItem)
             }
+            player.prepare()
+            player.play()
         }
+
     }
 
     fun tuneStep(stepHz: Int) {
@@ -373,7 +379,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     override fun onCleared() {
         super.onCleared()
         disconnect()
-        viewModelScope.launch { audioPlayer.release() }
+        controllerFuture?.let { MediaController.releaseFuture(it) }
     }
 
     fun formatSignal(state: TunerState?, unit: SignalUnit): String {

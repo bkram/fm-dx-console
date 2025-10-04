@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -164,7 +165,10 @@ private fun FmDxApp(
                 },
                 actions = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        ConnectionStatusIndicator(isConnected = state.isConnected)
+                        ConnectionStatusIndicator(
+                            isConnected = state.isConnected,
+                            isConnecting = state.isConnecting
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
                         IconButton(onClick = onToggleAudio) {
                             val playing = state.audioPlaying
@@ -220,24 +224,40 @@ private data class SectionTab(
 )
 
 @Composable
-private fun ConnectionStatusIndicator(isConnected: Boolean) {
-    val label = if (isConnected) {
-        stringResource(id = R.string.connected)
-    } else {
-        stringResource(id = R.string.disconnected)
+private fun ConnectionStatusIndicator(
+    isConnected: Boolean,
+    isConnecting: Boolean
+) {
+    val label = when {
+        isConnecting -> stringResource(id = R.string.connecting)
+        isConnected -> stringResource(id = R.string.connected)
+        else -> stringResource(id = R.string.disconnected)
     }
-    val indicatorColor = if (isConnected) {
-        MaterialTheme.colorScheme.tertiary
-    } else {
-        MaterialTheme.colorScheme.error
+    val indicatorColor = when {
+        isConnecting -> MaterialTheme.colorScheme.secondary
+        isConnected -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.error
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(indicatorColor)
-        )
+    Row(
+        modifier = Modifier
+            .background(indicatorColor.copy(alpha = 0.15f), CircleShape)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (isConnecting) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                strokeWidth = 2.dp,
+                color = indicatorColor
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(indicatorColor)
+            )
+        }
         Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = label,
@@ -267,15 +287,25 @@ private fun ServerSection(
                 keyboardActions = KeyboardActions(onDone = { onConnect() })
             )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = onConnect) {
+                Button(onClick = onConnect, enabled = !state.isConnecting) {
                     Text(text = stringResource(id = R.string.connect))
                 }
-                OutlinedButton(onClick = onDisconnect, enabled = state.isConnected) {
+                OutlinedButton(onClick = onDisconnect, enabled = state.isConnected || state.isConnecting) {
                     Text(text = stringResource(id = R.string.disconnect))
                 }
             }
+            if (state.isConnecting) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
             state.tunerInfo?.let { info ->
                 Text(text = info.tunerDescription, style = MaterialTheme.typography.bodyMedium)
+            }
+            state.statusMessage?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }
@@ -362,7 +392,11 @@ private fun StatusSection(
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(text = stringResource(id = R.string.status), style = MaterialTheme.typography.titleLarge)
-            LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
+            if (state.isConnecting) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else {
+                LinearProgressIndicator(progress = progress, modifier = Modifier.fillMaxWidth())
+            }
             Text(text = stringResource(id = R.string.signal_label, formatSignal(state.tunerState, state.signalUnit)))
             Text(text = stringResource(id = R.string.ping_label, state.pingMs?.let { "$it ms" } ?: "--"))
             Text(text = stringResource(id = R.string.users_label, state.tunerState?.users?.toString() ?: "--"))
@@ -406,16 +440,41 @@ private fun ControlButtons(
     onCycleAntenna: () -> Unit,
     antennaLabel: () -> String
 ) {
+    val canSwitchAntenna = state.tunerInfo?.canSwitchAntenna() == true
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(text = stringResource(id = R.string.controls), style = MaterialTheme.typography.titleLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(onClick = onToggleIms) { Text(text = stringResource(id = R.string.toggle_ims)) }
-                Button(onClick = onToggleEq) { Text(text = stringResource(id = R.string.toggle_eq)) }
-                Button(onClick = onCycleAntenna, enabled = state.tunerInfo?.canSwitchAntenna() == true) {
-                    Text(text = stringResource(id = R.string.antenna_label, antennaLabel()))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = onToggleIms,
+                    modifier = Modifier.weight(1f),
+                    enabled = state.isConnected
+                ) {
+                    Text(text = stringResource(id = R.string.toggle_ims))
+                }
+                Button(
+                    onClick = onToggleEq,
+                    modifier = Modifier.weight(1f),
+                    enabled = state.isConnected
+                ) {
+                    Text(text = stringResource(id = R.string.toggle_eq))
                 }
             }
+            Button(
+                onClick = onCycleAntenna,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = state.isConnected && canSwitchAntenna
+            ) {
+                Text(text = stringResource(id = R.string.antenna_switch))
+            }
+            Text(
+                text = stringResource(id = R.string.antenna_current, antennaLabel()),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }

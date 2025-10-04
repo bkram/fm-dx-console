@@ -739,7 +739,8 @@ private fun RdsSection(
             }
             Text(text = "PTY: ${currentPty(tuner)}")
             tuner?.diDisplay()?.let { Text(text = "DI: $it") }
-            val afText = if (tuner?.afList.isNullOrEmpty()) "None" else "${tuner?.afList?.size} frequencies"
+//            val afText = if (tuner?.afList.isNullOrEmpty()) "None" else "${tuner?.afList?.size} frequencies"
+            val afText = tuner?.afList?.size?.let { "$it frequencies" } ?: "None"
             Text(text = "AF: $afText")
             Text(text = "RadioText:", style = MaterialTheme.typography.labelLarge)
             AnnotatedErrorText(tuner?.rt0 ?: "", tuner?.rt0Errors ?: emptyList())

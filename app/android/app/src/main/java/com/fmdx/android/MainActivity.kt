@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -139,7 +141,7 @@ private fun FmDxApp(
     formatSignal: (TunerState?, SignalUnit) -> String,
     currentPty: (TunerState?) -> String,
     antennaLabel: () -> String,
-    onUpdateSettings: (signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int) -> Unit
+    onUpdateSettings: (signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int, restartAudioOnTune: Boolean) -> Unit
 ) {
     var showSettings by rememberSaveable { mutableStateOf(false) }
 
@@ -280,7 +282,7 @@ private fun MainScreen(
 @Composable
 private fun SettingsScreen(
     state: UiState,
-    onUpdateSettings: (signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int) -> Unit,
+    onUpdateSettings: (signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int, restartAudioOnTune: Boolean) -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -502,7 +504,7 @@ private fun FrequencySection(
                     factory = { context ->
                         NumberPicker(context).apply {
                             descendantFocusability = NumberPicker.FOCUS_BLOCK_DESCENDANTS
-                            wrapSelectorWheel = false
+                            wrapSelectorWheel = true
                         }
                     },
                     update = { picker ->
@@ -555,11 +557,12 @@ private fun StatusSection(
 @Composable
 private fun SettingsSection(
     state: UiState,
-    onUpdateSettings: (signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int) -> Unit
+    onUpdateSettings: (signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int, restartAudioOnTune: Boolean) -> Unit
 ) {
     var signalUnit by remember(state.signalUnit) { mutableStateOf(state.signalUnit) }
     var networkBuffer by remember(state.networkBuffer) { mutableStateOf(state.networkBuffer.toString()) }
     var playerBuffer by remember(state.playerBuffer) { mutableStateOf(state.playerBuffer.toString()) }
+    var restartAudioOnTune by remember(state.restartAudioOnTune) { mutableStateOf(state.restartAudioOnTune) }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Card(modifier = Modifier.fillMaxWidth()) {
@@ -589,6 +592,20 @@ private fun SettingsSection(
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { restartAudioOnTune = !restartAudioOnTune }
+                        .padding(vertical = 4.dp)
+                ) {
+                    Checkbox(
+                        checked = restartAudioOnTune,
+                        onCheckedChange = { restartAudioOnTune = it }
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(text = stringResource(id = R.string.settings_restart_audio_on_tune))
+                }
             }
         }
         Button(
@@ -596,7 +613,8 @@ private fun SettingsSection(
                 onUpdateSettings(
                     signalUnit,
                     networkBuffer.toIntOrNull() ?: state.networkBuffer,
-                    playerBuffer.toIntOrNull() ?: state.playerBuffer
+                    playerBuffer.toIntOrNull() ?: state.playerBuffer,
+                    restartAudioOnTune
                 )
             },
             modifier = Modifier.fillMaxWidth()

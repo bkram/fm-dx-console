@@ -93,15 +93,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(serverUrl = url) }
     }
 
-    fun updateSettings(signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int) {
+    fun updateSettings(signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int, restartAudioOnTune: Boolean) {
         _uiState.update {
             it.copy(
                 signalUnit = signalUnit,
                 networkBuffer = networkBuffer,
-                playerBuffer = playerBuffer
+                playerBuffer = playerBuffer,
+                restartAudioOnTune = restartAudioOnTune
             )
         }
-        persistSettings(signalUnit, networkBuffer, playerBuffer)
+        persistSettings(signalUnit, networkBuffer, playerBuffer, restartAudioOnTune)
     }
 
     fun connect() {
@@ -205,17 +206,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun tuneStep(stepHz: Int) {
-        val current = _uiState.value.tunerState?.freqKHz ?: return
-        sendCommand("T${current + stepHz}")
-        resetRds()
-        refreshAudioStream()
+        val currentKHz = _uiState.value.tunerState?.freqKHz ?: return
+        tuneToFrequency((currentKHz + stepHz) / 1000.0)
     }
 
     fun tuneToFrequency(valueMHz: Double) {
         val kHz = (valueMHz * 1000).toInt()
+        val currentKHz = _uiState.value.tunerState?.freqKHz
+        if (kHz == currentKHz) return
+
         sendCommand("T$kHz")
         resetRds()
-        refreshAudioStream()
+
+        if (_uiState.value.restartAudioOnTune) {
+            refreshAudioStream()
+        }
     }
 
     private fun refreshAudioStream() {
@@ -256,10 +261,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val next = if (count > 0) (current + 1) % count else 0
         sendCommand("Z$next")
         _uiState.update { it.copy(tunerState = it.tunerState?.copy(antennaIndex = next)) }
-    }
-
-    fun setSignalUnit(unit: SignalUnit) {
-        _uiState.update { it.copy(signalUnit = unit) }
     }
 
     fun requestSpectrumScan() {
@@ -470,6 +471,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private const val KEY_SIGNAL_UNIT = "signal_unit"
         private const val KEY_NETWORK_BUFFER = "network_buffer"
         private const val KEY_PLAYER_BUFFER = "player_buffer"
+        private const val KEY_RESTART_AUDIO_ON_TUNE = "restart_audio_on_tune"
         private const val TAG = "MainViewModel"
 
         private fun baselineSpectrum(): List<SpectrumPoint> {
@@ -493,11 +495,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(serverUrl = sanitized) }
     }
 
-    private fun persistSettings(signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int) {
+    private fun persistSettings(signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int, restartAudioOnTune: Boolean) {
         preferences.edit()
             .putString(KEY_SIGNAL_UNIT, signalUnit.name)
             .putInt(KEY_NETWORK_BUFFER, networkBuffer)
             .putInt(KEY_PLAYER_BUFFER, playerBuffer)
+            .putBoolean(KEY_RESTART_AUDIO_ON_TUNE, restartAudioOnTune)
             .apply()
     }
 
@@ -506,15 +509,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val signalUnit = SignalUnit.entries.firstOrNull { it.name == signalUnitName } ?: SignalUnit.DBF
         val networkBuffer = preferences.getInt(KEY_NETWORK_BUFFER, 2)
         val playerBuffer = preferences.getInt(KEY_PLAYER_BUFFER, 2000)
+        val restartAudioOnTune = preferences.getBoolean(KEY_RESTART_AUDIO_ON_TUNE, true)
         _uiState.update {
             it.copy(
                 signalUnit = signalUnit,
                 networkBuffer = networkBuffer,
-                playerBuffer = playerBuffer
+                playerBuffer = playerBuffer,
+                restartAudioOnTune = restartAudioOnTune
             )
         }
     }
-	
+
     private fun logDebug(message: String, throwable: Throwable? = null) {
         if (!BuildConfig.DEBUG) return
         if (throwable != null) {
@@ -540,5 +545,6 @@ data class UiState(
     val signalUnit: SignalUnit = SignalUnit.DBF,
     val networkBuffer: Int = 2,
     val playerBuffer: Int = 2000,
+    val restartAudioOnTune: Boolean = true,
     val statusMessage: String? = null
 )

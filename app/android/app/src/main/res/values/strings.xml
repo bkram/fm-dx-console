@@ -39,4 +39,5 @@
     <string name="settings_audio_buffering_desc">Lower values can reduce latency, but may cause stuttering on unstable connections.</string>
     <string name="settings_network_buffer_label">Network Buffer (chunks)</string>
     <string name="settings_player_buffer_label">Player Buffer (ms)</string>
+    <string name="settings_restart_audio_on_tune">Restart audio on tune</string>
 </resources>

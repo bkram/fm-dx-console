@@ -5,10 +5,13 @@ import com.fmdx.android.BuildConfig
 import com.fmdx.android.model.SpectrumPoint
 import com.fmdx.android.model.TunerInfo
 import com.fmdx.android.model.TunerState
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -22,7 +25,8 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class FmDxRepository(
-    val client: OkHttpClient
+    val client: OkHttpClient,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     fun connectControl(
         baseUrl: String,
@@ -110,7 +114,7 @@ class FmDxRepository(
         return PluginConnection(webSocket)
     }
 
-    suspend fun fetchTunerInfo(url: String, userAgent: String): TunerInfo {
+    suspend fun fetchTunerInfo(url: String, userAgent: String): TunerInfo = withContext(ioDispatcher) {
         logDebug("fetchTunerInfo(): requesting metadata from $url")
         val httpUrl = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid URL")
         val staticUrl = httpUrl.newBuilder()
@@ -189,7 +193,7 @@ class FmDxRepository(
             antennaNames += "Default"
         }
         val active = activeAnt ?: 0
-        return TunerInfo(
+        TunerInfo(
             tunerName = tunerName,
             tunerDescription = tunerDesc,
             antennaNames = antennaNames,
@@ -197,7 +201,7 @@ class FmDxRepository(
         )
     }
 
-    suspend fun ping(url: String, userAgent: String): Long {
+    suspend fun ping(url: String, userAgent: String): Long = withContext(ioDispatcher) {
         logDebug("ping(): sending request to $url")
         val httpUrl = url.toHttpUrlOrNull() ?: throw IllegalArgumentException("Invalid URL")
         val pingUrl = httpUrl.newBuilder()
@@ -211,12 +215,12 @@ class FmDxRepository(
             }
         }
         val end = System.nanoTime()
-        return TimeUnit.NANOSECONDS.toMillis(end - start)
+        TimeUnit.NANOSECONDS.toMillis(end - start)
     }
 
-    suspend fun fetchSpectrumData(url: String, userAgent: String): List<SpectrumPoint>? {
+    suspend fun fetchSpectrumData(url: String, userAgent: String): List<SpectrumPoint>? = withContext(ioDispatcher) {
         logDebug("fetchSpectrumData(): requesting data from $url")
-        val httpUrl = url.toHttpUrlOrNull() ?: return null
+        val httpUrl = url.toHttpUrlOrNull() ?: return@withContext null
         val spectrumUrl = httpUrl.newBuilder()
             .addPathSegments("spectrum-graph-plugin")
             .build()
@@ -228,9 +232,9 @@ class FmDxRepository(
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 logDebug("fetchSpectrumData(): request failed code=${response.code}")
-                return null
+                return@use null
             }
-            val body = response.body?.string() ?: return null
+            val body = response.body?.string() ?: return@use null
             val json = JSONObject(body)
             val dataset = when {
                 json.optString("sd").isNotBlank() -> json.optString("sd")
@@ -239,8 +243,8 @@ class FmDxRepository(
                     json.optString("sd$ad")
                 }
                 else -> null
-            } ?: return null
-            return dataset.split(',')
+            } ?: return@use null
+            dataset.split(',')
                 .mapNotNull { pair ->
                     val parts = pair.split('=')
                     if (parts.size != 2) return@mapNotNull null

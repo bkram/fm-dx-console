@@ -25,8 +25,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -84,17 +86,18 @@ import kotlin.math.roundToInt
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
 
-    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             val state by viewModel.uiState.collectAsStateWithLifecycle()
             val snackbarHostState = remember { SnackbarHostState() }
+
             LaunchedEffect(state.errorMessage) {
                 state.errorMessage?.let { message ->
                     snackbarHostState.showSnackbar(message)
                 }
             }
+
             FmDxTheme {
                 FmDxApp(
                     state = state,
@@ -109,7 +112,6 @@ class MainActivity : ComponentActivity() {
                     onCycleAntenna = viewModel::cycleAntenna,
                     onScan = viewModel::requestSpectrumScan,
                     onRefreshSpectrum = viewModel::refreshSpectrum,
-                    onSignalUnitChange = viewModel::setSignalUnit,
                     formatSignal = { s, unit -> viewModel.formatSignal(s, unit) },
                     currentPty = viewModel::currentPty,
                     antennaLabel = viewModel::antennaLabel,
@@ -120,7 +122,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FmDxApp(
     state: UiState,
@@ -135,11 +136,60 @@ private fun FmDxApp(
     onCycleAntenna: () -> Unit,
     onScan: () -> Unit,
     onRefreshSpectrum: () -> Unit,
-    onSignalUnitChange: (SignalUnit) -> Unit,
     formatSignal: (TunerState?, SignalUnit) -> String,
     currentPty: (TunerState?) -> String,
     antennaLabel: () -> String,
     onUpdateSettings: (signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int) -> Unit
+) {
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+
+    if (showSettings) {
+        SettingsScreen(
+            state = state,
+            onUpdateSettings = onUpdateSettings,
+            onBack = { showSettings = false }
+        )
+    } else {
+        MainScreen(
+            state = state,
+            snackbarHostState = snackbarHostState,
+            onUpdateUrl = onUpdateUrl,
+            onConnect = onConnect,
+            onDisconnect = onDisconnect,
+            onToggleAudio = onToggleAudio,
+            onTuneDirect = onTuneDirect,
+            onToggleEq = onToggleEq,
+            onToggleIms = onToggleIms,
+            onCycleAntenna = onCycleAntenna,
+            onScan = onScan,
+            onRefreshSpectrum = onRefreshSpectrum,
+            formatSignal = formatSignal,
+            currentPty = currentPty,
+            antennaLabel = antennaLabel,
+            onShowSettings = { showSettings = true }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MainScreen(
+    state: UiState,
+    snackbarHostState: SnackbarHostState,
+    onUpdateUrl: (String) -> Unit,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit,
+    onToggleAudio: () -> Unit,
+    onTuneDirect: (Double) -> Unit,
+    onToggleEq: () -> Unit,
+    onToggleIms: () -> Unit,
+    onCycleAntenna: () -> Unit,
+    onScan: () -> Unit,
+    onRefreshSpectrum: () -> Unit,
+    formatSignal: (TunerState?, SignalUnit) -> String,
+    currentPty: (TunerState?) -> String,
+    antennaLabel: () -> String,
+    onShowSettings: () -> Unit
 ) {
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf(
@@ -149,9 +199,9 @@ private fun FmDxApp(
         SectionTab(R.string.controls) { ControlButtons(state, onToggleEq, onToggleIms, onCycleAntenna, antennaLabel) },
         SectionTab(R.string.rds) { RdsSection(state, currentPty) },
         SectionTab(R.string.station) { StationSection(state) },
-        SectionTab(R.string.spectrum) { SpectrumSection(state, onScan, onRefreshSpectrum) },
-        SectionTab(R.string.settings) { SettingsSection(state, onUpdateSettings) }
+        SectionTab(R.string.spectrum) { SpectrumSection(state, onScan, onRefreshSpectrum) }
     )
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -182,6 +232,9 @@ private fun FmDxApp(
                                 imageVector = icon,
                                 contentDescription = if (playing) stringResource(id = R.string.stop_audio) else stringResource(id = R.string.play_audio)
                             )
+                        }
+                        IconButton(onClick = onShowSettings) {
+                            Icon(Icons.Default.Settings, contentDescription = stringResource(id = R.string.settings))
                         }
                     }
                 }
@@ -219,6 +272,38 @@ private fun FmDxApp(
                     tabs[selectedTab].content()
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsScreen(
+    state: UiState,
+    onUpdateSettings: (signalUnit: SignalUnit, networkBuffer: Int, playerBuffer: Int) -> Unit,
+    onBack: () -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(id = R.string.settings)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(id = R.string.back))
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            SettingsSection(state, onUpdateSettings)
         }
     }
 }
@@ -476,27 +561,47 @@ private fun SettingsSection(
     var networkBuffer by remember(state.networkBuffer) { mutableStateOf(state.networkBuffer.toString()) }
     var playerBuffer by remember(state.playerBuffer) { mutableStateOf(state.playerBuffer.toString()) }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(text = stringResource(id = R.string.settings), style = MaterialTheme.typography.titleLarge)
-            SignalUnitSelector(selected = signalUnit, onSignalUnitSelected = { signalUnit = it })
-            OutlinedTextField(
-                value = networkBuffer,
-                onValueChange = { networkBuffer = it },
-                label = { Text("Network Buffer (chunks)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-            )
-            OutlinedTextField(
-                value = playerBuffer,
-                onValueChange = { playerBuffer = it },
-                label = { Text("Player Buffer (ms)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-            )
-            Button(onClick = { 
-                onUpdateSettings(signalUnit, networkBuffer.toInt(), playerBuffer.toInt())
-            }) {
-                Text(text = stringResource(id = R.string.apply_settings))
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(text = stringResource(id = R.string.settings_display_title), style = MaterialTheme.typography.titleLarge)
+                SignalUnitSelector(selected = signalUnit, onSignalUnitSelected = { signalUnit = it })
             }
+        }
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(text = stringResource(id = R.string.settings_audio_buffering_title), style = MaterialTheme.typography.titleLarge)
+                Text(
+                    text = stringResource(id = R.string.settings_audio_buffering_desc),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                OutlinedTextField(
+                    value = networkBuffer,
+                    onValueChange = { networkBuffer = it.filter { c -> c.isDigit() } },
+                    label = { Text(stringResource(id = R.string.settings_network_buffer_label)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+                OutlinedTextField(
+                    value = playerBuffer,
+                    onValueChange = { playerBuffer = it.filter { c -> c.isDigit() } },
+                    label = { Text(stringResource(id = R.string.settings_player_buffer_label)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                )
+            }
+        }
+        Button(
+            onClick = {
+                onUpdateSettings(
+                    signalUnit,
+                    networkBuffer.toIntOrNull() ?: state.networkBuffer,
+                    playerBuffer.toIntOrNull() ?: state.playerBuffer
+                )
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(text = stringResource(id = R.string.apply_settings))
         }
     }
 }

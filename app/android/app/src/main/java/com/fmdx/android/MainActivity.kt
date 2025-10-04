@@ -250,9 +250,13 @@ private fun FrequencySection(
     onTuneDirect: (Double) -> Unit,
     onRefresh: () -> Unit
 ) {
-    val minFreq = 875
-    val maxFreq = 1080
-    val displayValues = remember { (minFreq..maxFreq).map { String.format(Locale.getDefault(), "%.2f", it / 100.0) }.toTypedArray() }
+    val minFreq = 8_750
+    val maxFreq = 10_800
+    val displayValues = remember {
+        (minFreq..maxFreq).map { freqValue ->
+            String.format(Locale.getDefault(), "%.2f", freqValue / 100.0)
+        }.toTypedArray()
+    }
     val currentIndex = state.tunerState?.freqMHz?.times(100)?.roundToInt()?.minus(minFreq)
     var selectedIndex by rememberSaveable { mutableIntStateOf(currentIndex?.coerceIn(0, maxFreq - minFreq) ?: 0) }
     LaunchedEffect(currentIndex) {

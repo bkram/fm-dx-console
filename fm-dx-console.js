@@ -839,11 +839,25 @@ function updateStationBox(txInfo) {
 function updateStatsBox(data) {
     if (!statsBox || !data) return;
     const padLength = 16;
-    statsBox.setContent(
+    const mode = getLayoutMode();
+    
+    let content = '';
+    
+    // Show server info when terminal is large enough (normal or expanded mode)
+    if (mode !== 'compact' && tunerName) {
+        content += `{bold}Server:{/bold} ${stripUnicode(tunerName)}\n`;
+        if (mode === 'expanded' && tunerDesc) {
+            content += `${stripUnicode(tunerDesc)}\n`;
+        }
+        content += '\n';
+    }
+    
+    content += 
         `${padStringWithSpaces('Server users:', 'green', padLength)}${data.users}\n` +
         `${padStringWithSpaces('Server ping:', 'green', padLength)}${pingTime !== null ? pingTime + ' ms' : ''}\n` +
-        `${padStringWithSpaces('Local audio:', 'green', padLength)}${player.getStatus() ? 'Playing' : 'Stopped'}`
-    );
+        `${padStringWithSpaces('Local audio:', 'green', padLength)}${player.getStatus() ? 'Playing' : 'Stopped'}`;
+    
+    statsBox.setContent(content);
 }
 
 function scaleValue(value) {

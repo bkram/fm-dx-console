@@ -594,8 +594,8 @@ const serverBox = blessed.box({
     }
 });
 
-// Advanced RDS Window (toggle with 'r' key)
-const rdsAdvancedBox = blessed.box({
+// Advanced RDS Window (toggle with 'a' key)
+rdsBoxAdvanced = blessed.box({
     parent: uiBox,
     top: 'center',
     left: 'center',
@@ -920,60 +920,76 @@ function updateRdsAdvancedBox() {
     
     const state = rdsDecoder.getState();
     const lines = [];
-    const w = rdsBoxAdvanced.width - 2;
     
-    lines.push(`{bold}PI:{/bold} ${state.pi}  {bold}PTY:{/bold} ${rdsDecoder.getPtyName()} [${state.pty}]  {bold}TP:{/bold} ${state.tp ? 'Yes' : 'No'}  {bold}TA:{/bold} ${state.ta ? 'Yes' : 'No'}  {bold}MS:{/bold} ${state.ms ? 'Music' : 'Speech'}`);
-    lines.push(`{bold}PS:{/bold} ${rdsDecoder.getPs() || '(no data)'}`);
+    lines.push(`{bold}PI:{/bold} ${state.pi}  {bold}PTY:{/bold} ${rdsDecoder.getPtyName()} [${state.pty}]`);
+    lines.push(`{bold}TP:{/bold} ${state.tp ? '1' : '0'}  {bold}TA:{/bold} ${state.ta ? '1' : '0'}  {bold}MS:{/bold} ${state.ms ? 'Music' : 'Speech'}  {bold}Stereo:{/bold} ${state.diStereo ? '1' : '0'}`);
+    lines.push(`{bold}DI:{/bold} Stereo=${state.diStereo ? 1:0} AH=${state.diArtificialHead ? 1:0} Comp=${state.diCompressed ? 1:0} DPTY=${state.diDynamicPty ? 1:0}`);
+    
+    const ps = rdsDecoder.getPs();
+    const longPs = rdsDecoder.getLongPs();
+    const ptyn = rdsDecoder.getPtyn();
+    
+    lines.push(`{bold}PS:{/bold} ${ps || '(waiting...)'}`);
+    
+    if (longPs && longPs.length > 0) {
+        lines.push(`{bold}Long PS:{/bold} ${longPs}`);
+    }
+    
+    if (ptyn && ptyn.length > 0) {
+        lines.push(`{bold}PTYN:{/bold} ${ptyn}`);
+    }
     lines.push('');
     
     const rt = rdsDecoder.getRt();
     if (rt) {
-        lines.push(`{bold}Radiotext:{/bold} ${rt}`);
+        lines.push(`{bold}RT (${state.abFlag ? 'B' : 'A'}):{/bold} ${rt}`);
     }
     lines.push('');
     
     const afList = rdsDecoder.getAfList();
     if (afList.length > 0) {
-        lines.push(`{bold}AF List (${state.afType}):{/bold} ${afList.join(', ')}`);
+        lines.push(`{bold}AF (${state.afType}):{/bold} ${afList.join(', ')}`);
     }
     
     if (state.ecc || state.lic) {
-        lines.push(`{bold}ECC:{/bold} ${state.ecc || 'N/A'}  {bold}LIC:{/bold} ${state.lic || 'N/A'}`);
+        lines.push(`{bold}ECC:{/bold} ${state.ecc || '-'}  {bold}LIC:{/bold} ${state.lic || '-'}`);
+    }
+    
+    if (state.pin) {
+        lines.push(`{bold}PIN:{/bold} ${state.pin}`);
     }
     
     if (state.localTime || state.utcTime) {
-        lines.push(`{bold}Time:{/bold} Local: ${state.localTime || 'N/A'}  UTC: ${state.utcTime || 'N/A'}`);
+        lines.push(`{bold}Time:{/bold} ${state.localTime || '-'} / ${state.utcTime || '-'}`);
     }
-    
     lines.push('');
-    lines.push('{bold}Group Statistics:{/bold}');
+    
+    lines.push('{bold}Groups:{/bold}');
     const stats = rdsDecoder.getGroupStats();
-    const statsLine = stats.slice(0, 8).map(s => `${s.group}:${s.percent}%`).join('  ');
-    lines.push(statsLine);
+    for (let i = 0; i < Math.min(stats.length, 16); i += 4) {
+        const row = stats.slice(i, i + 4).map(s => `${s.group}:${s.percent}%`).join('  ');
+        lines.push(row);
+    }
     
-    if (state.hasRtPlus) {
+    if (state.hasRtPlus || state.hasTmc || state.hasEon || state.odaList.length > 0) {
         lines.push('');
-        lines.push('{bold}RDS+:{/bold} Detected');
-    }
-    
-    if (state.hasTmc) {
-        lines.push('{bold}TMC:{/bold} Detected');
-    }
-    
-    if (state.hasEon) {
-        lines.push('{bold}EON:{/bold} Detected');
+        const flags = [];
+        if (state.hasRtPlus) flags.push('RDS+');
+        if (state.hasTmc) flags.push('TMC');
+        if (state.hasEon) flags.push('EON');
+        if (state.odaList.length > 0) flags.push('ODA');
+        lines.push(`{bold}Features:{/bold} ${flags.join(', ')}`);
     }
     
     if (state.odaList.length > 0) {
-        lines.push('');
-        lines.push('{bold}ODA:{/bold} ' + state.odaList.map(o => `${o.aid} (${o.group})`).join(', '));
+        lines.push('ODA: ' + state.odaList.map(o => `${o.aid}`).join(', '));
     }
     
     if (Object.keys(state.eonData).length > 0) {
         lines.push('');
-        lines.push('{bold}EON Networks:{/bold}');
+        lines.push('{bold}EON:{/bold}');
         for (const [pi, net] of Object.entries(state.eonData)) {
-            lines.push(`  ${pi}: ${net.ps} TP=${net.tp ? 1:0} TA=${net.ta ? 1:0}`);
+            lines.push(`  ${pi}: ${net.ps} TP=${net.tp?1:0} TA=${net.ta?1:0}`);
         }
     }
     
@@ -1083,7 +1099,11 @@ function connectRdsWebSocket() {
     
     rdsWs.on('message', (data) => {
         try {
-            rdsDecoder.parseMessage(data.toString());
+            const msg = data.toString();
+            if (argDebug) {
+                debugLog('RDS raw:', msg.substring(0, 200));
+            }
+            rdsDecoder.parseMessage(msg);
             updateRdsAdvancedBox();
             renderScreen();
         } catch (error) {

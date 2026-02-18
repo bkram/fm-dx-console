@@ -32,8 +32,17 @@ function decodeRdsChar(byte) {
     return RDS_CHAR_MAP[byte] || '?';
 }
 
-function decodeRdsBuffer(chars) {
-    return chars.map(c => c ? decodeRdsChar(c.charCodeAt(0)) : ' ').join('').trim();
+function decodeRdsBuffer(chars, length = 64) {
+    let result = '';
+    for (let i = 0; i < Math.min(chars.length, length); i++) {
+        const c = chars[i];
+        if (c && c !== ' ') {
+            result += decodeRdsChar(c.charCodeAt(0));
+        } else {
+            result += ' ';
+        }
+    }
+    return result.trim();
 }
 
 function createRdsDecoder() {
@@ -53,10 +62,12 @@ function createRdsDecoder() {
         ptynBuffer: new Array(8).fill(' '),
         
         longPsBuffer: new Array(32).fill(' '),
+        longPsMask: new Array(32).fill(false),
         
         afList: [],
         afListHead: null,
         afType: 'Unknown',
+        afBMap: new Map(),
         
         ecc: '',
         lic: '',
@@ -101,6 +112,17 @@ function createRdsDecoder() {
         lastUpdate: Date.now()
     };
 
+    function decodeAf(code) {
+        if (code >= 1 && code <= 204) {
+            return (87.5 + (code * 0.1)).toFixed(1);
+        }
+        return null;
+    }
+
+    function isAfHeader(code) {
+        return code >= 225 && code <= 249;
+    }
+
     function decodeGroup(g1, g2, g3, g4) {
         state.lastUpdate = Date.now();
         state.groupTotal++;
@@ -113,7 +135,7 @@ function createRdsDecoder() {
         state.groupCounts[groupStr] = (state.groupCounts[groupStr] || 0) + 1;
         
         state.rawGroups.push({ type: groupStr, blocks: [g1, g2, g3, g4], time: new Date().toISOString() });
-        if (state.rawGroups.length > 100) state.rawGroups.shift();
+        if (state.rawGroups.length > 200) state.rawGroups.shift();
         
         const piHex = g1.toString(16).toUpperCase().padStart(4, '0');
         if (piHex === state.piCandidate) {
@@ -132,9 +154,12 @@ function createRdsDecoder() {
                 state.rtBuffer1.fill(' ');
                 state.rtMask0.fill(false);
                 state.rtMask1.fill(false);
+                state.longPsBuffer.fill(' ');
+                state.longPsMask.fill(false);
                 state.afList = [];
                 state.afListHead = null;
                 state.afType = 'Unknown';
+                state.afBMap.clear();
                 state.ecc = '';
                 state.lic = '';
                 state.pin = '';
@@ -182,15 +207,12 @@ function createRdsDecoder() {
                 const af1 = (g3 >> 8) & 0xFF;
                 const af2 = g3 & 0xFF;
                 
-                const decodeAf = (code) => (code >= 1 && code <= 204) ? (87.5 + (code * 0.1)).toFixed(1) : null;
-                
-                const isAfHeader = (v) => v >= 225 && v <= 249;
-                
                 if (isAfHeader(af1)) {
                     const headFreq = decodeAf(af2);
                     if (headFreq) {
                         state.afListHead = headFreq;
                         state.afType = 'B';
+                        state.afBMap.set(headFreq, { expected: af1 - 224, afs: new Set(), matched: 0 });
                     }
                 } else {
                     const f1 = decodeAf(af1);
@@ -198,6 +220,14 @@ function createRdsDecoder() {
                     if (f1 && !state.afList.includes(f1)) state.afList.push(f1);
                     if (f2 && !state.afList.includes(f2)) state.afList.push(f2);
                     if (f1 || f2) state.afType = 'A';
+                }
+                
+                if (isAfHeader(af1) && state.afBMap.has(state.afListHead)) {
+                    const entry = state.afBMap.get(state.afListHead);
+                    const f1 = decodeAf(af1);
+                    const f2 = decodeAf(af2);
+                    if (f1) entry.afs.add(f1);
+                    if (f2) entry.afs.add(f2);
                 }
             }
         }
@@ -261,7 +291,7 @@ function createRdsDecoder() {
             const eonPi = g4.toString(16).toUpperCase().padStart(4, '0');
             
             if (!state.eonData[eonPi]) {
-                state.eonData[eonPi] = { ps: '', tp: false, ta: false, pty: 0, af: [] };
+                state.eonData[eonPi] = { ps: '', psBuffer: new Array(8).fill(' '), tp: false, ta: false, pty: 0, af: [] };
             }
             
             const network = state.eonData[eonPi];
@@ -269,12 +299,10 @@ function createRdsDecoder() {
             
             const variant = g2 & 0x0F;
             if (variant >= 0 && variant <= 3) {
-                if (!network.psBuffer) network.psBuffer = new Array(8).fill(' ');
                 network.psBuffer[variant * 2] = String.fromCharCode((g3 >> 8) & 0xFF);
                 network.psBuffer[variant * 2 + 1] = String.fromCharCode(g3 & 0xFF);
-                network.ps = decodeRdsBuffer(network.psBuffer);
+                network.ps = decodeRdsBuffer(network.psBuffer, 8);
             } else if (variant === 4) {
-                const decodeAf = (code) => (code >= 1 && code <= 204) ? (87.5 + (code * 0.1)).toFixed(1) : null;
                 const f1 = decodeAf((g3 >> 8) & 0xFF);
                 const f2 = decodeAf(g3 & 0xFF);
                 if (f1 && !network.af.includes(f1)) network.af.push(f1);
@@ -304,12 +332,28 @@ function createRdsDecoder() {
         else if (groupTypeVal === 16 || groupTypeVal === 17) {
             state.hasTmc = true;
         }
+        
+        else if (groupTypeVal === 30) {
+            const address = g2 & 0x0F;
+            if (address < 16) {
+                state.longPsBuffer[address * 2] = String.fromCharCode((g4 >> 8) & 0xFF);
+                state.longPsBuffer[address * 2 + 1] = String.fromCharCode(g4 & 0xFF);
+                state.longPsMask[address * 2] = true;
+                state.longPsMask[address * 2 + 1] = true;
+            }
+        }
     }
 
     function parseMessage(data) {
-        const lines = data.trim().split('\n');
+        if (!data || typeof data !== 'string') return;
+        
+        const lines = data.trim().split(/\r?\n/);
         for (const line of lines) {
-            const parts = line.trim().split(/[,\s]+/);
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            
+            const parts = trimmed.split(/[\s,;]+/);
+            
             if (parts.length >= 4) {
                 const g1 = parseInt(parts[0], 16);
                 const g2 = parseInt(parts[1], 16);
@@ -324,12 +368,20 @@ function createRdsDecoder() {
     }
 
     function getPs() {
-        return decodeRdsBuffer(state.psBuffer);
+        return decodeRdsBuffer(state.psBuffer, 8);
+    }
+
+    function getLongPs() {
+        return decodeRdsBuffer(state.longPsBuffer, 32);
     }
 
     function getRt() {
         const buffer = state.abFlag ? state.rtBuffer1 : state.rtBuffer0;
-        return decodeRdsBuffer(buffer);
+        return decodeRdsBuffer(buffer, 64);
+    }
+
+    function getPtyn() {
+        return decodeRdsBuffer(state.ptynBuffer, 8);
     }
 
     function getPtyName() {
@@ -338,7 +390,9 @@ function createRdsDecoder() {
 
     function getAfList() {
         if (state.afType === 'B' && state.afListHead) {
-            return [state.afListHead, ...state.afList.filter(f => f !== state.afListHead)];
+            const head = state.afListHead;
+            const others = state.afList.filter(f => f !== head);
+            return [head, ...others];
         }
         return state.afList;
     }
@@ -367,7 +421,9 @@ function createRdsDecoder() {
     return {
         parseMessage,
         getPs,
+        getLongPs,
         getRt,
+        getPtyn,
         getPtyName,
         getAfList,
         getGroupStats,

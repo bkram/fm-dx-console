@@ -75,6 +75,9 @@ function createRdsDecoder() {
         
         longPsBuffer: new Array(32).fill(' '),
         longPsMask: new Array(32).fill(false),
+        longPsCandidate: '',
+        longPsStableSince: 0,
+        longPsConfirmed: false,
         
         afList: [],
         afListHead: null,
@@ -391,6 +394,18 @@ function createRdsDecoder() {
                 state.longPsMask[address * 2] = true;
                 state.longPsMask[address * 2 + 1] = true;
             }
+            
+            // Long PS stability checking
+            const currentLps = decodeRdsBuffer(state.longPsBuffer, 32);
+            if (currentLps === state.longPsCandidate && currentLps.trim().length > 0) {
+                if (Date.now() - state.longPsStableSince > 500) {
+                    state.longPsConfirmed = true;
+                }
+            } else {
+                state.longPsCandidate = currentLps;
+                state.longPsStableSince = Date.now();
+                state.longPsConfirmed = false;
+            }
         }
     }
 
@@ -438,7 +453,14 @@ function createRdsDecoder() {
     }
 
     function getLongPs() {
-        return decodeRdsBuffer(state.longPsBuffer, 32);
+        const lps = decodeRdsBuffer(state.longPsBuffer, 32);
+        // Only show if we have confirmed content
+        if (state.longPsConfirmed) return lps;
+        return lps && lps.trim().length > 0 ? lps : '';
+    }
+    
+    function getLongPsStable() {
+        return state.longPsConfirmed;
     }
 
     function getRt() {
@@ -461,6 +483,18 @@ function createRdsDecoder() {
     
     function getRtAbFlag() {
         return state.abFlag;
+    }
+    
+    function getRtA() {
+        const rt = decodeRdsBuffer(state.rtBuffer0, 64);
+        if (state.rtConfirmed && !state.rtConfirmedFlag) return rt;
+        return rt && rt.trim().length > 0 ? rt : '';
+    }
+    
+    function getRtB() {
+        const rt = decodeRdsBuffer(state.rtBuffer1, 64);
+        if (state.rtConfirmed && state.rtConfirmedFlag) return rt;
+        return rt && rt.trim().length > 0 ? rt : '';
     }
 
     function getPtyn() {
@@ -506,7 +540,10 @@ function createRdsDecoder() {
         getPs,
         getPsStable,
         getLongPs,
+        getLongPsStable,
         getRt,
+        getRtA,
+        getRtB,
         getRtStable,
         getRtAbFlag,
         getPtyn,

@@ -933,8 +933,10 @@ function updateRdsAdvancedBox() {
     const psMark = psStable ? '*' : '';
     lines.push(`{bold}PS${psMark}:{/bold} ${ps || '(waiting...)'}`);
     
+    const longPsStable = rdsDecoder.getLongPsStable();
+    const longPsMark = longPsStable ? '*' : '';
     if (longPs && longPs.length > 0) {
-        lines.push(`{bold}Long PS:{/bold} ${longPs}`);
+        lines.push(`{bold}Long PS${longPsMark}:{/bold} ${longPs}`);
     }
     
     if (ptyn && ptyn.length > 0) {
@@ -942,9 +944,12 @@ function updateRdsAdvancedBox() {
     }
     lines.push('');
     
-    const rt = rdsDecoder.getRt();
-    const rtStable = rdsDecoder.getRtStable();
-    if (rt) {
+    const rtA = rdsDecoder.getRtA();
+    const rtB = rdsDecoder.getRtB();
+    if (rtA || rtB) {
+        if (rtA) lines.push(`{bold}RT-A:{/bold} ${rtA}`);
+        if (rtB) lines.push(`{bold}RT-B:{/bold} ${rtB}`);
+    } else if (rt) {
         const abFlag = rdsDecoder.getRtAbFlag();
         const stableMark = rtStable ? '*' : '';
         lines.push(`{bold}RT (${abFlag ? 'B' : 'A'})${stableMark}:{/bold} ${rt}`);

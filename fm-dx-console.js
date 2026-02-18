@@ -1102,15 +1102,20 @@ function connectRdsWebSocket() {
         debugLog('RDS WebSocket connection established');
     });
     
+    let lastRdsUpdate = 0;
+    const RDS_UPDATE_INTERVAL = 200; // ms
+    
     rdsWs.on('message', (data) => {
         try {
             const msg = data.toString();
-            if (argDebug) {
-                debugLog('RDS raw:', msg.substring(0, 200));
-            }
             rdsDecoder.parseMessage(msg);
-            updateRdsAdvancedBox();
-            renderScreen();
+            
+            const now = Date.now();
+            if (now - lastRdsUpdate > RDS_UPDATE_INTERVAL) {
+                lastRdsUpdate = now;
+                updateRdsAdvancedBox();
+                renderScreen();
+            }
         } catch (error) {
             debugLog('Error parsing RDS data:', error);
         }

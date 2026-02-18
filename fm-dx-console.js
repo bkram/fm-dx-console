@@ -995,11 +995,25 @@ function updateRdsAdvancedBox() {
         lines.push('ODA: ' + state.odaList.map(o => `${o.aid}`).join(', '));
     }
     
-    if (Object.keys(state.eonData).length > 0) {
+    const eonData = rdsDecoder.getEonData();
+    if (Object.keys(eonData).length > 0) {
         lines.push('');
         lines.push('{bold}EON:{/bold}');
-        for (const [pi, net] of Object.entries(state.eonData)) {
-            lines.push(`  ${pi}: ${net.ps} TP=${net.tp?1:0} TA=${net.ta?1:0}`);
+        for (const [pi, net] of Object.entries(eonData)) {
+            let eonLine = `  ${pi}: ${net.ps || '-'} TP=${net.tp?1:0} TA=${net.ta?1:0}`;
+            if (net.af && net.af.length > 0) {
+                eonLine += ` AF=[${net.af.join(',')}]`;
+            }
+            if (net.mappedFreqs && net.mappedFreqs.length > 0) {
+                eonLine += ` Mapped=[${net.mappedFreqs.join(',')}]`;
+            }
+            if (net.linkageInfo) {
+                eonLine += ` Link=${net.linkageInfo}`;
+            }
+            if (net.pin) {
+                eonLine += ` PIN=${net.pin}`;
+            }
+            lines.push(eonLine);
         }
     }
     

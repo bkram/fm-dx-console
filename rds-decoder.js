@@ -114,6 +114,7 @@ function createRdsDecoder() {
         rtPlusTags: [],
         
         eonData: {},
+        eonMappedFreqs: {},
         
         tmcMessages: [],
         
@@ -344,7 +345,11 @@ function createRdsDecoder() {
             const eonPi = g4.toString(16).toUpperCase().padStart(4, '0');
             
             if (!state.eonData[eonPi]) {
-                state.eonData[eonPi] = { ps: '', psBuffer: new Array(8).fill(' '), tp: false, ta: false, pty: 0, af: [] };
+                state.eonData[eonPi] = { 
+                    ps: '', psBuffer: new Array(8).fill(' '), 
+                    tp: false, ta: false, pty: 0, 
+                    af: [], linkageInfo: '', pin: '' 
+                };
             }
             
             const network = state.eonData[eonPi];
@@ -360,9 +365,29 @@ function createRdsDecoder() {
                 const f2 = decodeAf(g3 & 0xFF);
                 if (f1 && !network.af.includes(f1)) network.af.push(f1);
                 if (f2 && !network.af.includes(f2)) network.af.push(f2);
+            } else if (variant === 5) {
+                // Mapped frequencies
+                const fMain = decodeAf((g3 >> 8) & 0xFF);
+                const fMapped = decodeAf(g3 & 0xFF);
+                if (fMain && fMapped) {
+                    if (!network.mappedFreqs) network.mappedFreqs = [];
+                    const mapStr = `${fMain} -> ${fMapped}`;
+                    if (!network.mappedFreqs.includes(mapStr)) {
+                        network.mappedFreqs.push(mapStr);
+                    }
+                }
+            } else if (variant === 12) {
+                network.linkageInfo = g3.toString(16).toUpperCase().padStart(4, '0');
             } else if (variant === 13) {
                 network.pty = (g3 >> 11) & 0x1F;
                 network.ta = !!(g3 & 0x01);
+            } else if (variant === 14) {
+                const day = (g3 >> 11) & 0x1F;
+                const hour = (g3 >> 6) & 0x1F;
+                const min = g3 & 0x3F;
+                if (day > 0) {
+                    network.pin = `${day}. ${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+                }
             }
         }
         
@@ -377,8 +402,24 @@ function createRdsDecoder() {
                 if (state.odaList.length > 5) state.odaList.shift();
             }
             
+            // RT+ detection (AID 4A7A or 4A7B)
             if (aid === '4A7A' || aid === '4A7B') {
                 state.hasRtPlus = true;
+                // Decode RT+ tags from group 3A
+                const tag1 = (g3 >> 10) & 0x1F;
+                const tag2 = (g3 >> 5) & 0x1F;
+                const tag3 = g3 & 0x1F;
+                const len1 = (g4 >> 10) & 0x1F;
+                const len2 = (g4 >> 5) & 0x1F;
+                const len3 = g4 & 0x1F;
+                
+                if (tag1 > 0 && tag1 < 24) {
+                    state.rtPlusTags.push({ 
+                        contentType: tag1, 
+                        start: len1,
+                        length: (g4 >> 10) & 0x1F 
+                    });
+                }
             }
         }
         
@@ -496,6 +537,14 @@ function createRdsDecoder() {
         if (state.rtConfirmed && state.rtConfirmedFlag) return rt;
         return rt && rt.trim().length > 0 ? rt : '';
     }
+    
+    function getRtPlus() {
+        return state.rtPlusTags;
+    }
+    
+    function getEonData() {
+        return state.eonData;
+    }
 
     function getPtyn() {
         return decodeRdsBuffer(state.ptynBuffer, 8);
@@ -546,6 +595,8 @@ function createRdsDecoder() {
         getRtB,
         getRtStable,
         getRtAbFlag,
+        getRtPlus,
+        getEonData,
         getPtyn,
         getPtyName,
         getAfList,

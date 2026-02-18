@@ -6,7 +6,7 @@ const PTY_NAMES = [
     "National Music", "Oldies Music", "Folk Music", "Documentary", "Alarm Test", "Alarm"
 ];
 
-const RDS_CHAR_MAP = {
+const RDS_G2_MAP = {
     0x80: 'á', 0x81: 'à', 0x82: 'é', 0x83: 'è', 0x84: 'í', 0x85: 'ì', 0x86: 'ó', 0x87: 'ò',
     0x88: 'ú', 0x89: 'ù', 0x8A: 'Ñ', 0x8B: 'Ç', 0x8C: 'Ş', 0x8D: 'ß', 0x8E: '¡', 0x8F: 'Ĳ',
     0x90: 'â', 0x91: 'ä', 0x92: 'ê', 0x93: 'ë', 0x94: 'î', 0x95: 'ï', 0x96: 'ô', 0x97: 'ö',
@@ -25,73 +25,100 @@ const RDS_CHAR_MAP = {
     0xF8: 'þ', 0xF9: 'ŋ', 0xFA: 'ŕ', 0xFB: 'ć', 0xFC: 'ś', 0xFD: 'ź', 0xFE: 'ŧ', 0xFF: 'ÿ'
 };
 
-function decodeRdsChar(byte) {
-    if (byte >= 0x20 && byte <= 0x7F) {
-        return String.fromCharCode(byte);
-    }
-    return RDS_CHAR_MAP[byte] || '?';
+const ODA_MAP = {
+    "CD46": "TMC", "4BD7": "Radiotext+", "0093": "DAB Cross-Referencing",
+    "CD9E": "EWS", "C737": "UMC", "E1C1": "Action Code",
+    "CD47": "TMC", "48D8": "Radiotext+", "4BD8": "Radiotext+"
+};
+
+const RT_PLUS_LABELS = {
+    1: "Title", 2: "Album", 3: "Track Number", 4: "Artist", 5: "Composition",
+    6: "Movement", 7: "Conductor", 8: "Composer", 9: "Band", 10: "Comment",
+    11: "Genre", 12: "News", 13: "Local News", 14: "Stockmarket", 15: "Sport",
+    16: "Lottery", 17: "Horoscope", 18: "Daily Diversion", 19: "Health Info",
+    20: "Event", 21: "Scene", 22: "Cinema", 23: "Stupidity Machine",
+    24: "Date & Time", 25: "Weather", 26: "Traffic Info", 27: "Alarm",
+    28: "Advertisement", 29: "Website/URL", 30: "Other",
+    31: "Station Name (Short)", 32: "Station Name (Long)", 33: "Current program",
+    34: "Next program", 35: "Part", 36: "Host", 37: "Editorial Staff",
+    38: "Frequency", 39: "Homepage", 40: "Sub-channel"
+};
+
+function decodeRdsByte(b) {
+    if (RDS_G2_MAP[b]) return RDS_G2_MAP[b];
+    if (b < 0x20) return String.fromCharCode(b);
+    if (b >= 0x20 && b <= 0x7F) return String.fromCharCode(b);
+    return String.fromCharCode(b);
 }
 
-function decodeRdsBuffer(chars, length = 64) {
-    let result = '';
-    for (let i = 0; i < Math.min(chars.length, length); i++) {
-        const c = chars[i];
-        if (c && c !== ' ') {
-            result += decodeRdsChar(c.charCodeAt(0));
-        } else {
-            result += ' ';
-        }
+function renderRdsBuffer(chars) {
+    if (!chars || !Array.isArray(chars)) return '';
+    return chars.map(c => {
+        const b = c ? c.charCodeAt(0) : 0x20;
+        if (b === 0) return ' ';
+        if (b === 0x0D) return '[0x0D]';
+        return decodeRdsByte(b);
+    }).join('');
+}
+
+function pad(n) {
+    return n.toString().padStart(2, '0');
+}
+
+function convertMjd(mjd) {
+    if (mjd === 0) return null;
+    const yp = Math.floor((mjd - 15078.2) / 365.25);
+    const mp = Math.floor((mjd - 14956.1 - Math.floor(yp * 365.25)) / 30.6001);
+    const term1 = Math.floor(yp * 365.25);
+    const term2 = Math.floor(mp * 30.6001);
+    const day = Number(mjd) - 14956 - Number(term1) - Number(term2);
+    const k = (mp === 14 || mp === 15) ? 1 : 0;
+    const year = 1900 + yp + k;
+    const month = Number(mp) - 1 - Number(k) * 12;
+    return { day: day, month: month, year: year };
+}
+
+function decodeAf(code) {
+    if (code >= 1 && code <= 204) {
+        return (87.5 + (code * 0.1)).toFixed(1);
     }
-    return result.trim();
+    return null;
 }
 
 function createRdsDecoder() {
     const state = {
-        pi: '----',
-        piCounter: 0,
-        piCandidate: '----',
-        
         psBuffer: new Array(8).fill(' '),
         psMask: new Array(8).fill(false),
+        lpsBuffer: new Array(32).fill(' '),
+        ptynBuffer: new Array(8).fill(' '),
         
         rtBuffer0: new Array(64).fill(' '),
         rtBuffer1: new Array(64).fill(' '),
         rtMask0: new Array(64).fill(false),
         rtMask1: new Array(64).fill(false),
-        
-        // PS stability checking
-        psCandidate: '',
-        psStableSince: 0,
-        psConfirmed: false,
-        
-        // RT stability checking
-        rtCandidate0: '',
-        rtCandidate1: '',
+        rtCandidateString: "",
         rtStableSince: 0,
-        rtConfirmed: false,
-        rtConfirmedFlag: false,
         
-        ptynBuffer: new Array(8).fill(' '),
-        
-        longPsBuffer: new Array(32).fill(' '),
-        longPsMask: new Array(32).fill(false),
-        longPsCandidate: '',
-        longPsStableSince: 0,
-        longPsConfirmed: false,
-        
-        afList: [],
+        afSet: [],
         afListHead: null,
-        afType: 'Unknown',
+        lastGroup0A3: null,
         afBMap: new Map(),
+        currentMethodBGroup: null,
+        afType: 'Unknown',
+        
+        currentPi: "----",
+        piCandidate: "----",
+        piCounter: 0,
+        piEstablishmentTime: 0,
         
         ecc: '',
         lic: '',
         pin: '',
-        
         localTime: '',
         utcTime: '',
         
         pty: 0,
+        ptynAbFlag: false,
         tp: false,
         ta: false,
         ms: false,
@@ -103,57 +130,123 @@ function createRdsDecoder() {
         
         abFlag: false,
         
-        groupCounts: {},
-        groupTotal: 0,
+        rtPlusOdaGroup: null,
+        rtPlusTags: new Map(),
+        rtPlusItemRunning: false,
+        rtPlusItemToggle: false,
         
+        hasOda: false,
+        odaApp: null,
+        odaList: [],
         hasRtPlus: false,
         hasEon: false,
         hasTmc: false,
-        hasOda: false,
-        
-        rtPlusTags: [],
+        hasEws: false,
+        ewsId: "",
         
         eonData: {},
-        eonMappedFreqs: {},
         
-        tmcMessages: [],
+        tmcServiceInfo: { ltn: 0, sid: 0, afi: false, mode: 0, providerName: "[Identifying...]" },
+        tmcBuffer: [],
+        tmcProviderBuffer: new Array(16).fill(' '),
         
-        odaList: [],
+        groupCounts: {},
+        groupTotal: 0,
         
-        rawGroups: [],
+        graceCounter: 10,
+        isDirty: false,
         
-        rtHistory: [],
-        psHistory: [],
+        psCandidateString: "        ",
+        psStableSince: 0,
+        psValidationBuffer: "        ",
+        ptynCandidateString: "        ",
+        ptynStableSince: 0,
+        
+        berHistory: [],
+        BER_WINDOW_SIZE: 40,
+        
+        dabTargetGroup: null,
+        dabExtraInfo: "",
         
         lastUpdate: Date.now()
     };
 
-    function decodeAf(code) {
-        if (code >= 1 && code <= 204) {
-            return (87.5 + (code * 0.1)).toFixed(1);
-        }
-        return null;
-    }
-
-    function isAfHeader(code) {
-        return code >= 225 && code <= 249;
+    function resetState() {
+        state.psBuffer.fill(' ');
+        state.psMask.fill(false);
+        state.lpsBuffer.fill(' ');
+        state.ptynBuffer.fill(' ');
+        state.rtBuffer0.fill(' ');
+        state.rtBuffer1.fill(' ');
+        state.rtMask0.fill(false);
+        state.rtMask1.fill(false);
+        state.rtCandidateString = "";
+        state.rtStableSince = 0;
+        
+        state.afSet = [];
+        state.afListHead = null;
+        state.afBMap.clear();
+        state.currentMethodBGroup = null;
+        state.afType = 'Unknown';
+        
+        state.eonData = {};
+        state.tmcBuffer = [];
+        state.tmcProviderBuffer.fill(' ');
+        state.rtPlusTags.clear();
+        state.rtPlusItemRunning = false;
+        state.rtPlusItemToggle = false;
+        
+        state.hasOda = false;
+        state.odaApp = null;
+        state.odaList = [];
+        state.hasRtPlus = false;
+        state.hasEon = false;
+        state.hasTmc = false;
+        state.hasEws = false;
+        state.ewsId = "";
+        
+        state.ecc = '';
+        state.lic = '';
+        state.pin = '';
+        state.localTime = '';
+        state.utcTime = '';
+        
+        state.pty = 0;
+        state.ptynAbFlag = false;
+        state.tp = false;
+        state.ta = false;
+        state.ms = false;
+        state.diStereo = false;
+        state.diArtificialHead = false;
+        state.diCompressed = false;
+        state.diDynamicPty = false;
+        state.abFlag = false;
+        
+        state.rtPlusOdaGroup = null;
+        state.lastGroup0A3 = null;
+        
+        state.groupCounts = {};
+        state.groupTotal = 0;
+        
+        state.piEstablishmentTime = Date.now();
+        state.psCandidateString = "        ";
+        state.psStableSince = 0;
+        state.psValidationBuffer = "        ";
+        state.ptynCandidateString = "        ";
+        state.ptynStableSince = 0;
+        
+        state.graceCounter = 10;
+        state.berHistory = [];
+        state.dabTargetGroup = null;
+        state.dabExtraInfo = "";
     }
 
     function decodeGroup(g1, g2, g3, g4) {
+        state.isDirty = true;
         state.lastUpdate = Date.now();
-        state.groupTotal++;
-        
-        const groupTypeVal = (g2 >> 11) & 0x1F;
-        const typeNum = groupTypeVal >> 1;
-        const versionBit = groupTypeVal & 1;
-        const groupStr = `${typeNum}${versionBit === 0 ? 'A' : 'B'}`;
-        
-        state.groupCounts[groupStr] = (state.groupCounts[groupStr] || 0) + 1;
-        
-        state.rawGroups.push({ type: groupStr, blocks: [g1, g2, g3, g4], time: new Date().toISOString() });
-        if (state.rawGroups.length > 200) state.rawGroups.shift();
         
         const piHex = g1.toString(16).toUpperCase().padStart(4, '0');
+        
         if (piHex === state.piCandidate) {
             state.piCounter++;
         } else {
@@ -161,36 +254,20 @@ function createRdsDecoder() {
             state.piCounter = 1;
         }
         
-        if (state.piCounter >= 4 || (state.pi === '----' && state.piCounter >= 1)) {
-            if (state.piCandidate !== state.pi) {
-                state.pi = state.piCandidate;
-                state.psBuffer.fill(' ');
-                state.psMask.fill(false);
-                state.rtBuffer0.fill(' ');
-                state.rtBuffer1.fill(' ');
-                state.rtMask0.fill(false);
-                state.rtMask1.fill(false);
-                state.longPsBuffer.fill(' ');
-                state.longPsMask.fill(false);
-                state.afList = [];
-                state.afListHead = null;
-                state.afType = 'Unknown';
-                state.afBMap.clear();
-                state.ecc = '';
-                state.lic = '';
-                state.pin = '';
-                state.hasRtPlus = false;
-                state.hasEon = false;
-                state.hasTmc = false;
-                state.hasOda = false;
-                state.rtPlusTags = [];
-                state.eonData = {};
-                state.tmcMessages = [];
-                state.odaList = [];
-                state.groupCounts = {};
-                state.groupTotal = 0;
+        if (state.piCounter >= 4 || (state.currentPi === "----" && state.piCounter >= 1)) {
+            if (state.piCandidate !== state.currentPi) {
+                state.currentPi = state.piCandidate;
+                resetState();
             }
         }
+        
+        const groupTypeVal = (g2 >> 11) & 0x1F;
+        const typeNum = groupTypeVal >> 1;
+        const versionBit = groupTypeVal & 1;
+        const groupStr = `${typeNum}${versionBit === 0 ? 'A' : 'B'}`;
+        
+        state.groupCounts[groupStr] = (state.groupCounts[groupStr] || 0) + 1;
+        state.groupTotal++;
         
         const tp = !!((g2 >> 10) & 0x01);
         const pty = (g2 >> 5) & 0x1F;
@@ -219,61 +296,96 @@ function createRdsDecoder() {
             state.psMask[address * 2] = true;
             state.psMask[address * 2 + 1] = true;
             
-            // PS stability checking
-            const currentPs = decodeRdsBuffer(state.psBuffer, 8);
-            if (currentPs === state.psCandidate && currentPs.trim().length > 0) {
-                if (Date.now() - state.psStableSince > 500) {
-                    state.psConfirmed = true;
-                }
-            } else {
-                state.psCandidate = currentPs;
-                state.psStableSince = Date.now();
-                state.psConfirmed = false;
-            }
-            
-            if (isGroupA && address === 0) {
-                const af1 = (g3 >> 8) & 0xFF;
-                const af2 = g3 & 0xFF;
-                
-                if (isAfHeader(af1)) {
-                    const headFreq = decodeAf(af2);
-                    if (headFreq) {
-                        state.afListHead = headFreq;
-                        state.afType = 'B';
-                        state.afBMap.set(headFreq, { expected: af1 - 224, afs: new Set(), matched: 0 });
+            if (isGroupA) {
+                if (state.lastGroup0A3 !== g3) {
+                    state.lastGroup0A3 = g3;
+                    
+                    const af1 = (g3 >> 8) & 0xFF;
+                    const af2 = g3 & 0xFF;
+                    const isAfHeader = (v) => v >= 225 && v <= 249;
+                    const isAfFreq = (v) => v >= 1 && v <= 204;
+                    
+                    const processMethodAFreq = (f) => {
+                        if (f && !state.afSet.includes(f)) {
+                            state.afSet.push(f);
+                        }
+                    };
+                    
+                    if (isAfHeader(af1)) {
+                        const headFreq = decodeAf(af2);
+                        if (headFreq) {
+                            processMethodAFreq(headFreq);
+                            state.afListHead = headFreq;
+                            const headIdx = state.afSet.indexOf(headFreq);
+                            if (headIdx > 0) {
+                                state.afSet.splice(headIdx, 1);
+                                state.afSet.unshift(headFreq);
+                            }
+                            const count = Number(af1) - 224;
+                            state.currentMethodBGroup = headFreq;
+                            if (!state.afBMap.has(headFreq)) {
+                                state.afBMap.set(headFreq, {
+                                    expected: count,
+                                    afs: new Set(),
+                                    matchCount: 0,
+                                    pairCount: 0
+                                });
+                            } else {
+                                state.afBMap.get(headFreq).expected = count;
+                            }
+                        }
+                    } else {
+                        const f1 = decodeAf(af1);
+                        const f2 = decodeAf(af2);
+                        if (f1) processMethodAFreq(f1);
+                        if (f2) processMethodAFreq(f2);
                     }
-                } else {
-                    const f1 = decodeAf(af1);
-                    const f2 = decodeAf(af2);
-                    if (f1 && !state.afList.includes(f1)) state.afList.push(f1);
-                    if (f2 && !state.afList.includes(f2)) state.afList.push(f2);
-                    if (f1 || f2) state.afType = 'A';
-                }
-                
-                if (isAfHeader(af1) && state.afBMap.has(state.afListHead)) {
-                    const entry = state.afBMap.get(state.afListHead);
-                    const f1 = decodeAf(af1);
-                    const f2 = decodeAf(af2);
-                    if (f1) entry.afs.add(f1);
-                    if (f2) entry.afs.add(f2);
+                    
+                    if (isAfFreq(af1) && isAfFreq(af2)) {
+                        const f1 = decodeAf(af1);
+                        const f2 = decodeAf(af2);
+                        if (f1 && f2 && state.currentMethodBGroup && state.afBMap.has(state.currentMethodBGroup)) {
+                            const entry = state.afBMap.get(state.currentMethodBGroup);
+                            entry.afs.add(f1);
+                            entry.afs.add(f2);
+                            entry.pairCount++;
+                            if (f1 === state.currentMethodBGroup || f2 === state.currentMethodBGroup) {
+                                entry.matchCount++;
+                            }
+                        }
+                    }
+                    
+                    const validCandidates = Array.from(state.afBMap.values()).filter((entry) => {
+                        return entry.expected > 0 && 
+                               (entry.afs.size >= entry.expected * 0.75 || 
+                                (entry.expected <= 2 && entry.afs.size === entry.expected) || 
+                                (entry.expected > 5 && entry.afs.size > 4));
+                    });
+                    
+                    state.afType = (validCandidates.length > 1 || 
+                                   (validCandidates.length === 1 && validCandidates[0].pairCount > 0 && 
+                                    (validCandidates[0].matchCount / validCandidates[0].pairCount > 0.35))) ? 'B' : 'A';
                 }
             }
         }
         
         else if (groupTypeVal === 2 || groupTypeVal === 3) {
-            const variant = (g3 >> 12) & 0x0F;
-            
-            if (variant === 0) {
-                state.ecc = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
-            } else if (variant === 3) {
-                state.lic = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
+            if (groupTypeVal === 2) {
+                const variant = (g3 >> 12) & 0x0F;
+                if (variant === 0) {
+                    state.ecc = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
+                } else if (variant === 3) {
+                    state.lic = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
+                } else if (variant === 7) {
+                    state.hasEws = true;
+                    state.ewsId = (g3 & 0xFF).toString(16).toUpperCase().padStart(2, '0');
+                }
             }
-            
             if (((g4 >> 11) & 0x1F) !== 0) {
                 const day = (g4 >> 11) & 0x1F;
                 const hour = (g4 >> 6) & 0x1F;
                 const min = g4 & 0x3F;
-                state.pin = `${day}. ${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+                state.pin = `${day}. ${pad(hour)}:${pad(min)}`;
             }
         }
         
@@ -281,8 +393,14 @@ function createRdsDecoder() {
             const textAbFlag = !!((g2 >> 4) & 0x01);
             if (state.abFlag !== textAbFlag) {
                 state.abFlag = textAbFlag;
-                if (textAbFlag) state.rtMask1.fill(false);
-                else state.rtMask0.fill(false);
+                state.rtPlusTags.forEach((tag) => { tag.isCached = true; });
+                if (textAbFlag) {
+                    state.rtMask1.fill(false);
+                    state.rtBuffer1.fill(' ');
+                } else {
+                    state.rtMask0.fill(false);
+                    state.rtBuffer0.fill(' ');
+                }
             }
             
             const isGroup2A = groupTypeVal === 4;
@@ -306,38 +424,104 @@ function createRdsDecoder() {
                     target[idx+1] = String.fromCharCode(g4 & 0xFF); mask[idx+1] = true;
                 }
             }
+        }
+        
+        else if (groupTypeVal === 6) {
+            state.hasOda = true;
+            const aid = g4.toString(16).toUpperCase().padStart(4, '0');
+            const targetGroup = `${(g2 & 0x1F) >> 1}${(g2 & 0x01) ? 'B' : 'A'}`;
+            const odaName = ODA_MAP[aid] || "Unknown ODA";
             
-            // RT stability checking - require same content for 2 cycles before confirming
-            const currentRt0 = decodeRdsBuffer(state.rtBuffer0, 64);
-            const currentRt1 = decodeRdsBuffer(state.rtBuffer1, 64);
+            const newOda = { name: odaName, aid: aid, group: targetGroup };
+            state.odaApp = newOda;
             
-            if (textAbFlag) {
-                if (currentRt1 === state.rtCandidate1 && currentRt1.trim().length > 0) {
-                    if (Date.now() - state.rtStableSince > 500) {
-                        state.rtConfirmed = true;
-                        state.rtConfirmedFlag = true;
-                    }
-                } else {
-                    state.rtCandidate1 = currentRt1;
-                    state.rtStableSince = Date.now();
-                }
+            const eIdx = state.odaList.findIndex((o) => o.aid === aid);
+            if (eIdx !== -1) {
+                state.odaList[eIdx] = newOda;
             } else {
-                if (currentRt0 === state.rtCandidate0 && currentRt0.trim().length > 0) {
-                    if (Date.now() - state.rtStableSince > 500) {
-                        state.rtConfirmed = true;
-                        state.rtConfirmedFlag = false;
+                state.odaList.unshift(newOda);
+                if (state.odaList.length > 5) state.odaList.pop();
+            }
+            
+            if (g4 === 0x4BD7 || g4 === 0x4BD8) {
+                state.rtPlusOdaGroup = (g2 & 0x1F);
+            }
+            
+            if (aid === '0093') {
+                state.dabTargetGroup = targetGroup;
+            }
+        }
+        
+        else if (state.rtPlusOdaGroup !== null && groupTypeVal === state.rtPlusOdaGroup) {
+            state.hasRtPlus = true;
+            const g2Spare = g2 & 0x07;
+            state.rtPlusItemToggle = !!((g2 >> 4) & 0x01);
+            state.rtPlusItemRunning = !!((g2 >> 3) & 0x01);
+            
+            const processTag = (id, start, len) => {
+                if (id === 0) return;
+                const rtStr = renderRdsBuffer(state.abFlag ? state.rtBuffer1 : state.rtBuffer0);
+                const length = len + 1;
+                if (start < rtStr.length) {
+                    let text = rtStr.substring(start, start + length).replace(/[\x00-\x1F]/g, '').trim();
+                    if (text.length > 0) {
+                        state.rtPlusTags.set(id, {
+                            contentType: id,
+                            start: start,
+                            length: len,
+                            text: text,
+                            isCached: false,
+                            timestamp: Date.now()
+                        });
                     }
-                } else {
-                    state.rtCandidate0 = currentRt0;
-                    state.rtStableSince = Date.now();
+                }
+            };
+            
+            const t1Id = (g2Spare << 3) | ((g3 >> 13) & 0x07);
+            if (t1Id !== 0 && ((g3 >> 7) & 0x3F) + ((g3 >> 1) & 0x3F) < 70) {
+                processTag(t1Id, (g3 >> 7) & 0x3F, (g3 >> 1) & 0x3F);
+            }
+            
+            const t2Id = ((g3 & 0x01) << 5) | ((g4 >> 11) & 0x1F);
+            if (t2Id !== 0 && ((g4 >> 5) & 0x3F) + (g4 & 0x1F) < 70) {
+                processTag(t2Id, (g4 >> 5) & 0x3F, g4 & 0x1F);
+            }
+            
+            if (state.rtPlusTags.size > 6) {
+                const sortedTags = Array.from(state.rtPlusTags.values()).sort((a, b) => a.timestamp - b.timestamp);
+                while (state.rtPlusTags.size > 6) {
+                    const oldestKey = sortedTags.shift()?.contentType;
+                    if (oldestKey !== undefined) {
+                        state.rtPlusTags.delete(oldestKey);
+                    }
                 }
             }
         }
         
+        else if (groupTypeVal === 8) {
+            const mjd = ((g2 & 0x03) << 15) | ((g3 >> 1));
+            const date = convertMjd(mjd);
+            if (date) {
+                const g4TR = ((g3 & 0x01) << 15) | (g4 >>> 1);
+                const h = (g4TR >>> 11) & 0x1F;
+                const m = (g4TR >> 5) & 0x3F;
+                state.utcTime = `${pad(date.day)}/${pad(date.month)}/${date.year} ${pad(h)}:${pad(m)}`;
+                const lDate = new Date(Date.UTC(date.year, date.month - 1, date.day, h, m) + (g4 & 0x1F) * 30 * 60 * 1000 * (((g4 >> 5) & 0x01) === 1 ? -1 : 1));
+                state.localTime = `${pad(lDate.getUTCDate())}/${pad(lDate.getUTCMonth() + 1)}/${lDate.getUTCFullYear()} ${pad(lDate.getUTCHours())}:${pad(lDate.getUTCMinutes())}`;
+            }
+        }
+        
         else if (groupTypeVal === 10) {
+            const newFlag = !!((g2 >> 4) & 0x01);
+            if (state.ptynAbFlag !== newFlag) {
+                state.ptynAbFlag = newFlag;
+                state.ptynBuffer.fill(' ');
+            }
             const address = g2 & 0x0F;
             state.ptynBuffer[address * 2] = String.fromCharCode((g3 >> 8) & 0xFF);
             state.ptynBuffer[address * 2 + 1] = String.fromCharCode(g3 & 0xFF);
+            state.ptynBuffer[address * 2 + 2] = String.fromCharCode((g4 >> 8) & 0xFF);
+            state.ptynBuffer[address * 2 + 3] = String.fromCharCode(g4 & 0xFF);
         }
         
         else if (groupTypeVal === 14 || groupTypeVal === 15) {
@@ -345,35 +529,44 @@ function createRdsDecoder() {
             const eonPi = g4.toString(16).toUpperCase().padStart(4, '0');
             
             if (!state.eonData[eonPi]) {
-                state.eonData[eonPi] = { 
-                    ps: '', psBuffer: new Array(8).fill(' '), 
-                    tp: false, ta: false, pty: 0, 
-                    af: [], linkageInfo: '', pin: '' 
+                state.eonData[eonPi] = {
+                    pi: eonPi,
+                    ps: '        ',
+                    psBuffer: new Array(8).fill(' '),
+                    tp: false,
+                    ta: false,
+                    pty: 0,
+                    pin: '',
+                    linkageInfo: '',
+                    af: [],
+                    mappedFreqs: [],
+                    lastUpdate: Date.now()
                 };
             }
             
             const network = state.eonData[eonPi];
+            network.lastUpdate = Date.now();
             network.tp = !!((g2 >> 4) & 0x01);
             
             const variant = g2 & 0x0F;
             if (variant >= 0 && variant <= 3) {
                 network.psBuffer[variant * 2] = String.fromCharCode((g3 >> 8) & 0xFF);
                 network.psBuffer[variant * 2 + 1] = String.fromCharCode(g3 & 0xFF);
-                network.ps = decodeRdsBuffer(network.psBuffer, 8);
+                network.ps = renderRdsBuffer(network.psBuffer);
             } else if (variant === 4) {
                 const f1 = decodeAf((g3 >> 8) & 0xFF);
                 const f2 = decodeAf(g3 & 0xFF);
                 if (f1 && !network.af.includes(f1)) network.af.push(f1);
                 if (f2 && !network.af.includes(f2)) network.af.push(f2);
-            } else if (variant === 5) {
-                // Mapped frequencies
-                const fMain = decodeAf((g3 >> 8) & 0xFF);
+                network.af.sort((a,b) => parseFloat(a) - parseFloat(b));
+            } else if (variant >= 5 && variant <= 9) {
+                const fMain = decodeAf(g3 >> 8);
                 const fMapped = decodeAf(g3 & 0xFF);
                 if (fMain && fMapped) {
-                    if (!network.mappedFreqs) network.mappedFreqs = [];
                     const mapStr = `${fMain} -> ${fMapped}`;
                     if (!network.mappedFreqs.includes(mapStr)) {
                         network.mappedFreqs.push(mapStr);
+                        if (network.mappedFreqs.length > 10) network.mappedFreqs.shift();
                     }
                 }
             } else if (variant === 12) {
@@ -382,70 +575,37 @@ function createRdsDecoder() {
                 network.pty = (g3 >> 11) & 0x1F;
                 network.ta = !!(g3 & 0x01);
             } else if (variant === 14) {
-                const day = (g3 >> 11) & 0x1F;
-                const hour = (g3 >> 6) & 0x1F;
-                const min = g3 & 0x3F;
-                if (day > 0) {
-                    network.pin = `${day}. ${hour.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`;
+                if (((g3 >> 11) & 0x1F) !== 0) {
+                    network.pin = `${(g3 >> 11) & 0x1F}. ${pad((g3 >> 6) & 0x1F)}:${pad(g3 & 0x3F)}`;
                 }
             }
         }
         
-        else if (groupTypeVal === 6 || groupTypeVal === 7) {
-            state.hasOda = true;
-            const aid = g4.toString(16).toUpperCase().padStart(4, '0');
-            const targetGroup = `${(g2 & 0x1F) >> 1}${(g2 & 0x01) ? 'B' : 'A'}`;
-            
-            const existing = state.odaList.find(o => o.aid === aid);
-            if (!existing) {
-                state.odaList.push({ aid, group: targetGroup });
-                if (state.odaList.length > 5) state.odaList.shift();
-            }
-            
-            // RT+ detection (AID 4A7A or 4A7B)
-            if (aid === '4A7A' || aid === '4A7B') {
-                state.hasRtPlus = true;
-                // Decode RT+ tags from group 3A
-                const tag1 = (g3 >> 10) & 0x1F;
-                const tag2 = (g3 >> 5) & 0x1F;
-                const tag3 = g3 & 0x1F;
-                const len1 = (g4 >> 10) & 0x1F;
-                const len2 = (g4 >> 5) & 0x1F;
-                const len3 = g4 & 0x1F;
-                
-                if (tag1 > 0 && tag1 < 24) {
-                    state.rtPlusTags.push({ 
-                        contentType: tag1, 
-                        start: len1,
-                        length: (g4 >> 10) & 0x1F 
-                    });
-                }
-            }
-        }
-        
-        else if (groupTypeVal === 16 || groupTypeVal === 17) {
+        else if (groupTypeVal === 16) {
             state.hasTmc = true;
+        }
+        
+        else if (groupTypeVal === 20) {
+            const newFlag = !!((g2 >> 4) & 0x01);
+            if (state.ptynAbFlag !== newFlag) {
+                state.ptynAbFlag = newFlag;
+                state.ptynBuffer.fill(' ');
+            }
+            const address = g2 & 0x01;
+            state.ptynBuffer[address * 4] = String.fromCharCode((g3 >> 8) & 0xFF);
+            state.ptynBuffer[address * 4 + 1] = String.fromCharCode(g3 & 0xFF);
+            state.ptynBuffer[address * 4 + 2] = String.fromCharCode((g4 >> 8) & 0xFF);
+            state.ptynBuffer[address * 4 + 3] = String.fromCharCode(g4 & 0xFF);
         }
         
         else if (groupTypeVal === 30) {
             const address = g2 & 0x0F;
-            if (address < 16) {
-                state.longPsBuffer[address * 2] = String.fromCharCode((g4 >> 8) & 0xFF);
-                state.longPsBuffer[address * 2 + 1] = String.fromCharCode(g4 & 0xFF);
-                state.longPsMask[address * 2] = true;
-                state.longPsMask[address * 2 + 1] = true;
-            }
-            
-            // Long PS stability checking
-            const currentLps = decodeRdsBuffer(state.longPsBuffer, 32);
-            if (currentLps === state.longPsCandidate && currentLps.trim().length > 0) {
-                if (Date.now() - state.longPsStableSince > 500) {
-                    state.longPsConfirmed = true;
-                }
-            } else {
-                state.longPsCandidate = currentLps;
-                state.longPsStableSince = Date.now();
-                state.longPsConfirmed = false;
+            const idx = address * 4;
+            if (idx < 32) {
+                state.lpsBuffer[idx] = String.fromCharCode((g3 >> 8) & 0xFF);
+                state.lpsBuffer[idx + 1] = String.fromCharCode(g3 & 0xFF);
+                state.lpsBuffer[idx + 2] = String.fromCharCode((g4 >> 8) & 0xFF);
+                state.lpsBuffer[idx + 3] = String.fromCharCode(g4 & 0xFF);
             }
         }
     }
@@ -453,114 +613,125 @@ function createRdsDecoder() {
     function parseMessage(data) {
         if (!data || typeof data !== 'string') return;
         
-        // Remove "G:" prefix and any whitespace/newlines
         const cleanData = data.replace(/G:\s*/g, '').trim();
-        
         const lines = cleanData.split(/\r?\n/);
+        
         for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed || trimmed.length < 8) continue;
             
-            // Remove any "G:" prefix from individual lines
             const cleanLine = trimmed.replace(/^G:\s*/, '');
             if (cleanLine.length < 8) continue;
             
-            // Remove all whitespace
             const hexOnly = cleanLine.replace(/\s/g, '');
             if (hexOnly.length < 16) continue;
             
-            // Parse as big-endian: each 4 hex chars = 2 bytes = 1 group word
-            // Format: g1g2g3g4 (16 hex chars = 4 words)
+            const hasError = hexOnly.includes('-');
+            
             const g1 = parseInt(hexOnly.substring(0, 4), 16);
             const g2 = parseInt(hexOnly.substring(4, 8), 16);
             const g3 = parseInt(hexOnly.substring(8, 12), 16);
             const g4 = parseInt(hexOnly.substring(12, 16), 16);
             
-            if (!isNaN(g1) && !isNaN(g2) && !isNaN(g3) && !isNaN(g4)) {
-                // Swap bytes in g3 and g4 for little-endian
-                const g3le = ((g3 & 0xFF) << 8) | ((g3 >> 8) & 0xFF);
-                const g4le = ((g4 & 0xFF) << 8) | ((g4 >> 8) & 0xFF);
-                decodeGroup(g1, g2, g3le, g4le);
+            if (!isNaN(g1) && !isNaN(g2) && !isNaN(g3) && !isNaN(g4) && !hasError) {
+                decodeGroup(g1, g2, g3, g4);
+                updateBer(false);
+            } else {
+                updateBer(true);
+            }
+        }
+    }
+
+    function updateBer(isError) {
+        state.berHistory.push(isError ? 1 : 0);
+        if (state.berHistory.length > state.BER_WINDOW_SIZE) {
+            state.berHistory.shift();
+        }
+    }
+
+    function updateStability() {
+        const now = Date.now();
+        
+        const currentPs = renderRdsBuffer(state.psBuffer);
+        if (currentPs !== state.psCandidateString) {
+            state.psCandidateString = currentPs;
+            state.psStableSince = now;
+        }
+        
+        const currentPtyn = renderRdsBuffer(state.ptynBuffer);
+        if (currentPtyn !== state.ptynCandidateString) {
+            state.ptynCandidateString = currentPtyn;
+            state.ptynStableSince = now;
+        }
+        
+        const cRtBuf = state.abFlag ? state.rtBuffer1 : state.rtBuffer0;
+        const isRtComplete = state.abFlag ? state.rtMask1.every(Boolean) : state.rtMask0.every(Boolean);
+        const rawRt = renderRdsBuffer(cRtBuf);
+        
+        if (isRtComplete) {
+            if (rawRt !== state.rtCandidateString) {
+                state.rtCandidateString = rawRt;
+                state.rtStableSince = now;
             }
         }
     }
 
     function getPs() {
-        return decodeRdsBuffer(state.psBuffer, 8);
-    }
-    
-    function getPsStable() {
-        return state.psConfirmed;
+        return renderRdsBuffer(state.psBuffer);
     }
 
     function getLongPs() {
-        const lps = decodeRdsBuffer(state.longPsBuffer, 32);
-        // Only show if we have confirmed content
-        if (state.longPsConfirmed) return lps;
-        return lps && lps.trim().length > 0 ? lps : '';
-    }
-    
-    function getLongPsStable() {
-        return state.longPsConfirmed;
+        return renderRdsBuffer(state.lpsBuffer);
     }
 
     function getRt() {
-        // Return confirmed RT if available, otherwise show current buffer
-        const buffer = state.abFlag ? state.rtBuffer1 : state.rtBuffer0;
-        const rt = decodeRdsBuffer(buffer, 64);
-        
-        // If we have confirmed RT, show it
-        if (state.rtConfirmed && state.rtConfirmedFlag === state.abFlag) {
-            return rt;
-        }
-        
-        // Show unconfirmed but don't clear display
-        return rt;
+        return renderRdsBuffer(state.abFlag ? state.rtBuffer1 : state.rtBuffer0);
     }
-    
-    function getRtStable() {
-        return state.rtConfirmed;
-    }
-    
-    function getRtAbFlag() {
-        return state.abFlag;
-    }
-    
+
     function getRtA() {
-        const rt = decodeRdsBuffer(state.rtBuffer0, 64);
-        if (state.rtConfirmed && !state.rtConfirmedFlag) return rt;
-        return rt && rt.trim().length > 0 ? rt : '';
+        return renderRdsBuffer(state.rtBuffer0);
     }
-    
+
     function getRtB() {
-        const rt = decodeRdsBuffer(state.rtBuffer1, 64);
-        if (state.rtConfirmed && state.rtConfirmedFlag) return rt;
-        return rt && rt.trim().length > 0 ? rt : '';
-    }
-    
-    function getRtPlus() {
-        return state.rtPlusTags;
-    }
-    
-    function getEonData() {
-        return state.eonData;
+        return renderRdsBuffer(state.rtBuffer1);
     }
 
     function getPtyn() {
-        return decodeRdsBuffer(state.ptynBuffer, 8);
+        return renderRdsBuffer(state.ptynBuffer);
     }
 
     function getPtyName() {
         return PTY_NAMES[state.pty] || 'Unknown';
     }
 
+    function getPsStable() {
+        updateStability();
+        const now = Date.now();
+        return state.psStableSince > 0 && (now - state.psStableSince) >= 2000;
+    }
+
+    function getLongPsStable() {
+        const current = renderRdsBuffer(state.lpsBuffer);
+        return current && current.trim().length > 0;
+    }
+
+    function getRtAbFlag() {
+        return state.abFlag;
+    }
+
+    function getRtStable() {
+        updateStability();
+        const now = Date.now();
+        return state.rtStableSince > 0 && (now - state.rtStableSince) >= 2000;
+    }
+
     function getAfList() {
         if (state.afType === 'B' && state.afListHead) {
             const head = state.afListHead;
-            const others = state.afList.filter(f => f !== head);
+            const others = state.afSet.filter(f => f !== head);
             return [head, ...others];
         }
-        return state.afList;
+        return state.afSet;
     }
 
     function getGroupStats() {
@@ -584,24 +755,77 @@ function createRdsDecoder() {
         return state;
     }
 
+    function getEonData() {
+        return state.eonData;
+    }
+
+    function getOdaList() {
+        return state.odaList;
+    }
+
+    function getTmcData() {
+        return state.hasTmc ? { serviceInfo: state.tmcServiceInfo, messages: state.tmcBuffer } : null;
+    }
+
+    function getRtPlusData() {
+        if (!state.hasRtPlus) return [];
+        return Array.from(state.rtPlusTags.values()).sort((a, b) => a.contentType - b.contentType);
+    }
+
+    function getBer() {
+        const now = Date.now();
+        const gracePeriodActive = state.piEstablishmentTime > 0 && (now - state.piEstablishmentTime) < 3000;
+        if (state.currentPi === "----" || gracePeriodActive || state.berHistory.length === 0) {
+            return -1;
+        }
+        const errors = state.berHistory.reduce((a, b) => a + b, 0);
+        return (errors / state.berHistory.length) * 100;
+    }
+
+    function getStableFlags() {
+        const now = Date.now();
+        const gracePeriodActive = state.piEstablishmentTime > 0 && (now - state.piEstablishmentTime) < 3000;
+        
+        const psStable = state.psStableSince > 0 && (now - state.psStableSince) >= 2000;
+        const ptynStable = state.ptynStableSince > 0 && (now - state.ptynStableSince) >= 2000;
+        const rtStable = state.rtStableSince > 0 && (now - state.rtStableSince) >= 2000;
+        
+        return {
+            tpStable: !gracePeriodActive,
+            taStable: !gracePeriodActive,
+            msStable: !gracePeriodActive,
+            diStereoStable: !gracePeriodActive,
+            diAhStable: !gracePeriodActive,
+            diCompStable: !gracePeriodActive,
+            diDptyStable: !gracePeriodActive,
+            psStable,
+            ptynStable,
+            rtStable
+        };
+    }
+
     return {
         parseMessage,
         getPs,
-        getPsStable,
         getLongPs,
-        getLongPsStable,
         getRt,
         getRtA,
         getRtB,
-        getRtStable,
-        getRtAbFlag,
-        getRtPlus,
-        getEonData,
         getPtyn,
         getPtyName,
         getAfList,
         getGroupStats,
-        getState
+        getState,
+        getPsStable,
+        getLongPsStable,
+        getRtAbFlag,
+        getRtStable,
+        getEonData,
+        getOdaList,
+        getTmcData,
+        getRtPlusData,
+        getStableFlags,
+        getBer
     };
 }
 

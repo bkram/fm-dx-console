@@ -16,8 +16,7 @@ const path = require('path');
 const WebSocket = require('ws');
 const { getTunerInfo, getPingTime } = require('./tunerinfo');
 const { setAntNames, getAntNames, getAntLabel, cycleAntenna } = require('./antenna');
-const playAudio = require('./3lasclient');
-const { createRdsDecoder } = require('./rds-decoder');
+const { Worker } = require('worker_threads');
 
 // -----------------------------
 // Global Constants
@@ -31,7 +30,7 @@ const europe_programmes = [
     "Travel", "Leisure", "Jazz Music", "Country Music", "National Music",
     "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
 ];
-const version = '1.52';
+const version = '1.53';
 const userAgent = `fm-dx-console/${version}`;
 
 // Terminal must be at least 80x24
@@ -79,13 +78,18 @@ let tunerName = '';
 let websocketAudio;
 let websocketData;
 let websocketRds;
-let rdsDecoder;
 let rdsBoxAdvanced = null;
 let argDebug = argv.debug;
 let argAutoPlay = argv['auto-play'];
 let argUrl;
 let pingTime = null;
 let lastRdsData = null;
+let lastRdsUpdate = 0;
+let RDS_UPDATE_INTERVAL = 500;
+let audioPlaying = false;
+let rdsWorker = null;
+let rdsDataCache = null;
+let audioWorker = null;
 
 // -----------------------------
 // Logging Setup
@@ -197,7 +201,7 @@ function enqueueCommand(cmd) {
 }
 
 /** Every 125 ms, send up to one command if ws is open */
-const commandQueueInterval = setInterval(() => {
+setInterval(() => {
     if (commandQueue.length > 0 && ws && ws.readyState === WebSocket.OPEN) {
         const nextCmd = commandQueue.shift();
         debugLog('Sending command:', nextCmd);
@@ -645,7 +649,7 @@ const helpBox = blessed.box({
 renderScreen();
 
 // Update the title bar every second (for the clock)
-const titleBarInterval = setInterval(() => {
+setInterval(() => {
     updateTitleBar();
     renderScreen();
 }, 1000);
@@ -870,9 +874,9 @@ function updateStatsBox(data) {
     
     // Show server info when terminal is large enough (normal or expanded mode)
     if (mode !== 'compact' && tunerName) {
-        content += `{bold}Server:{/bold} ${stripUnicode(tunerName)}\n`;
+        content += `${padStringWithSpaces('Server:', 'green', padLength)}${stripUnicode(tunerName)}\n`;
         if (mode === 'expanded' && tunerDesc) {
-            content += `${stripUnicode(tunerDesc)}\n`;
+            content += `${padStringWithSpaces('Desc:', 'green', padLength)}${stripUnicode(tunerDesc)}\n`;
         }
         content += '\n';
     }
@@ -880,8 +884,9 @@ function updateStatsBox(data) {
     content += 
         `${padStringWithSpaces('Server users:', 'green', padLength)}${data.users}\n` +
         `${padStringWithSpaces('Server ping:', 'green', padLength)}${pingTime !== null ? pingTime + ' ms' : ''}\n` +
-        `${padStringWithSpaces('Local audio:', 'green', padLength)}${player && player.getStatus() ? 'Playing' : 'Stopped'}`
-    );
+        `${padStringWithSpaces('Local audio:', 'green', padLength)}${audioPlaying ? 'Playing' : 'Stopped'}`;
+    
+    statsBox.setContent(content);
 }
 
 function scaleValue(value) {
@@ -917,113 +922,135 @@ function updateServerBox() {
 
 function updateRdsAdvancedBox() {
     if (!rdsBoxAdvanced || rdsBoxAdvanced.hidden) return;
-    
-    const state = rdsDecoder.getState();
+    if (!rdsDataCache) return;
+    const d = rdsDataCache;
+    const stableFlags = d.stableFlags;
     const lines = [];
-    
-    lines.push(`{bold}PI:{/bold} ${state.pi}  {bold}PTY:{/bold} ${rdsDecoder.getPtyName()} [${state.pty}]`);
-    lines.push(`{bold}TP:{/bold} ${state.tp ? '1' : '0'}  {bold}TA:{/bold} ${state.ta ? '1' : '0'}  {bold}MS:{/bold} ${state.ms ? 'Music' : 'Speech'}  {bold}Stereo:{/bold} ${state.diStereo ? '1' : '0'}`);
-    lines.push(`{bold}DI:{/bold} Stereo=${state.diStereo ? 1:0} AH=${state.diArtificialHead ? 1:0} Comp=${state.diCompressed ? 1:0} DPTY=${state.diDynamicPty ? 1:0}`);
-    
-    const ps = rdsDecoder.getPs();
-    const psStable = rdsDecoder.getPsStable();
-    const longPs = rdsDecoder.getLongPs();
-    const ptyn = rdsDecoder.getPtyn();
-    
-    const psMark = psStable ? '*' : '';
-    lines.push(`{bold}PS${psMark}:{/bold} ${ps || '(waiting...)'}`);
-    
-    const longPsStable = rdsDecoder.getLongPsStable();
-    const longPsMark = longPsStable ? '*' : '';
-    if (longPs && longPs.length > 0) {
-        lines.push(`{bold}Long PS${longPsMark}:{/bold} ${longPs}`);
-    }
-    
-    if (ptyn && ptyn.length > 0) {
-        lines.push(`{bold}PTYN:{/bold} ${ptyn}`);
-    }
+    const pad = 12;
+    const lbl = (text) => padStringWithSpaces(text, 'green', pad);
+
+    // Header
+    lines.push(`${lbl('PI:')}${d.pi}   ${lbl('PTY:')}${d.ptyName} [${d.pty}]`);
+
+    // Flags
+    const tpDisplay = stableFlags.tpStable ? (d.tp ? '1' : '0') : '-';
+    const taDisplay = stableFlags.taStable ? (d.ta ? '1' : '0') : '-';
+    const msDisplay = stableFlags.msStable ? (d.ms ? 'Music' : 'Speech') : '-';
+    const stereoDisplay = stableFlags.diStereoStable ? (d.diStereo ? '1' : '0') : '-';
+    lines.push(`${lbl('TP/TA:')}${tpDisplay}/${taDisplay}   ${lbl('MS:')}${msDisplay}   ${lbl('Stereo:')}${stereoDisplay}`);
+
+    const diStereo = stableFlags.diStereoStable ? d.diStereo : null;
+    const diAh = stableFlags.diAhStable ? d.diArtificialHead : null;
+    const diComp = stableFlags.diCompStable ? d.diCompressed : null;
+    const diDpty = stableFlags.diDptyStable ? d.diDynamicPty : null;
+    lines.push(`${lbl('DI:')}Stereo=${diStereo !== null ? (diStereo ? 1:0) : '-'} AH=${diAh !== null ? (diAh ? 1:0) : '-'} Comp=${diComp !== null ? (diComp ? 1:0) : '-'} DPTY=${diDpty !== null ? (diDpty ? 1:0) : '-'}`);
+
     lines.push('');
-    
-    const rtA = rdsDecoder.getRtA();
-    const rtB = rdsDecoder.getRtB();
-    if (rtA || rtB) {
-        if (rtA) lines.push(`{bold}RT-A:{/bold} ${rtA}`);
-        if (rtB) lines.push(`{bold}RT-B:{/bold} ${rtB}`);
-    } else if (rt) {
-        const abFlag = rdsDecoder.getRtAbFlag();
-        const stableMark = rtStable ? '*' : '';
-        lines.push(`{bold}RT (${abFlag ? 'B' : 'A'})${stableMark}:{/bold} ${rt}`);
+    // Text fields
+    const psMark = d.psStable ? '*' : '';
+    lines.push(`${lbl('PS' + psMark)}${d.ps || '(waiting...)'}`);
+    if (d.longPs && d.longPs.length > 0) {
+        lines.push(`${lbl('Long PS')}${d.longPs}`);
     }
+    if (d.ptyn && d.ptyn.length > 0) {
+        lines.push(`${lbl('PTYN')}${d.ptyn}`);
+    }
+    if (d.rtA || d.rtB) {
+        if (d.rtA) lines.push(`${lbl('RT-A')}${d.rtA}`);
+        if (d.rtB) lines.push(`${lbl('RT-B')}${d.rtB}`);
+    } else if (d.rt) {
+        const stableMark = d.rtStable ? '*' : '';
+        lines.push(`${lbl(`RT ${d.rtAbFlag ? '(B)' : '(A)'}${stableMark}`)}${d.rt}`);
+    }
+
     lines.push('');
-    
-    const afList = rdsDecoder.getAfList();
-    if (afList.length > 0) {
-        lines.push(`{bold}AF (${state.afType}):{/bold} ${afList.join(', ')}`);
+    // AF / IDs / Time / BER
+    if (d.afList && d.afList.length > 0) {
+        lines.push(`${lbl(`AF (${d.afType})`)}${d.afList.join(', ')}`);
     }
-    
-    if (state.ecc || state.lic) {
-        lines.push(`{bold}ECC:{/bold} ${state.ecc || '-'}  {bold}LIC:{/bold} ${state.lic || '-'}`);
+    if (d.ecc || d.lic) {
+        lines.push(`${lbl('ECC / LIC')}${(d.ecc || '-') + ' / ' + (d.lic || '-')}`);
     }
-    
-    if (state.pin) {
-        lines.push(`{bold}PIN:{/bold} ${state.pin}`);
+    if (d.pin) {
+        lines.push(`${lbl('PIN')}${d.pin}`);
     }
-    
-    if (state.localTime || state.utcTime) {
-        lines.push(`{bold}Time:{/bold} ${state.localTime || '-'} / ${state.utcTime || '-'}`);
+    if (d.localTime || d.utcTime) {
+        lines.push(`${lbl('Time')}${d.localTime || '-'}  UTC: ${d.utcTime || '-'}`);
     }
-    lines.push('');
-    
-    lines.push('{bold}Groups:{/bold}');
-    const stats = rdsDecoder.getGroupStats();
-    for (let i = 0; i < Math.min(stats.length, 16); i += 4) {
-        const row = stats.slice(i, i + 4).map(s => `${s.group}:${s.percent}%`).join('  ');
-        lines.push(row);
+    if (d.ber >= 0) {
+        lines.push(`${lbl('BER')}${d.ber.toFixed(2)}%`);
     }
-    
-    if (state.hasRtPlus || state.hasTmc || state.hasEon || state.odaList.length > 0) {
+
+    // Features
+    const features = [];
+    if (d.hasRtPlus) features.push('RDS+');
+    if (d.hasTmc) features.push('TMC');
+    if (d.hasEon) features.push('EON');
+    if (d.odaList.length > 0) features.push('ODA');
+    if (features.length > 0) {
         lines.push('');
-        const flags = [];
-        if (state.hasRtPlus) flags.push('RDS+');
-        if (state.hasTmc) flags.push('TMC');
-        if (state.hasEon) flags.push('EON');
-        if (state.odaList.length > 0) flags.push('ODA');
-        lines.push(`{bold}Features:{/bold} ${flags.join(', ')}`);
+        lines.push(`${lbl('Features')}${features.join(', ')}`);
     }
-    
-    if (state.odaList.length > 0) {
-        lines.push('ODA: ' + state.odaList.map(o => `${o.aid}`).join(', '));
+    if (d.odaList.length > 0) {
+        lines.push(`${lbl('ODA')}${d.odaList.map(o => o.aid).join(', ')}`);
     }
-    
-    const eonData = rdsDecoder.getEonData();
+
+    // Groups
+    lines.push('');
+    const stats = d.groupStats;
+    const fmtStat = (s) => `${s.group}:${s.percent}%`;
+    const rows = [];
+    const maxStats = Math.min(stats.length, 16);
+    for (let i = 0; i < maxStats; i += 3) {
+        rows.push(stats.slice(i, i + 3).map(fmtStat).join('   '));
+    }
+    if (rows.length > 0) {
+        lines.push(`${lbl('Groups')}${rows[0]}`);
+        for (let i = 1; i < rows.length; i++) {
+            lines.push(`${padStringWithSpaces('', 'green', pad)}${rows[i]}`);
+        }
+    }
+
+    // EON
+    const eonData = d.eonData;
     if (Object.keys(eonData).length > 0) {
         lines.push('');
-        lines.push('{bold}EON:{/bold}');
+        lines.push('{bold}EON{/bold}');
         for (const [pi, net] of Object.entries(eonData)) {
-            let eonLine = `  ${pi}: ${net.ps || '-'} TP=${net.tp?1:0} TA=${net.ta?1:0}`;
-            if (net.af && net.af.length > 0) {
-                eonLine += ` AF=[${net.af.join(',')}]`;
-            }
-            if (net.mappedFreqs && net.mappedFreqs.length > 0) {
-                eonLine += ` Mapped=[${net.mappedFreqs.join(',')}]`;
-            }
-            if (net.linkageInfo) {
-                eonLine += ` Link=${net.linkageInfo}`;
-            }
-            if (net.pin) {
-                eonLine += ` PIN=${net.pin}`;
-            }
+            let eonLine = `${lbl(pi)}${net.ps || '-'}  TP=${net.tp?1:0} TA=${net.ta?1:0}`;
+            if (net.af && net.af.length > 0) eonLine += ` AF=[${net.af.join(',')}]`;
+            if (net.mappedFreqs && net.mappedFreqs.length > 0) eonLine += ` Map=[${net.mappedFreqs.join(',')}]`;
+            if (net.linkageInfo) eonLine += ` Link=${net.linkageInfo}`;
+            if (net.pin) eonLine += ` PIN=${net.pin}`;
             lines.push(eonLine);
         }
     }
-    
+
     rdsBoxAdvanced.setContent(lines.join('\n'));
 }
 
 // -----------------------------
-// Audio
+// Audio (worker)
 // -----------------------------
-const player = playAudio(websocketAudio, userAgent, 2048, argv.debug);
+function initAudioWorker() {
+    if (audioWorker) return;
+    audioWorker = new Worker('./audio-worker.js', {
+        workerData: { url: websocketAudio, userAgent: userAgent }
+    });
+    audioWorker.on('error', (err) => debugLog('Audio worker error: ' + err.message));
+    audioWorker.on('exit', (code) => debugLog('Audio worker exit: ' + code));
+}
+
+function startAudio() {
+    if (!audioWorker) initAudioWorker();
+    audioWorker.postMessage({ type: 'start' });
+    audioPlaying = true;
+}
+
+function stopAudio() {
+    if (audioWorker) audioWorker.postMessage({ type: 'stop' });
+    audioPlaying = false;
+}
 
 // -----------------------------
 // Tuner Info + Ping
@@ -1060,7 +1087,7 @@ async function doPing() {
     }
 }
 doPing();
-const pingInterval = setInterval(doPing, 5000);
+setInterval(doPing, 5000);
 
 // -----------------------------
 // WebSocket Setup
@@ -1071,7 +1098,8 @@ const ws = new WebSocket(websocketData, wsOptions);
 ws.on('open', () => {
     debugLog('WebSocket connection established');
     if (argAutoPlay) {
-        player.play();
+        startAudio();
+        audioPlaying = true;
         updateStatsBox(jsonData || {});
         renderScreen();
     }
@@ -1102,17 +1130,45 @@ ws.on('close', () => {
     debugLog('WebSocket connection closed');
 });
 
-ws.on('error', (err) => {
-    debugLog('WebSocket error:', err.message);
-});
+// -----------------------------
+// Advanced RDS WebSocket (Worker Thread)
+// -----------------------------
 
-// -----------------------------
-// Advanced RDS WebSocket
-// -----------------------------
-rdsDecoder = createRdsDecoder();
+function initRdsWorker() {
+    rdsWorker = new Worker('./rds-worker.js');
+    
+    rdsWorker.on('message', (msg) => {
+        if (msg.type === 'data') {
+            rdsDataCache = msg;
+            
+            const now = Date.now();
+            if (now - lastRdsUpdate > RDS_UPDATE_INTERVAL) {
+                lastRdsUpdate = now;
+                updateRdsAdvancedBox();
+                renderScreen();
+            }
+        }
+    });
+    
+    rdsWorker.on('error', (err) => {
+        debugLog('RDS Worker error:', err.message);
+    });
+    
+    rdsWorker.on('exit', (code) => {
+        debugLog('RDS Worker exited with code:', code);
+    });
+}
+
+function requestRdsData() {
+    if (rdsWorker) {
+        rdsWorker.postMessage({ type: 'getData' });
+    }
+}
 
 function connectRdsWebSocket() {
     if (!websocketRds) return;
+    
+    initRdsWorker();
     
     const rdsWsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (rds)` } } : {};
     const rdsWs = new WebSocket(websocketRds, rdsWsOptions);
@@ -1121,24 +1177,35 @@ function connectRdsWebSocket() {
         debugLog('RDS WebSocket connection established');
     });
     
-    let lastRdsUpdate = 0;
-    const RDS_UPDATE_INTERVAL = 200; // ms
+    RDS_UPDATE_INTERVAL = 500;
+    let rdsMsgBuffer = [];
+    let rdsProcessInterval = null;
+    
+    function processRdsBuffer() {
+        if (rdsMsgBuffer.length === 0) return;
+        
+        const msgs = rdsMsgBuffer.splice(0, rdsMsgBuffer.length);
+        for (const msg of msgs) {
+            if (rdsWorker) {
+                rdsWorker.postMessage({ type: 'parse', data: msg });
+            }
+        }
+    }
     
     rdsWs.on('message', (data) => {
         try {
             const msg = data.toString();
-            rdsDecoder.parseMessage(msg);
+            rdsMsgBuffer.push(msg);
             
-            const now = Date.now();
-            if (now - lastRdsUpdate > RDS_UPDATE_INTERVAL) {
-                lastRdsUpdate = now;
-                updateRdsAdvancedBox();
-                renderScreen();
+            if (!rdsProcessInterval) {
+                rdsProcessInterval = setInterval(processRdsBuffer, 200);
             }
         } catch (error) {
             debugLog('Error parsing RDS data:', error);
         }
     });
+    
+    setInterval(requestRdsData, 500);
     
     rdsWs.on('error', (err) => {
         debugLog('RDS WebSocket error:', err.message);
@@ -1146,6 +1213,14 @@ function connectRdsWebSocket() {
     
     rdsWs.on('close', () => {
         debugLog('RDS WebSocket connection closed');
+        if (rdsProcessInterval) {
+            clearInterval(rdsProcessInterval);
+            rdsProcessInterval = null;
+        }
+        if (rdsWorker) {
+            rdsWorker.terminate();
+            rdsWorker = null;
+        }
     });
 }
 
@@ -1256,10 +1331,12 @@ screen.on('keypress', async (ch, key) => {
         renderScreen();
     } else if (key.full === 'p') {
         // Toggle audio
-        if (player.getStatus()) {
-            player.stop();
+        if (audioPlaying) {
+            stopAudio();
+            audioPlaying = false;
         } else {
-            player.play();
+            startAudio();
+            audioPlaying = true;
         }
         if (jsonData) {
             updateStatsBox(jsonData);
@@ -1267,14 +1344,14 @@ screen.on('keypress', async (ch, key) => {
         }
     } else if (key.full === '[') {
         // Toggle iMS
-        if (jsonData && jsonData.ims === 1) {
+        if (jsonData && jsonData.ims == 1) {
             enqueueCommand(`G${jsonData.eq}0`);
         } else if (jsonData) {
             enqueueCommand(`G${jsonData.eq}1`);
         }
     } else if (key.full === ']') {
         // Toggle EQ
-        if (jsonData && jsonData.eq === 1) {
+        if (jsonData && jsonData.eq == 1) {
             enqueueCommand(`G0${jsonData.ims}`);
         } else if (jsonData) {
             enqueueCommand(`G1${jsonData.ims}`);
@@ -1313,10 +1390,6 @@ screen.on('keypress', async (ch, key) => {
         }
         renderScreen();
     } else if (key.full === 'escape' || key.full === 'C-c') {
-        clearInterval(commandQueueInterval);
-        clearInterval(titleBarInterval);
-        clearInterval(pingInterval);
-        if (player) player.stop();
         process.exit(0);
     } else {
         debugLog(key.full);

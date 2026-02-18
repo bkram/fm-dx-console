@@ -59,6 +59,18 @@ function createRdsDecoder() {
         rtMask0: new Array(64).fill(false),
         rtMask1: new Array(64).fill(false),
         
+        // PS stability checking
+        psCandidate: '',
+        psStableSince: 0,
+        psConfirmed: false,
+        
+        // RT stability checking
+        rtCandidate0: '',
+        rtCandidate1: '',
+        rtStableSince: 0,
+        rtConfirmed: false,
+        rtConfirmedFlag: false,
+        
         ptynBuffer: new Array(8).fill(' '),
         
         longPsBuffer: new Array(32).fill(' '),
@@ -203,6 +215,18 @@ function createRdsDecoder() {
             state.psMask[address * 2] = true;
             state.psMask[address * 2 + 1] = true;
             
+            // PS stability checking
+            const currentPs = decodeRdsBuffer(state.psBuffer, 8);
+            if (currentPs === state.psCandidate && currentPs.trim().length > 0) {
+                if (Date.now() - state.psStableSince > 500) {
+                    state.psConfirmed = true;
+                }
+            } else {
+                state.psCandidate = currentPs;
+                state.psStableSince = Date.now();
+                state.psConfirmed = false;
+            }
+            
             if (isGroupA && address === 0) {
                 const af1 = (g3 >> 8) & 0xFF;
                 const af2 = g3 & 0xFF;
@@ -276,6 +300,32 @@ function createRdsDecoder() {
                 if (idx < 64) {
                     target[idx] = String.fromCharCode((g4 >> 8) & 0xFF); mask[idx] = true;
                     target[idx+1] = String.fromCharCode(g4 & 0xFF); mask[idx+1] = true;
+                }
+            }
+            
+            // RT stability checking - require same content for 2 cycles before confirming
+            const currentRt0 = decodeRdsBuffer(state.rtBuffer0, 64);
+            const currentRt1 = decodeRdsBuffer(state.rtBuffer1, 64);
+            
+            if (textAbFlag) {
+                if (currentRt1 === state.rtCandidate1 && currentRt1.trim().length > 0) {
+                    if (Date.now() - state.rtStableSince > 500) {
+                        state.rtConfirmed = true;
+                        state.rtConfirmedFlag = true;
+                    }
+                } else {
+                    state.rtCandidate1 = currentRt1;
+                    state.rtStableSince = Date.now();
+                }
+            } else {
+                if (currentRt0 === state.rtCandidate0 && currentRt0.trim().length > 0) {
+                    if (Date.now() - state.rtStableSince > 500) {
+                        state.rtConfirmed = true;
+                        state.rtConfirmedFlag = false;
+                    }
+                } else {
+                    state.rtCandidate0 = currentRt0;
+                    state.rtStableSince = Date.now();
                 }
             }
         }
@@ -382,14 +432,35 @@ function createRdsDecoder() {
     function getPs() {
         return decodeRdsBuffer(state.psBuffer, 8);
     }
+    
+    function getPsStable() {
+        return state.psConfirmed;
+    }
 
     function getLongPs() {
         return decodeRdsBuffer(state.longPsBuffer, 32);
     }
 
     function getRt() {
+        // Return confirmed RT if available, otherwise show current buffer
         const buffer = state.abFlag ? state.rtBuffer1 : state.rtBuffer0;
-        return decodeRdsBuffer(buffer, 64);
+        const rt = decodeRdsBuffer(buffer, 64);
+        
+        // If we have confirmed RT, show it
+        if (state.rtConfirmed && state.rtConfirmedFlag === state.abFlag) {
+            return rt;
+        }
+        
+        // Show unconfirmed but don't clear display
+        return rt;
+    }
+    
+    function getRtStable() {
+        return state.rtConfirmed;
+    }
+    
+    function getRtAbFlag() {
+        return state.abFlag;
     }
 
     function getPtyn() {
@@ -433,8 +504,11 @@ function createRdsDecoder() {
     return {
         parseMessage,
         getPs,
+        getPsStable,
         getLongPs,
         getRt,
+        getRtStable,
+        getRtAbFlag,
         getPtyn,
         getPtyName,
         getAfList,

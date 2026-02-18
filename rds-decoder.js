@@ -347,22 +347,34 @@ function createRdsDecoder() {
     function parseMessage(data) {
         if (!data || typeof data !== 'string') return;
         
-        const lines = data.trim().split(/\r?\n/);
+        // Remove "G:" prefix and any whitespace/newlines
+        const cleanData = data.replace(/G:\s*/g, '').trim();
+        
+        const lines = cleanData.split(/\r?\n/);
         for (const line of lines) {
             const trimmed = line.trim();
-            if (!trimmed) continue;
+            if (!trimmed || trimmed.length < 8) continue;
             
-            const parts = trimmed.split(/[\s,;]+/);
+            // Remove any "G:" prefix from individual lines
+            const cleanLine = trimmed.replace(/^G:\s*/, '');
+            if (cleanLine.length < 8) continue;
             
-            if (parts.length >= 4) {
-                const g1 = parseInt(parts[0], 16);
-                const g2 = parseInt(parts[1], 16);
-                const g3 = parseInt(parts[2], 16);
-                const g4 = parseInt(parts[3], 16);
-                
-                if (!isNaN(g1) && !isNaN(g2) && !isNaN(g3) && !isNaN(g4)) {
-                    decodeGroup(g1, g2, g3, g4);
-                }
+            // Remove all whitespace
+            const hexOnly = cleanLine.replace(/\s/g, '');
+            if (hexOnly.length < 16) continue;
+            
+            // Parse as big-endian: each 4 hex chars = 2 bytes = 1 group word
+            // Format: g1g2g3g4 (16 hex chars = 4 words)
+            const g1 = parseInt(hexOnly.substring(0, 4), 16);
+            const g2 = parseInt(hexOnly.substring(4, 8), 16);
+            const g3 = parseInt(hexOnly.substring(8, 12), 16);
+            const g4 = parseInt(hexOnly.substring(12, 16), 16);
+            
+            if (!isNaN(g1) && !isNaN(g2) && !isNaN(g3) && !isNaN(g4)) {
+                // Swap bytes in g3 and g4 for little-endian
+                const g3le = ((g3 & 0xFF) << 8) | ((g3 >> 8) & 0xFF);
+                const g4le = ((g4 & 0xFF) << 8) | ((g4 >> 8) & 0xFF);
+                decodeGroup(g1, g2, g3le, g4le);
             }
         }
     }

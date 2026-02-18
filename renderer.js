@@ -272,13 +272,13 @@ urlInputEl.addEventListener('keydown', (e) => {
 });
 document.getElementById('ims-btn').onclick = () => {
   if (currentData) {
-    const cmd = currentData.ims == 1 ? `G${currentData.eq}0` : `G${currentData.eq}1`;
+    const cmd = currentData.ims === 1 ? `G${currentData.eq}0` : `G${currentData.eq}1`;
     sendCmd(cmd);
   }
 };
 document.getElementById('eq-btn').onclick = () => {
   if (currentData) {
-    const cmd = currentData.eq == 1 ? `G0${currentData.ims}` : `G1${currentData.ims}`;
+    const cmd = currentData.eq === 1 ? `G0${currentData.ims}` : `G1${currentData.ims}`;
     sendCmd(cmd);
   }
 };

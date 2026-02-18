@@ -19,6 +19,7 @@ function play3LAS(websocketAddress, userAgent, bufferSize = 1024, debug = false)
     let playProcess;
     let isPlaying = false;
     let buffer = []; // Buffer to store incoming data
+    let flushBufferInterval; // Store interval ID for cleanup
     const flushInterval = 50; // Interval in ms to flush the buffer, smaller for lower latency
     const playCmd = 'ffplay';
     const playArgs = [
@@ -86,7 +87,7 @@ function play3LAS(websocketAddress, userAgent, bufferSize = 1024, debug = false)
             });
 
             // Start flushing the buffer at regular intervals
-            setInterval(flushBuffer, flushInterval);
+            flushBufferInterval = setInterval(flushBuffer, flushInterval);
         }
 
         isPlaying = true;
@@ -94,6 +95,12 @@ function play3LAS(websocketAddress, userAgent, bufferSize = 1024, debug = false)
 
     async function stopPlayback() {
         debugLog("Playback stopped");
+        
+        if (flushBufferInterval) {
+            clearInterval(flushBufferInterval);
+            flushBufferInterval = null;
+        }
+        
         if (ws) {
             try {
                 ws.removeAllListeners('message');

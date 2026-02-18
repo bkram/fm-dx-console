@@ -70,6 +70,10 @@ function createWindow() {
     const wsAddr = `${formatWebSocketURL(url)}/text`;
     const opts = { headers: { 'User-Agent': `${userAgent} (control)` } };
     ws = new WebSocket(wsAddr, opts);
+    ws.on('error', (err) => {
+      console.error('WebSocket (control) error:', err.message);
+      win.webContents.send('ws-error', { type: 'control', message: err.message });
+    });
     ws.on('message', (data) => {
       win.webContents.send('ws-data', data.toString());
     });
@@ -81,6 +85,9 @@ function createWindow() {
     const wsAddr = `${formatWebSocketURL(url)}/data_plugins`;
     const opts = { headers: { 'User-Agent': `${userAgent} (plugin)` } };
     pluginWs = new WebSocket(wsAddr, opts);
+    pluginWs.on('error', (err) => {
+      console.error('WebSocket (plugin) error:', err.message);
+    });
   }
 
   connectWebSocket(currentUrl);
@@ -90,8 +97,8 @@ function createWindow() {
     if (!currentUrl) return;
     if (!player) {
       const wsAddr = `${formatWebSocketURL(currentUrl)}/audio`;
-      const userAgent = `fm-dx-console/${app.getVersion()}`;
-      player = playAudio(wsAddr, userAgent, 2048, argv.debug);
+      const audioUserAgent = `fm-dx-console/${app.getVersion()}`;
+      player = playAudio(wsAddr, audioUserAgent, 2048, argv.debug);
     }
     player.play();
   });

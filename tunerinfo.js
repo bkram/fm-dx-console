@@ -15,7 +15,13 @@ const axios = require('axios');
  * antenna names and the currently active antenna index when available.
  */
 async function getTunerInfo(url) {
-    const baseUrl = new URL(url);
+    let baseUrl;
+    try {
+        baseUrl = new URL(url);
+    } catch (err) {
+        console.error('Invalid URL:', err.message);
+        return { tunerName: '', tunerDesc: '', antNames: ['Default'], activeAnt: 0 };
+    }
     const staticUrl = new URL('static_data', baseUrl).toString();
 
     let tunerName = '';
@@ -98,23 +104,28 @@ async function getTunerInfo(url) {
  * @throws {Error} If fetching ping time fails.
  */
 async function getPingTime(url) {
+    let pingUrl;
     try {
-        const pingUrl = new URL(url);
-        if (!pingUrl.pathname.endsWith('/')) {
-            pingUrl.pathname += '/';
-        }
-        pingUrl.pathname += 'ping';
-        const startTime = Date.now();
+        pingUrl = new URL(url);
+    } catch (err) {
+        throw new Error('Invalid URL: ' + err.message);
+    }
+    if (!pingUrl.pathname.endsWith('/')) {
+        pingUrl.pathname += '/';
+    }
+    pingUrl.pathname += 'ping';
+    const startTime = Date.now();
 
-        const headers = {};
+    const headers = {};
 
+    try {
         await axios.get(pingUrl.toString(), { headers });
-        const endTime = Date.now();
-        const pingTime = endTime - startTime;
-        return pingTime;
     } catch (error) {
         throw new Error('Failed to fetch ping: ' + error.message);
     }
+    const endTime = Date.now();
+    const pingTime = endTime - startTime;
+    return pingTime;
 }
 
 module.exports = { getTunerInfo, getPingTime };

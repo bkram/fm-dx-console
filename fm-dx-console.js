@@ -168,7 +168,7 @@ function enqueueCommand(cmd) {
 }
 
 /** Every 125 ms, send up to one command if ws is open */
-setInterval(() => {
+const commandQueueInterval = setInterval(() => {
     if (commandQueue.length > 0 && ws && ws.readyState === WebSocket.OPEN) {
         const nextCmd = commandQueue.shift();
         debugLog('Sending command:', nextCmd);
@@ -524,7 +524,7 @@ const helpBox = blessed.box({
 renderScreen();
 
 // Update the title bar every second (for the clock)
-setInterval(() => {
+const titleBarInterval = setInterval(() => {
     updateTitleBar();
     renderScreen();
 }, 1000);
@@ -717,7 +717,7 @@ function updateStatsBox(data) {
     statsBox.setContent(
         `${padStringWithSpaces('Server users:', 'green', padLength)}${data.users}\n` +
         `${padStringWithSpaces('Server ping:', 'green', padLength)}${pingTime !== null ? pingTime + ' ms' : ''}\n` +
-        `${padStringWithSpaces('Local audio:', 'green', padLength)}${player.getStatus() ? 'Playing' : 'Stopped'}`
+        `${padStringWithSpaces('Local audio:', 'green', padLength)}${player && player.getStatus() ? 'Playing' : 'Stopped'}`
     );
 }
 
@@ -792,7 +792,7 @@ async function doPing() {
     }
 }
 doPing();
-setInterval(doPing, 5000);
+const pingInterval = setInterval(doPing, 5000);
 
 // -----------------------------
 // WebSocket Setup
@@ -832,6 +832,10 @@ ws.on('message', (data) => {
 
 ws.on('close', () => {
     debugLog('WebSocket connection closed');
+});
+
+ws.on('error', (err) => {
+    debugLog('WebSocket error:', err.message);
 });
 
 // -----------------------------
@@ -940,14 +944,14 @@ screen.on('keypress', async (ch, key) => {
         }
     } else if (key.full === '[') {
         // Toggle iMS
-        if (jsonData && jsonData.ims == 1) {
+        if (jsonData && jsonData.ims === 1) {
             enqueueCommand(`G${jsonData.eq}0`);
         } else if (jsonData) {
             enqueueCommand(`G${jsonData.eq}1`);
         }
     } else if (key.full === ']') {
         // Toggle EQ
-        if (jsonData && jsonData.eq == 1) {
+        if (jsonData && jsonData.eq === 1) {
             enqueueCommand(`G0${jsonData.ims}`);
         } else if (jsonData) {
             enqueueCommand(`G1${jsonData.ims}`);
@@ -976,6 +980,10 @@ screen.on('keypress', async (ch, key) => {
         }
         renderScreen();
     } else if (key.full === 'escape' || key.full === 'C-c') {
+        clearInterval(commandQueueInterval);
+        clearInterval(titleBarInterval);
+        clearInterval(pingInterval);
+        if (player) player.stop();
         process.exit(0);
     } else {
         debugLog(key.full);

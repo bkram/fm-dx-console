@@ -16,7 +16,7 @@ const path = require('path');
 const WebSocket = require('ws');
 const { getTunerInfo, getPingTime } = require('./tunerinfo');
 const { setAntNames, getAntNames, getAntLabel, cycleAntenna } = require('./antenna');
-const playAudio = require('./3lasclient');
+const { Worker } = require('worker_threads');
 
 // -----------------------------
 // Global Constants
@@ -30,15 +30,39 @@ const europe_programmes = [
     "Travel", "Leisure", "Jazz Music", "Country Music", "National Music",
     "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
 ];
-const version = '1.52';
+const version = '1.53';
 const userAgent = `fm-dx-console/${version}`;
 
 // Terminal must be at least 80x24
 const MIN_COLS = 80;
 const MIN_ROWS = 24;
 
+function getMinCols() {
+    const mode = getLayoutMode();
+    return mode === 'compact' ? 70 : 80;
+}
+
+function getMinRows() {
+    const mode = getLayoutMode();
+    if (mode === 'compact') return 20;
+    return 24;
+}
+
 // Throttle interval => 8 commands/sec
 const THROTTLE_MS = 125;
+
+// Debounce utility to prevent excessive re-renders during resize
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
 
 // Style objects
 const titleStyle = { fg: 'black', bg: 'green', bold: true };
@@ -53,11 +77,19 @@ let tunerDesc = '';
 let tunerName = '';
 let websocketAudio;
 let websocketData;
+let websocketRds;
+let rdsBoxAdvanced = null;
 let argDebug = argv.debug;
 let argAutoPlay = argv['auto-play'];
 let argUrl;
 let pingTime = null;
 let lastRdsData = null;
+let lastRdsUpdate = 0;
+let RDS_UPDATE_INTERVAL = 500;
+let audioPlaying = false;
+let rdsWorker = null;
+let rdsDataCache = null;
+let audioWorker = null;
 
 // -----------------------------
 // Logging Setup
@@ -112,6 +144,7 @@ if (isValidURL(argUrl)) {
     let websocketAddress = formatWebSocketURL(argUrl);
     websocketAudio = `${websocketAddress}/audio`;
     websocketData = `${websocketAddress}/text`;
+    websocketRds = `${websocketAddress}/rds`;
 } else {
     console.error("Invalid URL provided.");
     process.exit(1);
@@ -168,7 +201,7 @@ function enqueueCommand(cmd) {
 }
 
 /** Every 125 ms, send up to one command if ws is open */
-const commandQueueInterval = setInterval(() => {
+setInterval(() => {
     if (commandQueue.length > 0 && ws && ws.readyState === WebSocket.OPEN) {
         const nextCmd = commandQueue.shift();
         debugLog('Sending command:', nextCmd);
@@ -182,11 +215,13 @@ const commandQueueInterval = setInterval(() => {
 // -----------------------------
 function checkSizeAndToggleUI() {
     const { cols, rows } = screen;
-    if (cols < MIN_COLS || rows < MIN_ROWS) {
+    const minCols = getMinCols();
+    const minRows = getMinRows();
+    if (cols < minCols || rows < minRows) {
         uiBox.hide();
         warningBox.setContent(
             `\n   Terminal too small!\n\n` +
-            `   Please resize to at least ${MIN_COLS}x${MIN_ROWS}\n`
+            `   Please resize to at least ${minCols}x${minRows}\n`
         );
         warningBox.show();
     } else {
@@ -349,16 +384,29 @@ const titleBar = blessed.box({
  */
 function updateTitleBar() {
     const leftText = ` fm-dx-console ${version} by Bkram `;
-    // Clock with a space at the end
     const now = new Date();
     const clockStr = now.toLocaleTimeString([], { hour12: false }) + ' ';
 
-    // Spacing so the clock is right-aligned
     const totalWidth = screen.cols;
-    let spacing = totalWidth - (leftText.length + clockStr.length);
-    if (spacing < 1) spacing = 1;
+    const minWidth = Math.max(leftText.length + clockStr.length + 1, MIN_COLS);
+    
+    let spacing;
+    if (totalWidth < minWidth) {
+        // Terminal too narrow - use minimal spacing
+        spacing = 1;
+    } else {
+        spacing = totalWidth - (leftText.length + clockStr.length);
+        if (spacing < 1) spacing = 1;
+    }
 
-    titleBar.setContent(leftText + ' '.repeat(spacing) + clockStr);
+    // Truncate left text if necessary to prevent overflow
+    let displayLeftText = leftText;
+    const maxLeftWidth = Math.floor(totalWidth * 0.6);
+    if (displayLeftText.length > maxLeftWidth) {
+        displayLeftText = displayLeftText.substring(0, maxLeftWidth - 3) + '... ';
+    }
+
+    titleBar.setContent(displayLeftText + ' '.repeat(spacing) + clockStr);
 }
 
 // Tuner, RDS, Station sections
@@ -372,11 +420,68 @@ let tunerWidth = 22;
 let rdsWidth = 30;
 const TUNER_RATIO = tunerWidth / 80;  // ratios based on original 80 column layout
 const RDS_RATIO = rdsWidth / 80;
-const MIN_TUNER = 16;
-const MIN_RDS = 24;
-const heightInRows = 8;
-const rdsHeight = heightInRows + 2;
-const rowHeight = Math.max(heightInRows, rdsHeight);
+
+function getLayoutMode() {
+    const rows = screen.rows;
+    if (rows < 28) return 'compact';
+    if (rows > 45) return 'expanded';
+    return 'normal';
+}
+
+// Calculate box heights based on terminal size
+function getTopBoxHeight() {
+    const rows = screen.rows;
+    const mode = getLayoutMode();
+    
+    let ratio;
+    switch (mode) {
+        case 'compact':
+            ratio = 0.32;
+            break;
+        case 'expanded':
+            ratio = 0.38;
+            break;
+        default:
+            ratio = 0.35;
+    }
+    
+    // Clamp between min and max based on mode
+    const minHeight = mode === 'compact' ? 5 : 6;
+    const maxHeight = mode === 'expanded' ? 12 : 10;
+    
+    return Math.min(maxHeight, Math.max(minHeight, Math.floor(rows * ratio)));
+}
+
+function getRdsBoxHeight() {
+    return getTopBoxHeight() + 2;
+}
+
+function getRowHeight() {
+    return Math.max(getTopBoxHeight(), getRdsBoxHeight());
+}
+
+function getRtBoxHeight() {
+    const mode = getLayoutMode();
+    const rows = screen.rows;
+    if (mode === 'compact') return 2;
+    if (mode === 'expanded') return 5;
+    return 3;
+}
+
+function getBottomBoxHeight() {
+    const rows = screen.rows;
+    const mode = getLayoutMode();
+    const rowHeight = getRowHeight();
+    const rtHeight = getRtBoxHeight();
+    const remaining = rows - rowHeight - rtHeight - 3;
+    
+    if (mode === 'compact') return Math.max(3, Math.floor(remaining * 0.5));
+    return Math.max(4, Math.floor(remaining * 0.55));
+}
+
+let heightInRows = getTopBoxHeight();
+let rdsHeight = getRdsBoxHeight();
+let rowHeight = getRowHeight();
 
 const tunerBox = blessed.box({
     parent: uiBox,
@@ -493,6 +598,26 @@ const serverBox = blessed.box({
     }
 });
 
+// Advanced RDS Window (toggle with 'a' key)
+rdsBoxAdvanced = blessed.box({
+    parent: uiBox,
+    top: 'center',
+    left: 'center',
+    width: '90%',
+    height: '90%',
+    tags: true,
+    border: { type: 'line' },
+    style: boxStyle,
+    label: boxLabel('Advanced RDS'),
+    hidden: true,
+    scrollable: true,
+    alwaysScroll: true,
+    scrollbar: {
+        ch: ' ',
+        inverse: true
+    }
+});
+
 // Bottom bar with "Press `h` for help" on the right
 const bottomBox = blessed.box({
     parent: uiBox,
@@ -524,7 +649,7 @@ const helpBox = blessed.box({
 renderScreen();
 
 // Update the title bar every second (for the clock)
-const titleBarInterval = setInterval(() => {
+setInterval(() => {
     updateTitleBar();
     renderScreen();
 }, 1000);
@@ -537,44 +662,73 @@ function updateProgressBarWidth() {
 }
 
 /**
- * Adjust tuner, RDS, and station box widths based on screen size
+ * Adjust tuner, RDS, and station box widths and heights based on screen size
  */
 function applyLayout() {
     const total = screen.cols;
-    tunerWidth = Math.max(MIN_TUNER, Math.floor(total * TUNER_RATIO));
-    rdsWidth = Math.max(MIN_RDS, Math.floor(total * RDS_RATIO));
-    const stationWidth = Math.max(20, total - tunerWidth - rdsWidth);
+    const mode = getLayoutMode();
+    
+    const minTuner = mode === 'compact' ? 14 : 16;
+    const minRds = mode === 'compact' ? 20 : 24;
+    
+    tunerWidth = Math.max(minTuner, Math.floor(total * TUNER_RATIO));
+    rdsWidth = Math.max(minRds, Math.floor(total * RDS_RATIO));
+    const stationWidth = Math.max(15, total - tunerWidth - rdsWidth);
+
+    // Recalculate heights based on current terminal size
+    heightInRows = getTopBoxHeight();
+    rdsHeight = getRdsBoxHeight();
+    rowHeight = getRowHeight();
+    const rtHeight = getRtBoxHeight();
+    const bottomBoxHeight = getBottomBoxHeight();
 
     tunerBox.width = tunerWidth;
+    tunerBox.height = heightInRows;
     rdsBox.left = tunerWidth;
     rdsBox.width = rdsWidth;
+    rdsBox.height = rdsHeight;
     stationBox.left = tunerWidth + rdsWidth;
     stationBox.width = stationWidth;
+    stationBox.height = heightInRows;
+
+    // Update RT box position and height
+    rtBox.top = rowHeight;
+    rtBox.height = rtHeight;
+
+    // Update signal/stats boxes
+    const boxTop = rowHeight + rtHeight + 1;
+    signalBox.top = boxTop;
+    signalBox.height = bottomBoxHeight;
+    statsBox.top = boxTop;
+    statsBox.height = bottomBoxHeight;
 }
 
 /**
  * On terminal resize, we re-check if UI is too small,
  * recalc the bottom bar, recalc the title bar, etc.
  */
-screen.on('resize', () => {
+const handleResize = debounce(() => {
+    // Batch all layout changes first
     updateProgressBarWidth();
     applyLayout();
     checkSizeAndToggleUI();
-
-    // Recompute the bottom bar text to keep "Press `h` for help" right-aligned
-    bottomBox.setContent(genBottomText(argUrl));
-
-    // Recompute the top bar clock spacing
-    updateTitleBar();
-
+    
+    // Only update UI content if there's data
     if (jsonData) {
         updateTunerBox(jsonData);
         updateRdsBox(jsonData);
         updateStationBox(jsonData.txInfo);
     }
-
+    
+    // Update bars
+    bottomBox.setContent(genBottomText(argUrl));
+    updateTitleBar();
+    
+    // Single render at the end
     renderScreen();
-});
+}, 75);
+
+screen.on('resize', handleResize);
 
 // -----------------------------
 // UI update functions
@@ -714,11 +868,25 @@ function updateStationBox(txInfo) {
 function updateStatsBox(data) {
     if (!statsBox || !data) return;
     const padLength = 16;
-    statsBox.setContent(
+    const mode = getLayoutMode();
+    
+    let content = '';
+    
+    // Show server info when terminal is large enough (normal or expanded mode)
+    if (mode !== 'compact' && tunerName) {
+        content += `${padStringWithSpaces('Server:', 'green', padLength)}${stripUnicode(tunerName)}\n`;
+        if (mode === 'expanded' && tunerDesc) {
+            content += `${padStringWithSpaces('Desc:', 'green', padLength)}${stripUnicode(tunerDesc)}\n`;
+        }
+        content += '\n';
+    }
+    
+    content += 
         `${padStringWithSpaces('Server users:', 'green', padLength)}${data.users}\n` +
         `${padStringWithSpaces('Server ping:', 'green', padLength)}${pingTime !== null ? pingTime + ' ms' : ''}\n` +
-        `${padStringWithSpaces('Local audio:', 'green', padLength)}${player && player.getStatus() ? 'Playing' : 'Stopped'}`
-    );
+        `${padStringWithSpaces('Local audio:', 'green', padLength)}${audioPlaying ? 'Playing' : 'Stopped'}`;
+    
+    statsBox.setContent(content);
 }
 
 function scaleValue(value) {
@@ -752,10 +920,137 @@ function updateServerBox() {
     serverBox.setContent(content.join('\n'));
 }
 
+function updateRdsAdvancedBox() {
+    if (!rdsBoxAdvanced || rdsBoxAdvanced.hidden) return;
+    if (!rdsDataCache) return;
+    const d = rdsDataCache;
+    const stableFlags = d.stableFlags;
+    const lines = [];
+    const pad = 12;
+    const lbl = (text) => padStringWithSpaces(text, 'green', pad);
+
+    // Header
+    lines.push(`${lbl('PI:')}${d.pi}   ${lbl('PTY:')}${d.ptyName} [${d.pty}]`);
+
+    // Flags
+    const tpDisplay = stableFlags.tpStable ? (d.tp ? '1' : '0') : '-';
+    const taDisplay = stableFlags.taStable ? (d.ta ? '1' : '0') : '-';
+    const msDisplay = stableFlags.msStable ? (d.ms ? 'Music' : 'Speech') : '-';
+    const stereoDisplay = stableFlags.diStereoStable ? (d.diStereo ? '1' : '0') : '-';
+    lines.push(`${lbl('TP/TA:')}${tpDisplay}/${taDisplay}   ${lbl('MS:')}${msDisplay}   ${lbl('Stereo:')}${stereoDisplay}`);
+
+    const diStereo = stableFlags.diStereoStable ? d.diStereo : null;
+    const diAh = stableFlags.diAhStable ? d.diArtificialHead : null;
+    const diComp = stableFlags.diCompStable ? d.diCompressed : null;
+    const diDpty = stableFlags.diDptyStable ? d.diDynamicPty : null;
+    lines.push(`${lbl('DI:')}Stereo=${diStereo !== null ? (diStereo ? 1:0) : '-'} AH=${diAh !== null ? (diAh ? 1:0) : '-'} Comp=${diComp !== null ? (diComp ? 1:0) : '-'} DPTY=${diDpty !== null ? (diDpty ? 1:0) : '-'}`);
+
+    lines.push('');
+    // Text fields
+    const psMark = d.psStable ? '*' : '';
+    lines.push(`${lbl('PS' + psMark)}${d.ps || '(waiting...)'}`);
+    if (d.longPs && d.longPs.length > 0) {
+        lines.push(`${lbl('Long PS')}${d.longPs}`);
+    }
+    if (d.ptyn && d.ptyn.length > 0) {
+        lines.push(`${lbl('PTYN')}${d.ptyn}`);
+    }
+    if (d.rtA || d.rtB) {
+        if (d.rtA) lines.push(`${lbl('RT-A')}${d.rtA}`);
+        if (d.rtB) lines.push(`${lbl('RT-B')}${d.rtB}`);
+    } else if (d.rt) {
+        const stableMark = d.rtStable ? '*' : '';
+        lines.push(`${lbl(`RT ${d.rtAbFlag ? '(B)' : '(A)'}${stableMark}`)}${d.rt}`);
+    }
+
+    lines.push('');
+    // AF / IDs / Time / BER
+    if (d.afList && d.afList.length > 0) {
+        lines.push(`${lbl(`AF (${d.afType})`)}${d.afList.join(', ')}`);
+    }
+    if (d.ecc || d.lic) {
+        lines.push(`${lbl('ECC / LIC')}${(d.ecc || '-') + ' / ' + (d.lic || '-')}`);
+    }
+    if (d.pin) {
+        lines.push(`${lbl('PIN')}${d.pin}`);
+    }
+    if (d.localTime || d.utcTime) {
+        lines.push(`${lbl('Time')}${d.localTime || '-'}  UTC: ${d.utcTime || '-'}`);
+    }
+    if (d.ber >= 0) {
+        lines.push(`${lbl('BER')}${d.ber.toFixed(2)}%`);
+    }
+
+    // Features
+    const features = [];
+    if (d.hasRtPlus) features.push('RDS+');
+    if (d.hasTmc) features.push('TMC');
+    if (d.hasEon) features.push('EON');
+    if (d.odaList.length > 0) features.push('ODA');
+    if (features.length > 0) {
+        lines.push('');
+        lines.push(`${lbl('Features')}${features.join(', ')}`);
+    }
+    if (d.odaList.length > 0) {
+        lines.push(`${lbl('ODA')}${d.odaList.map(o => o.aid).join(', ')}`);
+    }
+
+    // Groups
+    lines.push('');
+    const stats = d.groupStats;
+    const fmtStat = (s) => `${s.group}:${s.percent}%`;
+    const rows = [];
+    const maxStats = Math.min(stats.length, 16);
+    for (let i = 0; i < maxStats; i += 3) {
+        rows.push(stats.slice(i, i + 3).map(fmtStat).join('   '));
+    }
+    if (rows.length > 0) {
+        lines.push(`${lbl('Groups')}${rows[0]}`);
+        for (let i = 1; i < rows.length; i++) {
+            lines.push(`${padStringWithSpaces('', 'green', pad)}${rows[i]}`);
+        }
+    }
+
+    // EON
+    const eonData = d.eonData;
+    if (Object.keys(eonData).length > 0) {
+        lines.push('');
+        lines.push('{bold}EON{/bold}');
+        for (const [pi, net] of Object.entries(eonData)) {
+            let eonLine = `${lbl(pi)}${net.ps || '-'}  TP=${net.tp?1:0} TA=${net.ta?1:0}`;
+            if (net.af && net.af.length > 0) eonLine += ` AF=[${net.af.join(',')}]`;
+            if (net.mappedFreqs && net.mappedFreqs.length > 0) eonLine += ` Map=[${net.mappedFreqs.join(',')}]`;
+            if (net.linkageInfo) eonLine += ` Link=${net.linkageInfo}`;
+            if (net.pin) eonLine += ` PIN=${net.pin}`;
+            lines.push(eonLine);
+        }
+    }
+
+    rdsBoxAdvanced.setContent(lines.join('\n'));
+}
+
 // -----------------------------
-// Audio
+// Audio (worker)
 // -----------------------------
-const player = playAudio(websocketAudio, userAgent, 2048, argv.debug);
+function initAudioWorker() {
+    if (audioWorker) return;
+    audioWorker = new Worker('./audio-worker.js', {
+        workerData: { url: websocketAudio, userAgent: userAgent }
+    });
+    audioWorker.on('error', (err) => debugLog('Audio worker error: ' + err.message));
+    audioWorker.on('exit', (code) => debugLog('Audio worker exit: ' + code));
+}
+
+function startAudio() {
+    if (!audioWorker) initAudioWorker();
+    audioWorker.postMessage({ type: 'start' });
+    audioPlaying = true;
+}
+
+function stopAudio() {
+    if (audioWorker) audioWorker.postMessage({ type: 'stop' });
+    audioPlaying = false;
+}
 
 // -----------------------------
 // Tuner Info + Ping
@@ -792,7 +1087,7 @@ async function doPing() {
     }
 }
 doPing();
-const pingInterval = setInterval(doPing, 5000);
+setInterval(doPing, 5000);
 
 // -----------------------------
 // WebSocket Setup
@@ -803,7 +1098,8 @@ const ws = new WebSocket(websocketData, wsOptions);
 ws.on('open', () => {
     debugLog('WebSocket connection established');
     if (argAutoPlay) {
-        player.play();
+        startAudio();
+        audioPlaying = true;
         updateStatsBox(jsonData || {});
         renderScreen();
     }
@@ -834,9 +1130,101 @@ ws.on('close', () => {
     debugLog('WebSocket connection closed');
 });
 
-ws.on('error', (err) => {
-    debugLog('WebSocket error:', err.message);
-});
+// -----------------------------
+// Advanced RDS WebSocket (Worker Thread)
+// -----------------------------
+
+function initRdsWorker() {
+    rdsWorker = new Worker('./rds-worker.js');
+    
+    rdsWorker.on('message', (msg) => {
+        if (msg.type === 'data') {
+            rdsDataCache = msg;
+            
+            const now = Date.now();
+            if (now - lastRdsUpdate > RDS_UPDATE_INTERVAL) {
+                lastRdsUpdate = now;
+                updateRdsAdvancedBox();
+                renderScreen();
+            }
+        }
+    });
+    
+    rdsWorker.on('error', (err) => {
+        debugLog('RDS Worker error:', err.message);
+    });
+    
+    rdsWorker.on('exit', (code) => {
+        debugLog('RDS Worker exited with code:', code);
+    });
+}
+
+function requestRdsData() {
+    if (rdsWorker) {
+        rdsWorker.postMessage({ type: 'getData' });
+    }
+}
+
+function connectRdsWebSocket() {
+    if (!websocketRds) return;
+    
+    initRdsWorker();
+    
+    const rdsWsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (rds)` } } : {};
+    const rdsWs = new WebSocket(websocketRds, rdsWsOptions);
+    
+    rdsWs.on('open', () => {
+        debugLog('RDS WebSocket connection established');
+    });
+    
+    RDS_UPDATE_INTERVAL = 500;
+    let rdsMsgBuffer = [];
+    let rdsProcessInterval = null;
+    
+    function processRdsBuffer() {
+        if (rdsMsgBuffer.length === 0) return;
+        
+        const msgs = rdsMsgBuffer.splice(0, rdsMsgBuffer.length);
+        for (const msg of msgs) {
+            if (rdsWorker) {
+                rdsWorker.postMessage({ type: 'parse', data: msg });
+            }
+        }
+    }
+    
+    rdsWs.on('message', (data) => {
+        try {
+            const msg = data.toString();
+            rdsMsgBuffer.push(msg);
+            
+            if (!rdsProcessInterval) {
+                rdsProcessInterval = setInterval(processRdsBuffer, 200);
+            }
+        } catch (error) {
+            debugLog('Error parsing RDS data:', error);
+        }
+    });
+    
+    setInterval(requestRdsData, 500);
+    
+    rdsWs.on('error', (err) => {
+        debugLog('RDS WebSocket error:', err.message);
+    });
+    
+    rdsWs.on('close', () => {
+        debugLog('RDS WebSocket connection closed');
+        if (rdsProcessInterval) {
+            clearInterval(rdsProcessInterval);
+            rdsProcessInterval = null;
+        }
+        if (rdsWorker) {
+            rdsWorker.terminate();
+            rdsWorker = null;
+        }
+    });
+}
+
+connectRdsWebSocket();
 
 // -----------------------------
 // Key Bindings
@@ -872,11 +1260,21 @@ screen.on('keypress', async (ch, key) => {
             enqueueCommand(`T${(jsonData.freq * 1000) - 1000}`);
             resetRds();
         }
-    } else if (key.full === 'r') {
+    } else if (key.full.toLowerCase() === 'r') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000)}`);
             resetRds();
         }
+    } else if (key.full.toLowerCase() === 'a') {
+        // Toggle advanced RDS window
+        rdsBoxAdvanced.hidden = !rdsBoxAdvanced.hidden;
+        if (!rdsBoxAdvanced.hidden) {
+            updateRdsAdvancedBox();
+        } else {
+            rdsBoxAdvanced.setContent('');
+            screen.realloc();
+        }
+        renderScreen();
     } else if (key.full === 't') {
         // Direct freq input
         screen.saveFocus();
@@ -933,10 +1331,12 @@ screen.on('keypress', async (ch, key) => {
         renderScreen();
     } else if (key.full === 'p') {
         // Toggle audio
-        if (player.getStatus()) {
-            player.stop();
+        if (audioPlaying) {
+            stopAudio();
+            audioPlaying = false;
         } else {
-            player.play();
+            startAudio();
+            audioPlaying = true;
         }
         if (jsonData) {
             updateStatsBox(jsonData);
@@ -944,14 +1344,14 @@ screen.on('keypress', async (ch, key) => {
         }
     } else if (key.full === '[') {
         // Toggle iMS
-        if (jsonData && jsonData.ims === 1) {
+        if (jsonData && jsonData.ims == 1) {
             enqueueCommand(`G${jsonData.eq}0`);
         } else if (jsonData) {
             enqueueCommand(`G${jsonData.eq}1`);
         }
     } else if (key.full === ']') {
         // Toggle EQ
-        if (jsonData && jsonData.eq === 1) {
+        if (jsonData && jsonData.eq == 1) {
             enqueueCommand(`G0${jsonData.ims}`);
         } else if (jsonData) {
             enqueueCommand(`G1${jsonData.ims}`);
@@ -979,11 +1379,17 @@ screen.on('keypress', async (ch, key) => {
             screen.realloc();
         }
         renderScreen();
+    } else if (key.full.toLowerCase() === 'r') {
+        // Toggle advanced RDS window
+        rdsBoxAdvanced.hidden = !rdsBoxAdvanced.hidden;
+        if (!rdsBoxAdvanced.hidden) {
+            updateRdsAdvancedBox();
+        } else {
+            rdsBoxAdvanced.setContent('');
+            screen.realloc();
+        }
+        renderScreen();
     } else if (key.full === 'escape' || key.full === 'C-c') {
-        clearInterval(commandQueueInterval);
-        clearInterval(titleBarInterval);
-        clearInterval(pingInterval);
-        if (player) player.stop();
         process.exit(0);
     } else {
         debugLog(key.full);

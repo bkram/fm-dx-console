@@ -40,6 +40,19 @@ const MIN_ROWS = 24;
 // Throttle interval => 8 commands/sec
 const THROTTLE_MS = 125;
 
+// Debounce utility to prevent excessive re-renders during resize
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
 // Style objects
 const titleStyle = { fg: 'black', bg: 'green', bold: true };
 const boxStyle = { border: { fg: 'green', bg: 'blue' }, bg: 'blue' };
@@ -349,16 +362,29 @@ const titleBar = blessed.box({
  */
 function updateTitleBar() {
     const leftText = ` fm-dx-console ${version} by Bkram `;
-    // Clock with a space at the end
     const now = new Date();
     const clockStr = now.toLocaleTimeString([], { hour12: false }) + ' ';
 
-    // Spacing so the clock is right-aligned
     const totalWidth = screen.cols;
-    let spacing = totalWidth - (leftText.length + clockStr.length);
-    if (spacing < 1) spacing = 1;
+    const minWidth = Math.max(leftText.length + clockStr.length + 1, MIN_COLS);
+    
+    let spacing;
+    if (totalWidth < minWidth) {
+        // Terminal too narrow - use minimal spacing
+        spacing = 1;
+    } else {
+        spacing = totalWidth - (leftText.length + clockStr.length);
+        if (spacing < 1) spacing = 1;
+    }
 
-    titleBar.setContent(leftText + ' '.repeat(spacing) + clockStr);
+    // Truncate left text if necessary to prevent overflow
+    let displayLeftText = leftText;
+    const maxLeftWidth = Math.floor(totalWidth * 0.6);
+    if (displayLeftText.length > maxLeftWidth) {
+        displayLeftText = displayLeftText.substring(0, maxLeftWidth - 3) + '... ';
+    }
+
+    titleBar.setContent(displayLeftText + ' '.repeat(spacing) + clockStr);
 }
 
 // Tuner, RDS, Station sections
@@ -374,9 +400,26 @@ const TUNER_RATIO = tunerWidth / 80;  // ratios based on original 80 column layo
 const RDS_RATIO = rdsWidth / 80;
 const MIN_TUNER = 16;
 const MIN_RDS = 24;
-const heightInRows = 8;
-const rdsHeight = heightInRows + 2;
-const rowHeight = Math.max(heightInRows, rdsHeight);
+
+// Calculate box heights based on terminal size
+function getTopBoxHeight() {
+    const rows = screen.rows;
+    // Use 35% of available rows for top section (tuner/rds/station)
+    // Clamp between 6 and 10 rows
+    return Math.min(10, Math.max(6, Math.floor(rows * 0.35)));
+}
+
+function getRdsBoxHeight() {
+    return getTopBoxHeight() + 2;  // RDS box includes border
+}
+
+function getRowHeight() {
+    return Math.max(getTopBoxHeight(), getRdsBoxHeight());
+}
+
+let heightInRows = getTopBoxHeight();
+let rdsHeight = getRdsBoxHeight();
+let rowHeight = getRowHeight();
 
 const tunerBox = blessed.box({
     parent: uiBox,
@@ -537,7 +580,7 @@ function updateProgressBarWidth() {
 }
 
 /**
- * Adjust tuner, RDS, and station box widths based on screen size
+ * Adjust tuner, RDS, and station box widths and heights based on screen size
  */
 function applyLayout() {
     const total = screen.cols;
@@ -545,18 +588,38 @@ function applyLayout() {
     rdsWidth = Math.max(MIN_RDS, Math.floor(total * RDS_RATIO));
     const stationWidth = Math.max(20, total - tunerWidth - rdsWidth);
 
+    // Recalculate heights based on current terminal size
+    heightInRows = getTopBoxHeight();
+    rdsHeight = getRdsBoxHeight();
+    rowHeight = getRowHeight();
+
     tunerBox.width = tunerWidth;
+    tunerBox.height = heightInRows;
     rdsBox.left = tunerWidth;
     rdsBox.width = rdsWidth;
+    rdsBox.height = rdsHeight;
     stationBox.left = tunerWidth + rdsWidth;
     stationBox.width = stationWidth;
+    stationBox.height = heightInRows;
+
+    // Update RT box position and height
+    rtBox.top = rowHeight;
+    rtBox.height = Math.max(3, Math.floor(screen.rows * 0.18));
+
+    // Update signal/stats boxes
+    const boxTop = rowHeight + rtBox.height + 1;
+    const boxHeight = Math.max(4, Math.floor(screen.rows * 0.20));
+    signalBox.top = boxTop;
+    signalBox.height = boxHeight;
+    statsBox.top = boxTop;
+    statsBox.height = boxHeight;
 }
 
 /**
  * On terminal resize, we re-check if UI is too small,
  * recalc the bottom bar, recalc the title bar, etc.
  */
-screen.on('resize', () => {
+const handleResize = debounce(() => {
     updateProgressBarWidth();
     applyLayout();
     checkSizeAndToggleUI();
@@ -574,7 +637,9 @@ screen.on('resize', () => {
     }
 
     renderScreen();
-});
+}, 75);
+
+screen.on('resize', handleResize);
 
 // -----------------------------
 // UI update functions

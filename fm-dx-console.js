@@ -17,6 +17,7 @@ const WebSocket = require('ws');
 const { getTunerInfo, getPingTime } = require('./tunerinfo');
 const { setAntNames, getAntNames, getAntLabel, cycleAntenna } = require('./antenna');
 const playAudio = require('./3lasclient');
+const { createRdsDecoder } = require('./rds-decoder');
 
 // -----------------------------
 // Global Constants
@@ -77,6 +78,9 @@ let tunerDesc = '';
 let tunerName = '';
 let websocketAudio;
 let websocketData;
+let websocketRds;
+let rdsDecoder;
+let rdsBoxAdvanced = null;
 let argDebug = argv.debug;
 let argAutoPlay = argv['auto-play'];
 let argUrl;
@@ -136,6 +140,7 @@ if (isValidURL(argUrl)) {
     let websocketAddress = formatWebSocketURL(argUrl);
     websocketAudio = `${websocketAddress}/audio`;
     websocketData = `${websocketAddress}/text`;
+    websocketRds = `${websocketAddress}/rds`;
 } else {
     console.error("Invalid URL provided.");
     process.exit(1);
@@ -589,6 +594,26 @@ const serverBox = blessed.box({
     }
 });
 
+// Advanced RDS Window (toggle with 'r' key)
+const rdsAdvancedBox = blessed.box({
+    parent: uiBox,
+    top: 'center',
+    left: 'center',
+    width: '90%',
+    height: '90%',
+    tags: true,
+    border: { type: 'line' },
+    style: boxStyle,
+    label: boxLabel('Advanced RDS'),
+    hidden: true,
+    scrollable: true,
+    alwaysScroll: true,
+    scrollbar: {
+        ch: ' ',
+        inverse: true
+    }
+});
+
 // Bottom bar with "Press `h` for help" on the right
 const bottomBox = blessed.box({
     parent: uiBox,
@@ -890,6 +915,71 @@ function updateServerBox() {
     serverBox.setContent(content.join('\n'));
 }
 
+function updateRdsAdvancedBox() {
+    if (!rdsBoxAdvanced || rdsBoxAdvanced.hidden) return;
+    
+    const state = rdsDecoder.getState();
+    const lines = [];
+    const w = rdsBoxAdvanced.width - 2;
+    
+    lines.push(`{bold}PI:{/bold} ${state.pi}  {bold}PTY:{/bold} ${rdsDecoder.getPtyName()} [${state.pty}]  {bold}TP:{/bold} ${state.tp ? 'Yes' : 'No'}  {bold}TA:{/bold} ${state.ta ? 'Yes' : 'No'}  {bold}MS:{/bold} ${state.ms ? 'Music' : 'Speech'}`);
+    lines.push(`{bold}PS:{/bold} ${rdsDecoder.getPs() || '(no data)'}`);
+    lines.push('');
+    
+    const rt = rdsDecoder.getRt();
+    if (rt) {
+        lines.push(`{bold}Radiotext:{/bold} ${rt}`);
+    }
+    lines.push('');
+    
+    const afList = rdsDecoder.getAfList();
+    if (afList.length > 0) {
+        lines.push(`{bold}AF List (${state.afType}):{/bold} ${afList.join(', ')}`);
+    }
+    
+    if (state.ecc || state.lic) {
+        lines.push(`{bold}ECC:{/bold} ${state.ecc || 'N/A'}  {bold}LIC:{/bold} ${state.lic || 'N/A'}`);
+    }
+    
+    if (state.localTime || state.utcTime) {
+        lines.push(`{bold}Time:{/bold} Local: ${state.localTime || 'N/A'}  UTC: ${state.utcTime || 'N/A'}`);
+    }
+    
+    lines.push('');
+    lines.push('{bold}Group Statistics:{/bold}');
+    const stats = rdsDecoder.getGroupStats();
+    const statsLine = stats.slice(0, 8).map(s => `${s.group}:${s.percent}%`).join('  ');
+    lines.push(statsLine);
+    
+    if (state.hasRtPlus) {
+        lines.push('');
+        lines.push('{bold}RDS+:{/bold} Detected');
+    }
+    
+    if (state.hasTmc) {
+        lines.push('{bold}TMC:{/bold} Detected');
+    }
+    
+    if (state.hasEon) {
+        lines.push('{bold}EON:{/bold} Detected');
+    }
+    
+    if (state.odaList.length > 0) {
+        lines.push('');
+        lines.push('{bold}ODA:{/bold} ' + state.odaList.map(o => `${o.aid} (${o.group})`).join(', '));
+    }
+    
+    if (Object.keys(state.eonData).length > 0) {
+        lines.push('');
+        lines.push('{bold}EON Networks:{/bold}');
+        for (const [pi, net] of Object.entries(state.eonData)) {
+            lines.push(`  ${pi}: ${net.ps} TP=${net.tp ? 1:0} TA=${net.ta ? 1:0}`);
+        }
+    }
+    
+    rdsBoxAdvanced.setContent(lines.join('\n'));
+}
+
 // -----------------------------
 // Audio
 // -----------------------------
@@ -977,6 +1067,42 @@ ws.on('error', (err) => {
 });
 
 // -----------------------------
+// Advanced RDS WebSocket
+// -----------------------------
+rdsDecoder = createRdsDecoder();
+
+function connectRdsWebSocket() {
+    if (!websocketRds) return;
+    
+    const rdsWsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (rds)` } } : {};
+    const rdsWs = new WebSocket(websocketRds, rdsWsOptions);
+    
+    rdsWs.on('open', () => {
+        debugLog('RDS WebSocket connection established');
+    });
+    
+    rdsWs.on('message', (data) => {
+        try {
+            rdsDecoder.parseMessage(data.toString());
+            updateRdsAdvancedBox();
+            renderScreen();
+        } catch (error) {
+            debugLog('Error parsing RDS data:', error);
+        }
+    });
+    
+    rdsWs.on('error', (err) => {
+        debugLog('RDS WebSocket error:', err.message);
+    });
+    
+    rdsWs.on('close', () => {
+        debugLog('RDS WebSocket connection closed');
+    });
+}
+
+connectRdsWebSocket();
+
+// -----------------------------
 // Key Bindings
 // -----------------------------
 screen.on('keypress', async (ch, key) => {
@@ -1010,11 +1136,21 @@ screen.on('keypress', async (ch, key) => {
             enqueueCommand(`T${(jsonData.freq * 1000) - 1000}`);
             resetRds();
         }
-    } else if (key.full === 'r') {
+    } else if (key.full.toLowerCase() === 'r') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000)}`);
             resetRds();
         }
+    } else if (key.full.toLowerCase() === 'a') {
+        // Toggle advanced RDS window
+        rdsBoxAdvanced.hidden = !rdsBoxAdvanced.hidden;
+        if (!rdsBoxAdvanced.hidden) {
+            updateRdsAdvancedBox();
+        } else {
+            rdsBoxAdvanced.setContent('');
+            screen.realloc();
+        }
+        renderScreen();
     } else if (key.full === 't') {
         // Direct freq input
         screen.saveFocus();
@@ -1114,6 +1250,16 @@ screen.on('keypress', async (ch, key) => {
             updateServerBox();
         } else {
             serverBox.setContent('');
+            screen.realloc();
+        }
+        renderScreen();
+    } else if (key.full.toLowerCase() === 'r') {
+        // Toggle advanced RDS window
+        rdsBoxAdvanced.hidden = !rdsBoxAdvanced.hidden;
+        if (!rdsBoxAdvanced.hidden) {
+            updateRdsAdvancedBox();
+        } else {
+            rdsBoxAdvanced.setContent('');
             screen.realloc();
         }
         renderScreen();

@@ -37,6 +37,17 @@ const userAgent = `fm-dx-console/${version}`;
 const MIN_COLS = 80;
 const MIN_ROWS = 24;
 
+function getMinCols() {
+    const mode = getLayoutMode();
+    return mode === 'compact' ? 70 : 80;
+}
+
+function getMinRows() {
+    const mode = getLayoutMode();
+    if (mode === 'compact') return 20;
+    return 24;
+}
+
 // Throttle interval => 8 commands/sec
 const THROTTLE_MS = 125;
 
@@ -195,11 +206,13 @@ setInterval(() => {
 // -----------------------------
 function checkSizeAndToggleUI() {
     const { cols, rows } = screen;
-    if (cols < MIN_COLS || rows < MIN_ROWS) {
+    const minCols = getMinCols();
+    const minRows = getMinRows();
+    if (cols < minCols || rows < minRows) {
         uiBox.hide();
         warningBox.setContent(
             `\n   Terminal too small!\n\n` +
-            `   Please resize to at least ${MIN_COLS}x${MIN_ROWS}\n`
+            `   Please resize to at least ${minCols}x${minRows}\n`
         );
         warningBox.show();
     } else {
@@ -398,23 +411,63 @@ let tunerWidth = 22;
 let rdsWidth = 30;
 const TUNER_RATIO = tunerWidth / 80;  // ratios based on original 80 column layout
 const RDS_RATIO = rdsWidth / 80;
-const MIN_TUNER = 16;
-const MIN_RDS = 24;
+
+function getLayoutMode() {
+    const rows = screen.rows;
+    if (rows < 28) return 'compact';
+    if (rows > 45) return 'expanded';
+    return 'normal';
+}
 
 // Calculate box heights based on terminal size
 function getTopBoxHeight() {
     const rows = screen.rows;
-    // Use 35% of available rows for top section (tuner/rds/station)
-    // Clamp between 6 and 10 rows
-    return Math.min(10, Math.max(6, Math.floor(rows * 0.35)));
+    const mode = getLayoutMode();
+    
+    let ratio;
+    switch (mode) {
+        case 'compact':
+            ratio = 0.32;
+            break;
+        case 'expanded':
+            ratio = 0.38;
+            break;
+        default:
+            ratio = 0.35;
+    }
+    
+    // Clamp between min and max based on mode
+    const minHeight = mode === 'compact' ? 5 : 6;
+    const maxHeight = mode === 'expanded' ? 12 : 10;
+    
+    return Math.min(maxHeight, Math.max(minHeight, Math.floor(rows * ratio)));
 }
 
 function getRdsBoxHeight() {
-    return getTopBoxHeight() + 2;  // RDS box includes border
+    return getTopBoxHeight() + 2;
 }
 
 function getRowHeight() {
     return Math.max(getTopBoxHeight(), getRdsBoxHeight());
+}
+
+function getRtBoxHeight() {
+    const mode = getLayoutMode();
+    const rows = screen.rows;
+    if (mode === 'compact') return 2;
+    if (mode === 'expanded') return 5;
+    return 3;
+}
+
+function getBottomBoxHeight() {
+    const rows = screen.rows;
+    const mode = getLayoutMode();
+    const rowHeight = getRowHeight();
+    const rtHeight = getRtBoxHeight();
+    const remaining = rows - rowHeight - rtHeight - 3;
+    
+    if (mode === 'compact') return Math.max(3, Math.floor(remaining * 0.5));
+    return Math.max(4, Math.floor(remaining * 0.55));
 }
 
 let heightInRows = getTopBoxHeight();
@@ -584,14 +637,21 @@ function updateProgressBarWidth() {
  */
 function applyLayout() {
     const total = screen.cols;
-    tunerWidth = Math.max(MIN_TUNER, Math.floor(total * TUNER_RATIO));
-    rdsWidth = Math.max(MIN_RDS, Math.floor(total * RDS_RATIO));
-    const stationWidth = Math.max(20, total - tunerWidth - rdsWidth);
+    const mode = getLayoutMode();
+    
+    const minTuner = mode === 'compact' ? 14 : 16;
+    const minRds = mode === 'compact' ? 20 : 24;
+    
+    tunerWidth = Math.max(minTuner, Math.floor(total * TUNER_RATIO));
+    rdsWidth = Math.max(minRds, Math.floor(total * RDS_RATIO));
+    const stationWidth = Math.max(15, total - tunerWidth - rdsWidth);
 
     // Recalculate heights based on current terminal size
     heightInRows = getTopBoxHeight();
     rdsHeight = getRdsBoxHeight();
     rowHeight = getRowHeight();
+    const rtHeight = getRtBoxHeight();
+    const bottomBoxHeight = getBottomBoxHeight();
 
     tunerBox.width = tunerWidth;
     tunerBox.height = heightInRows;
@@ -604,15 +664,14 @@ function applyLayout() {
 
     // Update RT box position and height
     rtBox.top = rowHeight;
-    rtBox.height = Math.max(3, Math.floor(screen.rows * 0.18));
+    rtBox.height = rtHeight;
 
     // Update signal/stats boxes
-    const boxTop = rowHeight + rtBox.height + 1;
-    const boxHeight = Math.max(4, Math.floor(screen.rows * 0.20));
+    const boxTop = rowHeight + rtHeight + 1;
     signalBox.top = boxTop;
-    signalBox.height = boxHeight;
+    signalBox.height = bottomBoxHeight;
     statsBox.top = boxTop;
-    statsBox.height = boxHeight;
+    statsBox.height = bottomBoxHeight;
 }
 
 /**
@@ -620,22 +679,23 @@ function applyLayout() {
  * recalc the bottom bar, recalc the title bar, etc.
  */
 const handleResize = debounce(() => {
+    // Batch all layout changes first
     updateProgressBarWidth();
     applyLayout();
     checkSizeAndToggleUI();
-
-    // Recompute the bottom bar text to keep "Press `h` for help" right-aligned
-    bottomBox.setContent(genBottomText(argUrl));
-
-    // Recompute the top bar clock spacing
-    updateTitleBar();
-
+    
+    // Only update UI content if there's data
     if (jsonData) {
         updateTunerBox(jsonData);
         updateRdsBox(jsonData);
         updateStationBox(jsonData.txInfo);
     }
-
+    
+    // Update bars
+    bottomBox.setContent(genBottomText(argUrl));
+    updateTitleBar();
+    
+    // Single render at the end
     renderScreen();
 }, 75);
 

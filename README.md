@@ -30,7 +30,20 @@ ffplay needs to be installed, and accessible in your path.
 
 ## Starting
 
-### Webserver address must be used
+### Browse the public server list
+
+Run without `--url` and the console fetches the curated server directory at
+[`servers.fmdx.org`](https://servers.fmdx.org/) and presents an interactive
+picker. Type to filter by station name, city or country (e.g. `haaglanden`).
+
+```bash
+node fm-dx-console.js
+```
+
+Picker keys: `Enter` connects, `↑/↓` (or mouse) navigate, `Backspace` edits the
+filter, `^U` clears it, `Tab` toggles offline servers, `Esc` cancels.
+
+### Connect directly
 
 ```bash
 node fm-dx-console.js --url http://fm-dx-server:[port]/ [--auto-play]
@@ -43,6 +56,10 @@ node fm-dx-console.js --url https://fm-dx-server/ [--auto-play]
 ```
 
 Add `--auto-play` to begin audio playback immediately after connecting.
+
+While running, press **`m`** to swap to a different server without leaving the
+TUI — the picker opens as a modal overlay and the WebSockets reconnect to the
+new URL on selection.
 
 Run `node fm-dx-console.js --help` to show all available options.
 
@@ -116,9 +133,21 @@ General Controls
     'Esc' quit
     'h' toggle help
     's' toggle server info
+    'm' switch server (browse public directory)
+    'b' bandwidth selector
+    'g' AGC selector (Si47xx tuners)
 
 Toggles
 
     '[' toggle iMS
     ']' toggle EQ
+    'f' toggle forced stereo
     'y' cycle antenna
+
+### Bandwidth selector
+
+Press **`b`** to pick an IF bandwidth from the menu. The available steps match
+the tuner reported by the server (TEF668x, XDR F1HD/S10HDiP, RTL-SDR/AirSpy or
+Si47xx); the menu falls back to the TEF list if the tuner type is unknown.
+Selecting **Auto** lets the firmware choose. The same `F<legacy>` + `W<value>`
+command pair used by the web client is sent.

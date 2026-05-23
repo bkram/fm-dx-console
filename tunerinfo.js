@@ -26,6 +26,7 @@ async function getTunerInfo(url) {
 
     let tunerName = '';
     let tunerDesc = '';
+    let tunerType = '';
     let activeAnt;
     let antNames = [];
 
@@ -34,6 +35,7 @@ async function getTunerInfo(url) {
         const data = res.data || {};
         tunerName = data.tunerName || '';
         tunerDesc = data.tunerDesc || '';
+        tunerType = (data.tuner || data.device || '').toString();
         const antObj = data.ant || {};
         activeAnt =
             data.antSel !== undefined
@@ -53,11 +55,11 @@ async function getTunerInfo(url) {
         const $ = cheerio.load(html);
 
         if (!tunerName) {
-            tunerName = $('meta[property="og:title"]').attr('content')
+            tunerName = ($('meta[property="og:title"]').attr('content') || '')
                 .replace('FM-DX WebServer ', '');
         }
         if (!tunerDesc) {
-            tunerDesc = $('meta[property="og:description"]').attr('content')
+            tunerDesc = ($('meta[property="og:description"]').attr('content') || '')
                 .replace('Server description: ', '')
                 .trim();
         }
@@ -86,7 +88,7 @@ async function getTunerInfo(url) {
         }
     } catch (error) {
         console.error('tunerinfo error:', error.message);
-        return { tunerName: '', tunerDesc: '', antNames: ['Default'], activeAnt: 0 };
+        return { tunerName: '', tunerDesc: '', tunerType: '', antNames: ['Default'], activeAnt: 0 };
     }
 
     if (antNames.length === 0) {
@@ -94,7 +96,7 @@ async function getTunerInfo(url) {
     }
     if (activeAnt === undefined) activeAnt = 0;
 
-    return { tunerName, tunerDesc, antNames, activeAnt };
+    return { tunerName, tunerDesc, tunerType, antNames, activeAnt };
 }
 
 /**

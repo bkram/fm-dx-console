@@ -16,6 +16,8 @@ const path = require('path');
 const WebSocket = require('ws');
 const { getTunerInfo, getPingTime } = require('./tunerinfo');
 const { setAntNames, getAntNames, getAntLabel, cycleAntenna } = require('./antenna');
+const { pickServer } = require('./server-picker');
+const { pickBandwidth, pickAgc } = require('./bandwidth-picker');
 const { Worker } = require('worker_threads');
 
 // -----------------------------
@@ -30,23 +32,12 @@ const europe_programmes = [
     "Travel", "Leisure", "Jazz Music", "Country Music", "National Music",
     "Oldies Music", "Folk Music", "Documentary", "Alarm Test"
 ];
-const version = '1.53';
+const version = '1.60';
 const userAgent = `fm-dx-console/${version}`;
 
 // Terminal must be at least 80x24
 const MIN_COLS = 80;
 const MIN_ROWS = 24;
-
-function getMinCols() {
-    const mode = getLayoutMode();
-    return mode === 'compact' ? 70 : 80;
-}
-
-function getMinRows() {
-    const mode = getLayoutMode();
-    if (mode === 'compact') return 20;
-    return 24;
-}
 
 // Throttle interval => 8 commands/sec
 const THROTTLE_MS = 125;
@@ -90,6 +81,10 @@ let audioPlaying = false;
 let rdsWorker = null;
 let rdsDataCache = null;
 let audioWorker = null;
+let ws = null;
+let rdsWs = null;
+let pickerActive = false;
+let tunerType = '';
 
 // -----------------------------
 // Logging Setup
@@ -108,16 +103,42 @@ function debugLog(...args) {
 // Argument Parsing
 // -----------------------------
 if (argv.help) {
-    console.log('Usage: node fm-dx-console.js --url <fm-dx> [--debug] [--auto-play]');
+    console.log('Usage: node fm-dx-console.js [--url <fm-dx>] [--debug] [--auto-play]');
+    console.log('');
+    console.log('  --url <addr>   Connect directly to an fm-dx-webserver URL.');
+    console.log('                 Omit to pick from the public FM-DX server directory.');
+    console.log('  --auto-play    Start audio immediately after connecting.');
+    console.log('  --debug        Write a console.log file in the cwd.');
+    console.log('');
+    console.log('Inside the TUI:');
+    console.log("  'm'  switch server (browse public list)");
+    console.log("  'b'  bandwidth selector");
+    console.log("  'g'  AGC selector (Si47xx)");
+    console.log("  'f'  toggle forced stereo");
+    console.log("  'h'  show full keymap");
     process.exit(0);
 }
 
-if (!argv.url) {
-    console.error('Usage: node fm-dx-console.js --url <fm-dx> [--debug] [--auto-play]');
-    process.exit(1);
-} else {
-    argUrl = argv.url.toLowerCase().replace("#", "").replace("?", "");
-}
+(async () => {
+    if (!argv.url) {
+        try {
+            const picked = await pickServer({ userAgent });
+            if (!picked) {
+                console.log('No server selected.');
+                process.exit(0);
+            }
+            argUrl = picked.toLowerCase().replace('#', '').replace('?', '');
+        } catch (err) {
+            console.error(err.message);
+            process.exit(1);
+        }
+    } else {
+        argUrl = argv.url.toLowerCase().replace('#', '').replace('?', '');
+    }
+    main();
+})();
+
+function main() {
 
 function isValidURL(urlString) {
     try {
@@ -271,6 +292,8 @@ function generateHelpContent() {
         "'['  toggle iMS",
         "'y'  cycle antenna",
         "'s'  server info",
+        "'b'  bandwidth",
+        "'g'  AGC (Si47xx)",
     ];
 
     const rightCommands = [
@@ -282,6 +305,8 @@ function generateHelpContent() {
         "']'  toggle EQ",
         "'Esc'  quit",
         "'h'  toggle help",
+        "'m'  switch server",
+        "'f'  forced stereo",
     ];
 
     let helpContent = '  Press key to:\n\n';
@@ -428,6 +453,17 @@ function getLayoutMode() {
     return 'normal';
 }
 
+function getMinCols() {
+    const mode = getLayoutMode();
+    return mode === 'compact' ? 70 : 80;
+}
+
+function getMinRows() {
+    const mode = getLayoutMode();
+    if (mode === 'compact') return 20;
+    return 24;
+}
+
 // Calculate box heights based on terminal size
 function getTopBoxHeight() {
     const rows = screen.rows;
@@ -461,11 +497,9 @@ function getRowHeight() {
 }
 
 function getRtBoxHeight() {
-    const mode = getLayoutMode();
-    const rows = screen.rows;
-    if (mode === 'compact') return 2;
-    if (mode === 'expanded') return 5;
-    return 3;
+    // RDS RadioText always shows two lines (RT0 + RT1), so reserve 4 rows
+    // (top border + 2 content + bottom border) in every layout mode.
+    return 4;
 }
 
 function getBottomBoxHeight() {
@@ -1060,6 +1094,7 @@ async function tunerInfo() {
         const result = await getTunerInfo(argUrl);
         tunerName = result.tunerName || '';
         tunerDesc = result.tunerDesc || '';
+        tunerType = (result.tunerType || '').toLowerCase();
         setAntNames(result.antNames || []);
         if (result.activeAnt !== undefined) {
             if (!jsonData) jsonData = {};
@@ -1093,42 +1128,51 @@ setInterval(doPing, 5000);
 // WebSocket Setup
 // -----------------------------
 const wsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (control)` } } : {};
-const ws = new WebSocket(websocketData, wsOptions);
 
-ws.on('open', () => {
-    debugLog('WebSocket connection established');
-    if (argAutoPlay) {
-        startAudio();
-        audioPlaying = true;
-        updateStatsBox(jsonData || {});
-        renderScreen();
-    }
-});
+function connectMainWebSocket() {
+    ws = new WebSocket(websocketData, wsOptions);
 
-ws.on('message', (data) => {
-    try {
-        const newData = JSON.parse(data);
-        if (JSON.stringify(newData) !== JSON.stringify(previousJsonData)) {
-            jsonData = newData;
-            updateTunerBox(jsonData);
-            updateRdsBox(jsonData);
-            updateSignal(jsonData.sig);
-            updateStationBox(jsonData.txInfo);
-            updateRTBox(jsonData);
-            updateStatsBox(jsonData);
-            updateServerBox();
-
+    ws.on('open', () => {
+        debugLog('WebSocket connection established');
+        if (argAutoPlay && !audioPlaying) {
+            startAudio();
+            audioPlaying = true;
+            updateStatsBox(jsonData || {});
             renderScreen();
         }
-        previousJsonData = newData;
-    } catch (error) {
-        debugLog('Error parsing JSON:', error);
-    }
-});
+    });
 
-ws.on('close', () => {
-    debugLog('WebSocket connection closed');
-});
+    ws.on('message', (data) => {
+        try {
+            const newData = JSON.parse(data);
+            if (JSON.stringify(newData) !== JSON.stringify(previousJsonData)) {
+                jsonData = newData;
+                updateTunerBox(jsonData);
+                updateRdsBox(jsonData);
+                updateSignal(jsonData.sig);
+                updateStationBox(jsonData.txInfo);
+                updateRTBox(jsonData);
+                updateStatsBox(jsonData);
+                updateServerBox();
+
+                renderScreen();
+            }
+            previousJsonData = newData;
+        } catch (error) {
+            debugLog('Error parsing JSON:', error);
+        }
+    });
+
+    ws.on('error', (err) => {
+        debugLog('WebSocket error:', err.message);
+    });
+
+    ws.on('close', () => {
+        debugLog('WebSocket connection closed');
+    });
+}
+
+connectMainWebSocket();
 
 // -----------------------------
 // Advanced RDS WebSocket (Worker Thread)
@@ -1171,7 +1215,7 @@ function connectRdsWebSocket() {
     initRdsWorker();
     
     const rdsWsOptions = userAgent ? { headers: { 'User-Agent': `${userAgent} (rds)` } } : {};
-    const rdsWs = new WebSocket(websocketRds, rdsWsOptions);
+    rdsWs = new WebSocket(websocketRds, rdsWsOptions);
     
     rdsWs.on('open', () => {
         debugLog('RDS WebSocket connection established');
@@ -1196,7 +1240,7 @@ function connectRdsWebSocket() {
         try {
             const msg = data.toString();
             rdsMsgBuffer.push(msg);
-            
+
             if (!rdsProcessInterval) {
                 rdsProcessInterval = setInterval(processRdsBuffer, 200);
             }
@@ -1204,19 +1248,20 @@ function connectRdsWebSocket() {
             debugLog('Error parsing RDS data:', error);
         }
     });
-    
-    setInterval(requestRdsData, 500);
-    
+
+    const rdsRequestInterval = setInterval(requestRdsData, 500);
+
     rdsWs.on('error', (err) => {
         debugLog('RDS WebSocket error:', err.message);
     });
-    
+
     rdsWs.on('close', () => {
         debugLog('RDS WebSocket connection closed');
         if (rdsProcessInterval) {
             clearInterval(rdsProcessInterval);
             rdsProcessInterval = null;
         }
+        clearInterval(rdsRequestInterval);
         if (rdsWorker) {
             rdsWorker.terminate();
             rdsWorker = null;
@@ -1230,6 +1275,7 @@ connectRdsWebSocket();
 // Key Bindings
 // -----------------------------
 screen.on('keypress', async (ch, key) => {
+    if (pickerActive) return;
     if (key.full === 'left') {
         if (jsonData && jsonData.freq) {
             enqueueCommand(`T${(jsonData.freq * 1000) - 100}`);
@@ -1372,7 +1418,11 @@ screen.on('keypress', async (ch, key) => {
         // Toggle server info popup
         serverBox.hidden = !serverBox.hidden;
         if (!serverBox.hidden) {
-            await tunerInfo();
+            try {
+                await tunerInfo();
+            } catch (err) {
+                debugLog('tunerInfo error:', err.message);
+            }
             updateServerBox();
         } else {
             serverBox.setContent('');
@@ -1389,12 +1439,149 @@ screen.on('keypress', async (ch, key) => {
             screen.realloc();
         }
         renderScreen();
+    } else if (key.full === 'm' || key.full === 'M') {
+        // Open server picker (in-place switch).
+        switchServer();
+    } else if (key.full === 'b' || key.full === 'B') {
+        // Open bandwidth picker.
+        openBandwidthPicker();
+    } else if (key.full === 'g' || key.full === 'G') {
+        // Open AGC picker (Si47xx tuners only; harmless on others).
+        openAgcPicker();
+    } else if (key.full === 'f' || key.full === 'F') {
+        // Toggle forced stereo (B<0|1>).
+        toggleForcedStereo();
     } else if (key.full === 'escape' || key.full === 'C-c') {
         process.exit(0);
     } else {
         debugLog(key.full);
     }
 });
+
+function switchServer() {
+    if (pickerActive) return;
+    pickerActive = true;
+    pickServer({ userAgent, screen })
+        .then((url) => {
+            pickerActive = false;
+            screen.render();
+            if (url) applyNewUrl(url);
+        })
+        .catch((err) => {
+            pickerActive = false;
+            debugLog('picker error:', err.message);
+            screen.render();
+        });
+}
+
+function openAgcPicker() {
+    if (pickerActive) return;
+    pickerActive = true;
+    pickAgc({
+        screen,
+        currentAgc: jsonData ? jsonData.agc : undefined,
+    })
+        .then((value) => {
+            pickerActive = false;
+            screen.render();
+            if (value === null || value === undefined) return;
+            enqueueCommand(`A${value}`);
+            if (jsonData) {
+                jsonData.agc = String(value);
+                updateTunerBox(jsonData);
+                renderScreen();
+            }
+        })
+        .catch((err) => {
+            pickerActive = false;
+            debugLog('AGC picker error:', err.message);
+            screen.render();
+        });
+}
+
+function toggleForcedStereo() {
+    if (!jsonData) return;
+    const next = jsonData.stForced == '1' ? '0' : '1';
+    enqueueCommand(`B${next}`);
+    jsonData.stForced = next;
+    updateTunerBox(jsonData);
+    renderScreen();
+}
+
+function openBandwidthPicker() {
+    if (pickerActive) return;
+    pickerActive = true;
+    pickBandwidth({
+        screen,
+        tunerType,
+        currentBw: jsonData ? jsonData.bw : undefined,
+    })
+        .then((choice) => {
+            pickerActive = false;
+            screen.render();
+            if (!choice) return;
+            const legacy = choice.value2 !== undefined ? String(choice.value2) : '';
+            enqueueCommand(`F${legacy}`);
+            enqueueCommand(`W${choice.value}`);
+            if (jsonData) {
+                jsonData.bw = String(choice.value);
+                updateTunerBox(jsonData);
+                renderScreen();
+            }
+        })
+        .catch((err) => {
+            pickerActive = false;
+            debugLog('bandwidth picker error:', err.message);
+            screen.render();
+        });
+}
+
+function disconnectAll() {
+    try { if (ws) ws.close(); } catch (e) { /* ignore */ }
+    try { if (rdsWs) rdsWs.close(); } catch (e) { /* ignore */ }
+    if (audioWorker) {
+        try { audioWorker.terminate(); } catch (e) { /* ignore */ }
+        audioWorker = null;
+    }
+}
+
+function applyNewUrl(newUrl) {
+    const wasPlaying = audioPlaying;
+    disconnectAll();
+    audioPlaying = false;
+
+    argUrl = newUrl.toLowerCase().replace('#', '').replace('?', '');
+    const wsAddr = formatWebSocketURL(argUrl);
+    websocketAudio = `${wsAddr}/audio`;
+    websocketData = `${wsAddr}/text`;
+    websocketRds = `${wsAddr}/rds`;
+
+    jsonData = null;
+    previousJsonData = null;
+    rdsDataCache = null;
+    tunerName = '';
+    tunerDesc = '';
+    tunerType = '';
+    pingTime = null;
+    setAntNames([]);
+
+    bottomBox.setContent(genBottomText(argUrl));
+    updateTitleBar();
+    updateServerBox();
+    updateTunerBox({});
+    updateRdsBox({});
+    updateRTBox({});
+    updateStationBox({});
+    updateStatsBox({});
+    renderScreen();
+
+    connectMainWebSocket();
+    connectRdsWebSocket();
+    if (wasPlaying) startAudio();
+
+    tunerInfo();
+    doPing();
+}
 
 // -----------------------------
 // Final Initialization
@@ -1404,3 +1591,4 @@ applyLayout();
 updateProgressBarWidth();
 updateTitleBar();     // Initial top bar update
 updateServerBox();    // Fill server info if tuner info is already loaded
+} // end main()

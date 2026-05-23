@@ -2,184 +2,1024 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>FMDX App</title>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <title>FM DX Console</title>
   <style>
-    :root {
-      --bg-color: #2b2b2b;
-      --fg-color: #ececec;
-      --control-bg: #3c3c3c;
-      --control-border: #5a5a5a;
-      --accent: #3c7dd9;
+    @font-face {
+      font-family: 'Material Icons';
+      font-style: normal;
+      font-weight: 400;
+      src: url('fonts/material-icons.ttf') format('truetype');
     }
+    @font-face {
+      font-family: 'DSEG14';
+      font-style: normal;
+      font-weight: 400;
+      src: url('fonts/dseg14-classic.ttf') format('truetype');
+    }
+    @font-face {
+      font-family: 'DSEG14';
+      font-style: normal;
+      font-weight: 700;
+      src: url('fonts/dseg14-classic-bold.ttf') format('truetype');
+    }
+    .material-icons {
+      font-family: 'Material Icons';
+      font-weight: normal;
+      font-style: normal;
+      font-size: 18px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-feature-settings: 'liga';
+      font-feature-settings: 'liga';
+    }
+
+    :root {
+      color-scheme: dark;
+
+      --bg:           #0c0d10;
+      --bezel:        #16181c;
+      --bezel-edge:   #2a2d33;
+      --surface:      #1a1d22;
+      --surface-2:    #14171b;
+      --border:       rgba(255, 255, 255, 0.06);
+      --border-strong:rgba(255, 255, 255, 0.14);
+      --text:         #e8eaee;
+      --text-2:       #9aa0aa;
+      --text-3:       #6c727b;
+
+      /* LCD */
+      --lcd-bg:       #0e0a04;
+      --lcd-bg-2:     #15100a;
+      --lcd-edge:     #2c1d08;
+      --lcd-amber:    #ffb547;
+      --lcd-amber-2:  #ffcc6a;
+      --lcd-dim:      #6b4a1a;
+      --lcd-mid:      #a5752a;
+      --lcd-glow:     rgba(255, 181, 71, 0.18);
+
+      --accent:       #ffb547;
+      --accent-hover: #ffcc6a;
+      --ok:           #5dd673;
+      --warn:         #ffb547;
+      --danger:       #ff6b5e;
+
+      --radius:       10px;
+      --radius-sm:    8px;
+      --radius-lg:    12px;
+
+      --shadow-1:     0 1px 2px rgba(0, 0, 0, 0.4);
+
+      --chart-bg:     #0f1116;
+      --chart-grid:   rgba(255, 255, 255, 0.06);
+      --chart-line:   #ffb547;
+      --chart-text:   #6c727b;
+      --chart-marker: #ff6b5e;
+
+      --font-ui:      -apple-system, BlinkMacSystemFont, "Segoe UI Variable",
+                      "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono:    "SF Mono", ui-monospace, "Menlo", "Consolas",
+                      "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: "DejaVu Sans", Arial, sans-serif;
-      margin: 20px;
-      background: var(--bg-color);
-      color: var(--fg-color);
+      font-family: var(--font-ui);
+      font-size: 13px;
+      color: var(--text);
+      background: var(--bg);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
 
-    #player {
+    .dashboard {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 14px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .surface {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-1);
+    }
+
+    /* Top bar */
+    .topbar {
+      padding: 10px 14px;
       display: flex;
       align-items: center;
-      gap: 4px;
-      background: var(--control-bg);
-      padding: 10px;
-      border: 1px solid var(--control-border);
-      border-radius: 4px;
-      margin-bottom: 6px;
+      gap: 10px;
+      flex-wrap: wrap;
     }
 
-    #actions {
-      display: flex;
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--lcd-amber);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .brand .material-icons {
+      font-size: 18px;
+      color: var(--lcd-amber);
+    }
+
+    .top-spacer { flex: 1; }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
       gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+
+    .status-chip .material-icons {
+      font-size: 13px;
+      color: var(--text-3);
+    }
+
+    .status-value { color: var(--text); font-weight: 600; }
+    .status-value.online,
+    .status-value.playing { color: var(--ok); }
+    .status-value.stopped { color: var(--text-3); }
+    .status-value.error   { color: var(--danger); }
+
+    /* Server row */
+    .server-row {
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 220px 1fr 120px;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .url-select,
+    .url-input,
+    .signal-unit-select {
+      height: 32px;
+      width: 100%;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      padding: 0 10px;
+      font-family: var(--font-ui);
+      font-size: 13px;
+      transition: border-color 0.12s ease, box-shadow 0.12s ease;
+    }
+
+    .url-select,
+    .signal-unit-select {
+      appearance: none;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path fill='%239aa0aa' d='M5 7L1 3h8z'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 26px;
+      cursor: pointer;
+    }
+
+    .url-select:focus,
+    .url-input:focus,
+    .signal-unit-select:focus {
+      outline: none;
+      border-color: var(--lcd-amber);
+      box-shadow: 0 0 0 3px rgba(255, 181, 71, 0.16);
+    }
+
+    .connect-btn {
+      height: 32px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--lcd-amber);
+      background: transparent;
+      color: var(--lcd-amber);
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.12s ease, color 0.12s ease;
+    }
+
+    .connect-btn:hover { background: var(--lcd-amber); color: #1a1308; }
+
+    .connect-btn.disconnect {
+      border-color: var(--border-strong);
+      color: var(--text);
+    }
+
+    .connect-btn.disconnect:hover { background: var(--surface-2); color: var(--text); }
+
+    .server-error {
+      min-height: 16px;
+      color: var(--danger);
+      font-size: 12px;
+      padding: 0 4px;
+    }
+
+    /* ─── The LCD ─────────────────────────────────────────────────── */
+    .receiver {
+      background: var(--bezel);
+      border: 1px solid var(--bezel-edge);
+      border-radius: var(--radius-lg);
+      padding: 14px;
+      box-shadow: var(--shadow-1);
+      display: grid;
+      gap: 12px;
+    }
+
+    .lcd {
+      background: linear-gradient(180deg, var(--lcd-bg-2) 0%, var(--lcd-bg) 100%);
+      border: 1px solid var(--lcd-edge);
+      border-radius: var(--radius);
+      padding: 12px 18px 10px;
+      color: var(--lcd-amber);
+      font-family: var(--font-mono);
+      box-shadow:
+        inset 0 0 0 1px rgba(0, 0, 0, 0.5),
+        inset 0 1px 8px rgba(0, 0, 0, 0.6),
+        0 0 24px var(--lcd-glow);
+      position: relative;
+      overflow: hidden;
+      /* Fixed envelope. Header / readout (freq + station) / meta / RT-A / RT-B / info.
+         Heights sum to 214px, gaps 5×4 = 20px, padding 12+10 = 22px → 256px,
+         leaving comfortable slack under the 270px outer height. */
+      height: 270px;
+      display: grid;
+      grid-template-rows: 22px 76px 22px 22px 22px 50px;
+      row-gap: 4px;
+    }
+    /* Make the LCD glyphs a touch crisper at small sizes */
+    .lcd, .lcd input { font-feature-settings: "tnum"; }
+
+    /* faint scan-line texture */
+    .lcd::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        repeating-linear-gradient(0deg, rgba(0,0,0,0.18) 0, rgba(0,0,0,0.18) 1px, transparent 1px, transparent 3px);
+      pointer-events: none;
+    }
+
+    .lcd > * { position: relative; z-index: 1; }
+
+    /* Top strip: SIG bar (left) | PTYN (center, dim) | PTY + country (right) */
+    .lcd-top {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 18px;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+    }
+
+    .lcd-label { color: var(--lcd-mid); text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; }
+
+    .lcd-vol {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .lcd-vol-bar {
+      display: inline-flex;
+      gap: 2px;
+      align-items: flex-end;
+    }
+    .lcd-vol-bar i {
+      display: inline-block;
+      width: 4px;
+      background: var(--lcd-dim);
+      transition: background 0.12s ease;
+    }
+    /* Bars step up in height for a real signal-meter look */
+    .lcd-vol-bar i:nth-child(1) { height: 5px; }
+    .lcd-vol-bar i:nth-child(2) { height: 6px; }
+    .lcd-vol-bar i:nth-child(3) { height: 7px; }
+    .lcd-vol-bar i:nth-child(4) { height: 8px; }
+    .lcd-vol-bar i:nth-child(5) { height: 9px; }
+    .lcd-vol-bar i:nth-child(6) { height: 10px; }
+    .lcd-vol-bar i:nth-child(7) { height: 11px; }
+    .lcd-vol-bar i:nth-child(8) { height: 12px; }
+    .lcd-vol-bar i.on { background: var(--lcd-amber); }
+    /* The "peak" bar — last lit segment, slightly brighter for emphasis */
+    .lcd-vol-bar i.on.peak { background: var(--lcd-amber-2); }
+
+    .lcd-sig-num {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 4px;
+      margin-left: 4px;
+    }
+    .lcd-sig-num .val {
+      font-family: 'DSEG14', var(--font-mono);
+      font-weight: 700;
+      font-size: 13px;
+      color: var(--lcd-amber);
+      letter-spacing: 0.04em;
+      min-width: 44px;
+      text-align: right;
+    }
+    .lcd-sig-num .val.empty { color: var(--lcd-dim); }
+    .lcd-sig-num .unit {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--lcd-mid);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .lcd-right {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .lcd-pty {
+      color: var(--lcd-mid);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .lcd-country {
+      color: var(--lcd-amber);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border: 1px solid var(--lcd-dim);
+      border-radius: 3px;
+      padding: 1px 5px;
+    }
+    .lcd-country[hidden] { display: none; }
+
+    .lcd-ptyn {
+      color: var(--lcd-mid);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* The big readout row.
+       Left column: DSEG14 frequency + MHz unit.
+       Right column: descriptive station name (big) + broadcast PS (small dim sub-line).
+       RDS LOCK badge pinned to top-right. */
+    .lcd-readout {
+      display: grid;
+      grid-template-columns: auto auto 1fr;
+      align-items: end;
+      column-gap: 16px;
+      min-width: 0;
+      height: 100%;
+      position: relative;
+    }
+    .lcd-freq-input {
+      border: none;
+      background: transparent;
+      width: 268px;
+      font-family: 'DSEG14', var(--font-mono);
+      font-weight: 700;
+      font-size: 48px;
+      letter-spacing: 0;
+      line-height: 1;
+      padding: 0;
+      margin: 0;
+      color: var(--lcd-amber-2);
+      text-shadow: 0 0 12px var(--lcd-glow);
+      vertical-align: baseline;
+    }
+    .lcd-freq-input:focus { outline: none; }
+    .lcd-freq-unit {
+      color: var(--lcd-mid);
+      font-family: var(--font-mono);
+      font-size: 13px;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      font-weight: 600;
+      padding-bottom: 6px;
+    }
+    .lcd-station-block {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      justify-content: flex-end;
+      min-width: 0;
+      max-width: 100%;
+      gap: 2px;
+      padding-right: 88px; /* leave room for RDS LOCK badge */
+    }
+    .lcd-station {
+      font-family: var(--font-mono);
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      color: var(--lcd-amber);
+      text-shadow: 0 0 8px var(--lcd-glow);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: right;
+      max-width: 100%;
+    }
+    .lcd-station.empty { color: var(--lcd-dim); text-shadow: none; font-weight: 500; }
+    .lcd-station-sub {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--lcd-mid);
+      text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+      min-height: 14px;
+    }
+    .lcd-station-sub b {
+      color: var(--lcd-amber);
+      font-weight: 600;
+      letter-spacing: 0.1em;
+    }
+    .lcd-tag-stack {
+      position: absolute;
+      top: 0;
+      right: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 3px;
+    }
+    .lcd-rds-tag {
+      padding: 2px 8px;
+      border: 1px solid var(--lcd-amber);
+      border-radius: 3px;
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      color: var(--lcd-amber);
+      font-weight: 700;
+    }
+    .lcd-rds-tag.inactive { border-color: var(--lcd-dim); color: var(--lcd-dim); }
+    .lcd-rds-tag.tiny { font-size: 9px; padding: 1px 6px; letter-spacing: 0.14em; }
+    .lcd-longps { display: none; } /* folded into the station block now */
+
+    /* PI + flags row */
+    .lcd-meta {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 18px;
+      font-size: 12px;
+    }
+    .lcd-pi {
+      color: var(--lcd-amber);
+      font-weight: 600;
+      letter-spacing: 0.1em;
+    }
+    .lcd-flags {
+      display: inline-flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .lcd-flag {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      padding: 2px 8px;
+      border: 1px solid var(--lcd-dim);
+      border-radius: 3px;
+      color: var(--lcd-dim);
+    }
+    .lcd-flag.active {
+      border-color: var(--lcd-amber);
+      color: var(--lcd-amber);
+      background: rgba(255, 181, 71, 0.08);
+    }
+    .lcd-flag b { font-weight: 700; color: var(--lcd-amber); }
+    .lcd-flag span[style*='opacity'] { color: var(--lcd-amber); }
+
+    /* RT-A / RT-B rows */
+    .lcd-rt {
+      display: grid;
+      grid-template-columns: 56px 1fr;
+      align-items: center;
+      gap: 10px;
+      color: var(--lcd-amber);
+      font-size: 13px;
+      letter-spacing: 0.02em;
+      overflow: hidden;
+    }
+    .lcd-rt.active .lcd-title-label { color: var(--lcd-amber); }
+    .lcd-rt-text {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .lcd-rt.empty .lcd-rt-text { color: var(--lcd-dim); font-style: italic; }
+    .lcd-title-label {
+      color: var(--lcd-mid);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-weight: 700;
+    }
+
+    /* Bottom info strip: 6 columns, tight key+val pair per cell. */
+    .lcd-info {
+      padding-top: 6px;
+      margin-top: 2px;
+      border-top: 1px solid var(--lcd-edge);
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      column-gap: 12px;
+      font-size: 12px;
+    }
+    .lcd-info-cell {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-width: 0;
+      line-height: 1.15;
+    }
+    .lcd-info-key {
+      color: var(--lcd-mid);
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 2px;
+    }
+    .lcd-info-val {
+      color: var(--lcd-amber);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .lcd-info-val.dim { color: var(--lcd-dim); }
+
+    /* Soft-key row beneath the LCD */
+    .softkey-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+    }
+
+    .softkey {
+      height: 36px;
+      border-radius: 6px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-2);
+      color: var(--text);
+      font-family: var(--font-ui);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: background 0.10s ease, border-color 0.10s ease, color 0.10s ease;
+    }
+    .softkey .material-icons { font-size: 14px; }
+    .softkey:hover {
+      border-color: var(--lcd-amber);
+      color: var(--lcd-amber);
+    }
+    .softkey.active {
+      border-color: var(--lcd-amber);
+      color: var(--lcd-amber);
+      background: rgba(255, 181, 71, 0.10);
+    }
+    .softkey.primary {
+      border-color: var(--lcd-amber);
+      color: var(--lcd-amber);
+    }
+    .softkey.primary:hover { background: var(--lcd-amber); color: #1a1308; }
+
+    /* Play button — slightly emphasized, full row width */
+    .controls-row {
+      display: grid;
+      grid-template-columns: 90px 1fr 1fr 1fr 1fr;
+      gap: 8px;
+      align-items: center;
+    }
+    .play-btn {
+      height: 36px;
+      border-radius: 6px;
+      border: 1px solid var(--lcd-amber);
+      background: var(--lcd-amber);
+      color: #1a1308;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 11px;
+      font-family: var(--font-ui);
+    }
+    .play-btn .material-icons { font-size: 16px; }
+    .play-btn:hover { background: var(--lcd-amber-2); border-color: var(--lcd-amber-2); }
+    .play-btn.playing { background: transparent; color: var(--lcd-amber); }
+    .play-btn.playing:hover { background: rgba(255, 181, 71, 0.10); }
+
+    /* Charts cluster */
+    .cluster {
+      display: grid;
+      grid-template-columns: 1.45fr 1fr;
+      gap: 12px;
+    }
+
+    .charts-panel {
+      padding: 10px;
+      display: grid;
+      gap: 10px;
+    }
+
+    #spectrum-svg,
+    #signal-live-svg {
+      width: 100%;
+      height: 170px;
+      border-radius: var(--radius);
+      background: var(--chart-bg);
+      border: 1px solid var(--border);
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #spectrum-svg {
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    /* Signal block (side card) */
+    .side-panel {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+
+    .signal-block {
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      padding: 10px 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .signal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .signal-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-2);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .signal-value {
+      font-family: var(--font-mono);
+      color: var(--lcd-amber);
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    .signal-bar {
+      height: 6px;
+      border-radius: 4px;
+      overflow: hidden;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .signal-fill {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--lcd-mid), var(--lcd-amber));
+      transition: width 0.18s ease-out;
+    }
+
+    .signal-unit-select { max-width: 90px; height: 28px; font-size: 12px; }
+
+    /* Station / TX info card */
+    .card {
+      padding: 12px 14px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      box-shadow: var(--shadow-1);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-title {
+      color: var(--text-2);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 600;
       margin-bottom: 10px;
     }
 
-    #freq-input {
-      font-size: 1.8em;
-      font-family: "Courier New", monospace;
-      background: #000;
-      color: #0f0;
-      padding: 2px 8px;
-      border-radius: 4px;
-      margin: 0 8px;
-      min-width: 100px;
-      text-align: center;
-      border: none;
+    .card-content { flex: 1; min-height: 0; overflow: hidden; }
+    .card-content pre {
+      white-space: pre-wrap;
+      color: var(--text-2);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.5;
+      height: 100%;
+      overflow: auto;
     }
 
-    #url-input {
-      font-family: "Courier New", monospace;
-      background: #000;
-      color: #0f0;
-      padding: 2px 8px;
-      border-radius: 4px;
-      border: none;
-      min-width: 360px;
+    .station-card { min-height: 170px; }
+    .card-advanced { max-height: 320px; overflow: hidden; }
+
+    .footer {
+      color: var(--text-3);
+      font-size: 11px;
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 6px;
     }
 
-    button {
-      background: var(--control-bg);
-      color: var(--fg-color);
-      border: 1px solid var(--control-border);
-      border-radius: 4px;
-      padding: 4px 8px;
+    /* Help overlay */
+    #help-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(2px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
     }
-    button.material-icons {
-      font-family: 'Material Icons';
-      font-size: 20px;
+    .help-card {
+      background: var(--surface);
+      border: 1px solid var(--lcd-amber);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 24px var(--lcd-glow);
+      padding: 20px 24px;
+      max-width: 440px;
+      cursor: default;
     }
-    button:hover {
-      background: var(--accent);
+    .help-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--lcd-amber);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .help-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 6px 14px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--text-2);
+    }
+    .help-grid kbd {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      padding: 2px 6px;
+      border: 1px solid var(--border-strong);
+      border-bottom-width: 2px;
+      border-radius: 4px;
+      background: var(--surface-2);
+      color: var(--text);
+      min-width: 18px;
+      text-align: center;
+      display: inline-block;
+    }
+    .help-hint {
+      margin-top: 12px;
+      font-size: 11px;
+      color: var(--text-3);
+      text-align: right;
     }
 
-    #signal-unit-select {
-      background: var(--control-bg);
-      color: var(--fg-color);
-      border: 1px solid var(--control-border);
-      border-radius: 4px;
-    }
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
 
-    .section {
-      border: 1px solid var(--control-border);
-      padding: 8px;
-      margin-bottom: 8px;
-      background: var(--control-bg);
-      border-radius: 4px;
+    /* Responsive */
+    @media (max-width: 1100px) {
+      .cluster { grid-template-columns: 1fr; }
     }
-    .row {
-      display: flex;
-      gap: 8px;
-    }
-    .row .section {
-      flex: 1;
-    }
-    pre {
-      margin: 4px 0 0 0;
-      white-space: pre-wrap;
-    }
-    #spectrum-canvas {
-      width: 100%;
-      background: #000;
-      display: block;
+    @media (max-width: 760px) {
+      .server-row { grid-template-columns: 1fr; }
+      .lcd-freq-input { font-size: 42px; width: 200px; }
+      .softkey-row { grid-template-columns: repeat(3, 1fr); }
+      .controls-row { grid-template-columns: 90px 1fr 1fr; }
+      .lcd-info { grid-template-columns: repeat(2, 1fr); }
+      .topbar { flex-wrap: wrap; }
     }
   </style>
 </head>
 <body>
-  <div id="url-bar" style="margin-bottom:8px;">
-    <input id="url-input" type="text" placeholder="Server URL" style="min-width:400px;" />
-    <button id="url-btn" type="button">Connect</button>
-  </div>
-
-  <div id="player">
-    <button id="play-btn" type="button" title="Play" class="material-icons">play_arrow</button>
-    <button id="down1" type="button" class="material-icons" title="-1 MHz">fast_rewind</button>
-    <button id="down01" type="button" class="material-icons" title="-0.1 MHz">skip_previous</button>
-    <button id="down001" type="button" class="material-icons" title="-0.01 MHz">keyboard_arrow_left</button>
-    <input id="freq-input" type="text" value="" placeholder="--.--- MHz" />
-    <button id="up001" type="button" class="material-icons" title="+0.01 MHz">keyboard_arrow_right</button>
-    <button id="up01" type="button" class="material-icons" title="+0.1 MHz">skip_next</button>
-    <button id="up1" type="button" class="material-icons" title="+1 MHz">fast_forward</button>
-  </div>
-
-  <div id="actions">
-    <button id="refresh-btn" type="button">Refresh</button>
-    <button id="ims-btn" type="button">iMS</button>
-    <button id="eq-btn" type="button">EQ</button>
-    <button id="ant-btn" type="button">Ant</button>
-    <button id="scan-btn" type="button">Spectrum Scan</button>
-  </div>
-
-  <div class="section" id="signal-section">
-    <strong>Signal:</strong>
-    <progress id="signal" value="0" max="100"></progress>
-    <span id="signal-label"></span>
-    <select id="signal-unit-select">
-      <option value="dbf">dBf</option>
-      <option value="dbuv">dBµV</option>
-      <option value="dbm">dBm</option>
-    </select>
-  </div>
-
-  <div class="row">
-    <div class="section">
-      <strong>Tuner:</strong>
-      <pre id="tuner-info"></pre>
+  <div class="dashboard">
+    <div class="topbar surface">
+      <div class="brand"><span class="material-icons">radio</span>FM&nbsp;DX&nbsp;Console</div>
+      <div class="top-spacer"></div>
+      <div class="status-chip"><span class="material-icons">cloud</span><span id="connection-status" class="status-value stopped">Disconnected</span></div>
+      <div class="status-chip"><span class="material-icons">groups</span><span id="users" class="status-value">-</span></div>
+      <div class="status-chip"><span class="material-icons">network_ping</span><span id="ping" class="status-value">-</span></div>
+      <div class="status-chip"><span class="material-icons">equalizer</span><span id="audio-status" class="status-value stopped">Stopped</span></div>
     </div>
-    <div class="section">
-      <strong>RDS:</strong>
-      <pre id="rds-info"></pre>
+
+    <div class="server-row surface">
+      <select id="server-select" class="url-select">
+        <option value="">Select server...</option>
+      </select>
+      <input id="url-input" class="url-input" type="text" placeholder="http://192.168.1.100:8100">
+      <button id="url-btn" class="connect-btn" onclick="window.handleConnectBtnClick()">Connect</button>
     </div>
-  </div>
-  <div class="section">
-    <strong>RadioText:</strong>
-    <pre id="rt-info"></pre>
-  </div>
-  <div class="row">
-    <div class="section">
-      <strong>Station:</strong>
-      <pre id="station-info">Name:
-Location:
-Distance:
-Power:
-Azimuth:</pre>
+    <div id="server-error" class="server-error"></div>
+
+    <!-- ─── The receiver: LCD + soft keys ─────────────────────────── -->
+    <div class="receiver">
+      <div class="lcd">
+        <div class="lcd-top">
+          <div class="lcd-vol">
+            <span class="lcd-label">Sig</span>
+            <span class="lcd-vol-bar" id="lcd-sig-bar">
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+            </span>
+            <span class="lcd-sig-num">
+              <span id="lcd-sig-val" class="val empty">--.-</span>
+              <span id="lcd-sig-unit" class="unit">dBf</span>
+            </span>
+          </div>
+          <div id="lcd-ptyn" class="lcd-ptyn"></div>
+          <div class="lcd-right">
+            <span id="hero-pty" class="lcd-pty">PTY --</span>
+            <span id="lcd-country" class="lcd-country" hidden></span>
+          </div>
+        </div>
+
+        <div class="lcd-readout">
+          <input id="freq-input" class="lcd-freq-input" type="text" value="---.---" placeholder="---.---">
+          <span class="lcd-freq-unit">MHz</span>
+          <div class="lcd-station-block">
+            <div id="lcd-station-big" class="lcd-station empty">---</div>
+            <div id="lcd-station-sub" class="lcd-station-sub"></div>
+          </div>
+          <div class="lcd-tag-stack">
+            <span id="rds-badge" class="lcd-rds-tag inactive">NO RDS</span>
+            <span id="lps-badge" class="lcd-rds-tag tiny inactive">LPS</span>
+          </div>
+        </div>
+
+        <div class="lcd-meta">
+          <div class="lcd-pi"><span class="lcd-label">PI</span>&nbsp;<span id="pi-display">----</span></div>
+          <div></div>
+          <div id="rds-flags" class="lcd-flags"></div>
+        </div>
+
+        <!-- Hidden legacy IDs the renderer still writes to -->
+        <span id="rds-ps" hidden></span>
+        <span id="lcd-longps" hidden></span>
+
+        <div id="lcd-rt-a" class="lcd-rt empty">
+          <span class="lcd-title-label">RT-A</span>
+          <span class="lcd-rt-text">—</span>
+        </div>
+        <div id="lcd-rt-b" class="lcd-rt empty">
+          <span class="lcd-title-label">RT-B</span>
+          <span class="lcd-rt-text">—</span>
+        </div>
+
+        <div class="lcd-info">
+          <div class="lcd-info-cell">
+            <span class="lcd-info-key">Codec</span>
+            <span id="lcd-codec" class="lcd-info-val">MP3</span>
+          </div>
+          <div class="lcd-info-cell">
+            <span class="lcd-info-key">Bit rate</span>
+            <span id="lcd-bitrate" class="lcd-info-val dim">— kbps</span>
+          </div>
+          <div class="lcd-info-cell">
+            <span class="lcd-info-key">Sample rate</span>
+            <span id="lcd-samplerate" class="lcd-info-val">48 kHz</span>
+          </div>
+          <div class="lcd-info-cell">
+            <span class="lcd-info-key">Buffer</span>
+            <span id="lcd-buffer" class="lcd-info-val dim">— %</span>
+          </div>
+          <div class="lcd-info-cell">
+            <span class="lcd-info-key">AF</span>
+            <span id="lcd-af" class="lcd-info-val dim">0</span>
+          </div>
+          <div class="lcd-info-cell">
+            <span class="lcd-info-key">BER</span>
+            <span id="lcd-ber" class="lcd-info-val dim">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Hidden — renderer still writes to these but they're now folded into the LCD -->
+      <pre id="rt-info" hidden></pre>
+
+      <!-- Tuning soft keys -->
+      <div class="softkey-row">
+        <button id="down1"   class="softkey" title="-1 MHz"><span class="material-icons">fast_rewind</span>1.0</button>
+        <button id="down01"  class="softkey" title="-0.1 MHz"><span class="material-icons">skip_previous</span>0.1</button>
+        <button id="down001" class="softkey" title="-0.01 MHz"><span class="material-icons">chevron_left</span>0.01</button>
+        <button id="up001"   class="softkey" title="+0.01 MHz">0.01<span class="material-icons">chevron_right</span></button>
+        <button id="up01"    class="softkey" title="+0.1 MHz">0.1<span class="material-icons">skip_next</span></button>
+        <button id="up1"     class="softkey" title="+1 MHz">1.0<span class="material-icons">fast_forward</span></button>
+      </div>
+
+      <!-- Filter / play soft keys -->
+      <div class="controls-row">
+        <button id="play-btn" class="play-btn" title="Play (p)"><span class="material-icons">play_arrow</span>Play</button>
+        <button id="ims-btn" class="softkey" title="Toggle iMS [">iMS</button>
+        <button id="eq-btn" class="softkey" title="Toggle EQ ]">EQ</button>
+        <button id="ant-btn" class="softkey" title="Cycle Antenna (y)">Ant</button>
+        <button id="spectrum-btn" class="softkey" title="Spectrum">Spectrum</button>
+      </div>
     </div>
-    <div class="section">
-      <strong>Status:</strong>
-      <pre id="stats"></pre>
+
+    <div class="cluster">
+      <div class="charts-panel surface">
+        <svg id="spectrum-svg"></svg>
+        <svg id="signal-live-svg"></svg>
+      </div>
+
+      <div class="side-panel surface">
+        <div class="signal-block">
+          <div class="signal-head">
+            <span class="signal-title">Signal</span>
+            <span id="signal-value" class="signal-value">-</span>
+          </div>
+          <div class="signal-bar"><div id="signal-fill" class="signal-fill" style="width:0%"></div></div>
+          <select id="signal-unit-select" class="signal-unit-select">
+            <option value="dbf">dBf</option>
+            <option value="dbuv">dBµV</option>
+            <option value="dbm">dBm</option>
+          </select>
+        </div>
+
+        <div class="card station-card">
+          <div class="card-title">Transmitter</div>
+          <div class="card-content"><pre id="station-info">No transmitter match</pre></div>
+        </div>
+      </div>
     </div>
-  </div>
-  <div class="section">
-    <strong>Spectrum:</strong>
-    <canvas id="spectrum-canvas" width="1160" height="140"></canvas>
-    <div style="font-size: 0.9em; color: #bbb;">(click a point to tune)</div>
-  </div>
-  <div class="section">
-    <strong>Server:</strong>
-    <pre id="server-info"></pre>
+
+    <div class="card card-advanced">
+      <div class="card-title">Advanced RDS</div>
+      <div class="card-content"><pre id="rds-adv"></pre></div>
+    </div>
+
+    <!-- Hidden / migrated: kept for renderer.js to write to without errors. -->
+    <pre id="rds-info" hidden></pre>
+    <span id="ps-led" hidden></span>
+
+    <div class="footer">
+      <span id="version">v1.53</span>
+      <span>Press <kbd style="font-family:var(--font-mono);font-size:10px;padding:1px 5px;border:1px solid var(--border-strong);border-bottom-width:2px;border-radius:3px;background:var(--surface-2);color:var(--text);">h</kbd> for shortcuts</span>
+      <span>FM DX Console</span>
+    </div>
   </div>
 
   <script src="renderer.js"></script>

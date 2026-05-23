@@ -1,14 +1,14 @@
 # fm-dx-console
 
 ![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows%20%7C%20macos-brightgreen)
-![Node.js](https://img.shields.io/badge/node-%3E%3D14.x-blue)
+![Node.js](https://img.shields.io/badge/node-%3E%3D18.x-blue)
 
 
 A multi-platform console client for controlling the [fm-dx-webserver](https://github.com/NoobishSVK/fm-dx-webserver) and streaming audio directly from the command line. This client enables users to interact with the fm-dx-webserver remotely, providing convenience and flexibility.
 
 To utilize this client, you'll need to provide the URL of the fm-dx-webserver. It's important to note that the fm-dx-webserver version must be v1.2.6 or higher for seamless audio streaming functionality.
 
-With this console client, you can conveniently tune the fm-dx-webserver and stream audio effortlessly, all within the familiar environment of the command line.
+The TUI is built with [Ink](https://github.com/vadimdemedes/ink) (React for the terminal). The previous blessed-based renderer was retired in 1.60.
 
 ## Screenshot
 
@@ -37,7 +37,9 @@ Run without `--url` and the console fetches the curated server directory at
 picker. Type to filter by station name, city or country (e.g. `haaglanden`).
 
 ```bash
-node fm-dx-console.js
+npm start
+# or
+npx tsx src/cli.jsx
 ```
 
 Picker keys: `Enter` connects, `↑/↓` (or mouse) navigate, `Backspace` edits the
@@ -46,13 +48,13 @@ filter, `^U` clears it, `Tab` toggles offline servers, `Esc` cancels.
 ### Connect directly
 
 ```bash
-node fm-dx-console.js --url http://fm-dx-server:[port]/ [--auto-play]
+npm start -- --url http://fm-dx-server:[port]/ [--auto-play]
 ```
 
 or
 
 ```bash
-node fm-dx-console.js --url https://fm-dx-server/ [--auto-play]
+npx tsx src/cli.jsx --url https://fm-dx-server/ [--auto-play]
 ```
 
 Add `--auto-play` to begin audio playback immediately after connecting.
@@ -61,7 +63,7 @@ While running, press **`m`** to swap to a different server without leaving the
 TUI — the picker opens as a modal overlay and the WebSockets reconnect to the
 new URL on selection.
 
-Run `node fm-dx-console.js --help` to show all available options.
+Run `npm start -- --help` to show all available options.
 
 ### FMDX App
 

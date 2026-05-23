@@ -1,5 +1,5 @@
 const assert = require('assert');
-const antenna = require('../antenna');
+const antenna = require('../antenna.cjs');
 
 antenna.setAntNames(['V', 'H']);
 assert.strictEqual(antenna.getAntLabel(0), 'V');

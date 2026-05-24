@@ -2,7 +2,6 @@
   "name": "fm-dx-console",
   "version": "1.60",
   "description": "Console client for fm-dx-webserver",
-  "main": "main.js",
   "type": "module",
   "main": "src/cli.jsx",
   "bin": {
@@ -15,17 +14,13 @@
   },
   "dependencies": {
     "axios": "^1.15.2",
-    "blessed": "^0.1.81",
     "cheerio": "^1.0.0-rc.12",
     "electron": "^42.0.1",
     "ink": "^7.0.3",
-    "ink-big-text": "^2.0.0",
-    "ink-select-input": "^6.2.0",
     "ink-spinner": "^5.0.0",
     "ink-text-input": "^6.0.0",
     "minimist": "^1.2.8",
     "react": "^19.2.6",
-    "reblessed": "^0.2.1",
     "tsx": "^4.22.3",
     "ws": "^8.20.1"
   }

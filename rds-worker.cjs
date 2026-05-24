@@ -4,6 +4,10 @@ const { createRdsDecoder } = require('./rds-decoder.cjs');
 const decoder = createRdsDecoder();
 
 parentPort.on('message', (msg) => {
+    if (msg.type === 'reset') {
+        decoder.resetState();
+        return;
+    }
     if (msg.type === 'parse') {
         decoder.parseMessage(msg.data);
         parentPort.postMessage({ type: 'parsed' });

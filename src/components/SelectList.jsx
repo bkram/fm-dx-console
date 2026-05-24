@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
+import { colors } from '../theme.js';
 
 // Generic single-select list rendered inside a labelled box.
 // items: [{ label, value, value2? }]
@@ -22,19 +23,36 @@ export default function SelectList({ title, items, initialIndex = 0, onSelect, o
     });
 
     return (
-        <Box borderStyle="round" borderColor="green" flexDirection="column" width={width || 32} paddingX={1}>
-            {title && <Text bold>{title}</Text>}
+        <Box
+            borderStyle="single"
+            borderColor={colors.modalBorder}
+            flexDirection="column"
+            width={width || 32}
+            paddingX={2}
+            backgroundColor={colors.modalBg}
+            borderBackgroundColor={colors.modalBg}
+        >
+            {title && (
+                <>
+                    <Text bold color={colors.title}>{title}</Text>
+                    <Text> </Text>
+                </>
+            )}
             {items.map((it, i) => {
                 const isSel = i === selected;
                 return (
-                    <Text key={i} backgroundColor={isSel ? 'green' : undefined} color={isSel ? 'black' : 'white'} bold={isSel}>
+                    <Text
+                        key={i}
+                        backgroundColor={isSel ? colors.selectionBg : undefined}
+                        color={isSel ? colors.selectionFg : colors.modalFg}
+                        bold={isSel}
+                    >
                         {it.label}
                     </Text>
                 );
             })}
-            <Box marginTop={1}>
-                <Text color="gray">Enter=apply  Esc=cancel</Text>
-            </Box>
+            <Text> </Text>
+            <Text color={colors.title}>Enter=apply  Esc=cancel</Text>
         </Box>
     );
 }

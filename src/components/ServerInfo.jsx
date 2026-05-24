@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text, useInput } from 'ink';
+import { colors } from '../theme.js';
 
 export default function ServerInfo({ tunerInfo, url, onClose }) {
     useInput((input, key) => {
@@ -7,15 +8,24 @@ export default function ServerInfo({ tunerInfo, url, onClose }) {
     });
     const ant = (tunerInfo?.antNames || []).join(', ');
     return (
-        <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={2} paddingY={1} width={68}>
-            <Text bold color="green">Server</Text>
+        <Box
+            flexDirection="column"
+            borderStyle="single"
+            borderColor={colors.modalBorder}
+            paddingX={2}
+            width={68}
+            backgroundColor={colors.modalBg}
+            borderBackgroundColor={colors.modalBg}
+        >
+            <Text bold color={colors.title}>Server</Text>
             <Text> </Text>
-            <Text>URL      {url || '—'}</Text>
-            <Text>Tuner    {tunerInfo?.tunerName || '—'}</Text>
-            <Text>Type     {tunerInfo?.tunerType || '—'}</Text>
-            <Text>About    {tunerInfo?.tunerDesc || '—'}</Text>
-            <Text>Antennas {ant || '—'}</Text>
-            <Text dimColor>(press s or Esc to close)</Text>
+            <Text color={colors.modalFg}><Text color={colors.title}>URL     </Text> {url || '—'}</Text>
+            <Text color={colors.modalFg}><Text color={colors.title}>Tuner   </Text> <Text color={colors.value}>{tunerInfo?.tunerName || '—'}</Text></Text>
+            <Text color={colors.modalFg}><Text color={colors.title}>Type    </Text> {tunerInfo?.tunerType || '—'}</Text>
+            <Text color={colors.modalFg}><Text color={colors.title}>About   </Text> {tunerInfo?.tunerDesc || '—'}</Text>
+            <Text color={colors.modalFg}><Text color={colors.title}>Antennas</Text> {ant || '—'}</Text>
+            <Text> </Text>
+            <Text color={colors.title}>(press s or Esc to close)</Text>
         </Box>
     );
 }

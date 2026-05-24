@@ -59,6 +59,11 @@ npx tsx src/cli.jsx --url https://fm-dx-server/ [--auto-play]
 
 Add `--auto-play` to begin audio playback immediately after connecting.
 
+> **Note** — the `--` after `npm start` is required. Without it, npm
+> consumes `--url=…` as one of its own flags and the script never sees it,
+> so the app falls back to the picker. Use `npx tsx src/cli.jsx --url …`
+> if you want to skip the separator.
+
 While running, press **`m`** to swap to a different server without leaving the
 TUI — the picker opens as a modal overlay and the WebSockets reconnect to the
 new URL on selection.

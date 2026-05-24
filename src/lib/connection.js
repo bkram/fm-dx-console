@@ -48,6 +48,7 @@ export class Connection extends EventEmitter {
         this.rdsWorker = null;
         this.audioWorker = null;
         this.audioPlaying = false;
+        this.volume = 100;
         this.data = null;            // last jsonData from /text
         this.rdsAdvanced = null;     // last advanced RDS payload
         this.tunerInfo = {
@@ -61,6 +62,11 @@ export class Connection extends EventEmitter {
         this.commandQueue = [];
         this._intervals = new Set();
         this._closing = false;
+
+        // Auto-reconnect state
+        this._userDisconnected = false;
+        this._reconnectAttempts = 0;
+        this._reconnectTimer = null;
 
         // Default error listener — prevents unhandled 'error' throws when
         // the UI hasn't subscribed yet.
@@ -88,6 +94,8 @@ export class Connection extends EventEmitter {
 
     connect(url) {
         this.disconnect();
+        this._userDisconnected = false;
+        this._reconnectAttempts = 0;
         this.url = normalizeUrl(url);
         this.wsAddr = formatWebSocketURL(this.url);
         this.data = null;
@@ -103,6 +111,11 @@ export class Connection extends EventEmitter {
     }
 
     disconnect() {
+        this._userDisconnected = true;
+        if (this._reconnectTimer) {
+            clearTimeout(this._reconnectTimer);
+            this._reconnectTimer = null;
+        }
         this._closing = true;
         try { if (this.ws) this.ws.close(); } catch {}
         try { if (this.rdsWs) this.rdsWs.close(); } catch {}
@@ -113,6 +126,31 @@ export class Connection extends EventEmitter {
         this.ws = null;
         this.rdsWs = null;
         this._closing = false;
+    }
+
+    // Restart the WS pair without resetting cached state — used by the
+    // auto-reconnect path after an unexpected close.
+    _restartSockets() {
+        try { if (this.ws) this.ws.close(); } catch {}
+        try { if (this.rdsWs) this.rdsWs.close(); } catch {}
+        this.ws = null;
+        this.rdsWs = null;
+        this._openMainWs();
+        this._openRdsWs();
+    }
+
+    _scheduleReconnect() {
+        if (this._userDisconnected) return;
+        if (this._reconnectTimer) return;
+        this._reconnectAttempts++;
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, capped at 30s.
+        const delayMs = Math.min(30000, 1000 * Math.pow(2, this._reconnectAttempts - 1));
+        this.emit('reconnecting', { attempt: this._reconnectAttempts, delayMs });
+        this._reconnectTimer = setTimeout(() => {
+            this._reconnectTimer = null;
+            if (this._userDisconnected) return;
+            this._restartSockets();
+        }, delayMs);
     }
 
     enqueue(cmd) {
@@ -133,7 +171,11 @@ export class Connection extends EventEmitter {
         const opts = this.userAgent ? { headers: { 'User-Agent': `${this.userAgent} (control)` } } : {};
         const ws = new WebSocket(`${this.wsAddr}/text`, opts);
         this.ws = ws;
-        ws.on('open', () => { this.log('main ws open'); this.emit('open'); });
+        ws.on('open', () => {
+            this.log('main ws open');
+            this._reconnectAttempts = 0;
+            this.emit('open');
+        });
         ws.on('message', (raw) => {
             try {
                 const j = JSON.parse(raw.toString());
@@ -144,7 +186,11 @@ export class Connection extends EventEmitter {
             }
         });
         ws.on('error', (err) => { this.log('main ws error:', err.message); this.emit('error', err); });
-        ws.on('close', () => { this.log('main ws closed'); this.emit('close'); });
+        ws.on('close', () => {
+            this.log('main ws closed');
+            this.emit('close');
+            this._scheduleReconnect();
+        });
     }
 
     _openRdsWs() {
@@ -236,18 +282,51 @@ export class Connection extends EventEmitter {
 
     // --- High-level actions ---
 
+    // Wipe everything that depends on which station we're receiving.
+    // Sent to the RDS worker (clears its internal accumulator) and applied
+    // to our cached snapshot so the UI doesn't show the previous station's
+    // PS / RT / PTYN / signal / TX info while we wait for the new data.
+    _resetRdsState() {
+        if (this.rdsWorker) {
+            try { this.rdsWorker.postMessage({ type: 'reset' }); } catch (e) { /* ignore */ }
+        }
+        this.rdsAdvanced = null;
+        this.emit('rds-advanced', null);
+        if (this.data) {
+            // Broadcast metadata
+            this.data.pi = '';
+            this.data.ps = '';
+            this.data.pty = 0;
+            this.data.tp = 0;
+            this.data.ta = 0;
+            this.data.ms = '';
+            this.data.rt0 = '';
+            this.data.rt1 = '';
+            this.data.af = [];
+            // Reception state — comes back fast from the server
+            this.data.st = 0;
+            this.data.sig = 0;
+            // Transmitter info lookup is freq-keyed on the server
+            this.data.txInfo = {};
+            this.emit('data', this.data);
+        }
+    }
+
     tune(freqMHz) {
         this.enqueue(`T${Math.round(freqMHz * 1000)}`);
+        this._resetRdsState();
     }
 
     tuneDelta(deltaKHz) {
         if (!this.data || !this.data.freq) return;
         this.enqueue(`T${(this.data.freq * 1000) + deltaKHz}`);
+        this._resetRdsState();
     }
 
     tuneToCurrent() {
         if (!this.data || !this.data.freq) return;
         this.enqueue(`T${this.data.freq * 1000}`);
+        this._resetRdsState();
     }
 
     setAntenna(idx) {
@@ -322,10 +401,27 @@ export class Connection extends EventEmitter {
         const workerPath = path.join(PROJECT_ROOT, 'audio-worker.cjs');
         try {
             this.audioWorker = new Worker(workerPath, {
-                workerData: { url: `${this.wsAddr}/audio`, userAgent: this.userAgent },
+                workerData: {
+                    url: `${this.wsAddr}/audio`,
+                    userAgent: this.userAgent,
+                    volume: this.volume,
+                },
             });
             this.audioWorker.on('error', (err) => this.log('audio worker error:', err.message));
-            this.audioWorker.on('exit', () => { this.audioWorker = null; this.audioPlaying = false; this.emit('audio', false); });
+            this.audioWorker.on('message', (msg) => {
+                if (!msg) return;
+                if (msg.type === 'level') {
+                    this.emit('level', { L: msg.L || 0, R: msg.R || 0 });
+                } else if (msg.type === 'log') {
+                    this.log(`[audio ${msg.source}]`, msg.text);
+                }
+            });
+            this.audioWorker.on('exit', () => {
+                this.audioWorker = null;
+                this.audioPlaying = false;
+                this.emit('audio', false);
+                this.emit('level', { L: 0, R: 0 });
+            });
             this.audioWorker.postMessage({ type: 'start' });
             this.audioPlaying = true;
             this.emit('audio', true);
@@ -343,5 +439,19 @@ export class Connection extends EventEmitter {
     toggleAudio() {
         if (this.audioPlaying) this.stopAudio();
         else this.startAudio();
+    }
+
+    setVolume(v) {
+        const clamped = Math.max(0, Math.min(100, Math.round(v)));
+        if (clamped === this.volume) return;
+        this.volume = clamped;
+        if (this.audioWorker) {
+            this.audioWorker.postMessage({ type: 'setVolume', value: clamped });
+        }
+        this.emit('volume', clamped);
+    }
+
+    changeVolume(delta) {
+        this.setVolume(this.volume + delta);
     }
 }

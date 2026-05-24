@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
+import { colors } from '../theme.js';
 
 function line(label, value) {
     return value ? `${label.padEnd(7)}${value}` : null;
@@ -17,9 +18,22 @@ export default function StationBox({ data }) {
     ].filter(Boolean);
 
     return (
-        <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={1} flexGrow={1}>
-            <Text bold color="green">Station</Text>
-            {rows.length === 0 ? <Text dimColor>(no station data)</Text> : rows.map((r, i) => <Text key={i}>{r}</Text>)}
+        <Box
+            flexDirection="column"
+            borderStyle="single"
+            borderColor={colors.border}
+            backgroundColor={colors.bg}
+            borderBackgroundColor={colors.bg}
+            paddingX={1}
+            flexBasis={0}
+            flexGrow={1}
+            flexShrink={1}
+            overflow="hidden"
+        >
+            <Text bold color={colors.title}>Station</Text>
+            {rows.length === 0
+                ? <Text dimColor>(no station data)</Text>
+                : rows.map((r, i) => <Text key={i} wrap="truncate">{r}</Text>)}
         </Box>
     );
 }

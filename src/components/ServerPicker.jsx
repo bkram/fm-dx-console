@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import Spinner from 'ink-spinner';
 import { fetchServers, filterServers } from '../lib/servers.js';
+import { colors } from '../theme.js';
 
 function formatRow(entry) {
     const country = (entry.country || '??').toUpperCase().padEnd(2, ' ');
@@ -61,7 +62,7 @@ export default function ServerPicker({ userAgent, onPick, onCancel }) {
     if (error) {
         return (
             <Box flexDirection="column" padding={1}>
-                <Text color="red">Failed to fetch server list: {error}</Text>
+                <Text color={colors.bad}>Failed to fetch server list: {error}</Text>
                 <Text dimColor>Press Esc to quit.</Text>
             </Box>
         );
@@ -70,7 +71,7 @@ export default function ServerPicker({ userAgent, onPick, onCancel }) {
     if (!all) {
         return (
             <Box padding={1}>
-                <Text color="green"><Spinner type="dots" /></Text>
+                <Text color={colors.title}><Spinner type="dots" /></Text>
                 <Text> Fetching public FM-DX server list…</Text>
             </Box>
         );
@@ -83,23 +84,23 @@ export default function ServerPicker({ userAgent, onPick, onCancel }) {
 
     return (
         <Box flexDirection="column">
-            <Box backgroundColor="green" paddingX={1}>
-                <Text color="black" bold>
+            <Box backgroundColor={colors.barBg} paddingX={1}>
+                <Text color={colors.barFg} bold>
                     {`Public FM-DX servers — ${view.length} shown of ${all.length} total · ${onlineOnly ? 'online only' : 'all (incl. offline)'}`}
                 </Text>
             </Box>
-            <Box borderStyle="round" borderColor="green" paddingX={1} flexDirection="column">
+            <Box borderStyle="single" borderColor={colors.border} paddingX={1} flexDirection="column">
                 <Text>
-                    <Text color="gray">Search: </Text>
+                    <Text color={colors.dim}>Search: </Text>
                     {query.length === 0 ? (
-                        <Text color="gray">type to filter by name / city / country…</Text>
+                        <Text color={colors.dim}>type to filter by name / city / country…</Text>
                     ) : (
-                        <Text color="yellow">{query}</Text>
+                        <Text color={colors.value}>{query}</Text>
                     )}
                     <Text inverse> </Text>
                 </Text>
             </Box>
-            <Box borderStyle="round" borderColor="green" flexDirection="column" flexGrow={1} paddingX={1}>
+            <Box borderStyle="single" borderColor={colors.border} flexDirection="column" flexGrow={1} paddingX={1}>
                 {slice.length === 0 ? (
                     <Text dimColor>No matches.</Text>
                 ) : (
@@ -108,15 +109,20 @@ export default function ServerPicker({ userAgent, onPick, onCancel }) {
                         const isSel = idx === selected;
                         const text = formatRow(entry);
                         return (
-                            <Text key={entry.url + idx} backgroundColor={isSel ? 'green' : undefined} color={isSel ? 'black' : 'white'} bold={isSel}>
+                            <Text
+                                key={entry.url + idx}
+                                backgroundColor={isSel ? colors.selectionBg : undefined}
+                                color={isSel ? colors.selectionFg : 'white'}
+                                bold={isSel}
+                            >
                                 {text}
                             </Text>
                         );
                     })
                 )}
             </Box>
-            <Box backgroundColor="green" paddingX={1}>
-                <Text color="black">
+            <Box backgroundColor={colors.barBg} paddingX={1}>
+                <Text color={colors.barFg}>
                     Enter=connect  ↑/↓=move  type=filter  Bksp=del  ^U=clear  Tab=toggle offline  Esc=cancel
                 </Text>
             </Box>

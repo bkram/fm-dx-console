@@ -1,15 +1,25 @@
 import React, { useState } from 'react';
 import { Box, Text } from 'ink';
 import TextInput from 'ink-text-input';
+import { colors } from '../theme.js';
 
 export default function TextPrompt({ label, hint, initialValue = '', placeholder, onSubmit, onCancel }) {
     const [value, setValue] = useState(initialValue);
     return (
-        <Box borderStyle="round" borderColor="green" flexDirection="column" paddingX={1} width={48}>
-            <Text bold>{label}</Text>
-            {hint && <Text dimColor>{hint}</Text>}
+        <Box
+            borderStyle="single"
+            borderColor={colors.modalBorder}
+            flexDirection="column"
+            paddingX={2}
+            width={48}
+            backgroundColor={colors.modalBg}
+            borderBackgroundColor={colors.modalBg}
+        >
+            <Text bold color={colors.title}>{label}</Text>
+            <Text> </Text>
+            {hint && <Text color={colors.modalFg}>{hint}</Text>}
             <Box>
-                <Text color="yellow">› </Text>
+                <Text color={colors.value}>› </Text>
                 <TextInput
                     value={value}
                     placeholder={placeholder || ''}
@@ -17,7 +27,8 @@ export default function TextPrompt({ label, hint, initialValue = '', placeholder
                     onSubmit={(v) => onSubmit(v)}
                 />
             </Box>
-            <Text dimColor>Enter=apply  Esc=cancel</Text>
+            <Text> </Text>
+            <Text color={colors.title}>Enter=apply  Esc=cancel</Text>
         </Box>
     );
 }

@@ -1,9 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-
-function fmt(v, fallback = '—') {
-    return v === undefined || v === null || v === '' ? fallback : v;
-}
+import { colors } from '../theme.js';
 
 function freqDisplay(freq) {
     if (freq === undefined || freq === null) return '—';
@@ -12,20 +9,39 @@ function freqDisplay(freq) {
     return n.toFixed(3) + ' MHz';
 }
 
-export default function TunerBox({ data, tunerInfo, audioPlaying }) {
+function bwDisplay(bw) {
+    if (bw === undefined || bw === null || bw === '') return '—';
+    const n = Number(bw);
+    if (Number.isNaN(n)) return String(bw);
+    if (n === 0) return 'Auto';
+    return `${Math.round(n / 1000)} kHz`;
+}
+
+// Tuner: pure RF/receiver settings. Audio playback, signal quality, and
+// broadcast metadata live in their own panels.
+export default function TunerBox({ data, tunerInfo }) {
     const d = data || {};
     const ant = tunerInfo?.antNames?.[parseInt(d.ant, 10) || 0] || 'Default';
-    const bwLabel = d.bw ? `${(Number(d.bw) / 1000).toFixed(0)} kHz` : '—';
 
     return (
-        <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={1} flexGrow={1}>
-            <Text bold color="green">Tuner</Text>
-            <Text>Freq    <Text color="cyan" bold>{freqDisplay(d.freq)}</Text></Text>
-            <Text>BW      {bwLabel}</Text>
-            <Text>iMS     {fmt(d.ims) ? (d.ims ? 'on' : 'off') : 'off'}    EQ      {d.eq ? 'on' : 'off'}</Text>
-            <Text>St      {d.st ? 'stereo' : 'mono'}{d.stForced == '1' ? ' (forced)' : ''}</Text>
-            <Text>Antenna {ant}</Text>
-            <Text>Audio   {audioPlaying ? <Text color="green">playing</Text> : <Text dimColor>stopped</Text>}</Text>
+        <Box
+            flexDirection="column"
+            borderStyle="single"
+            borderColor={colors.border}
+            backgroundColor={colors.bg}
+            borderBackgroundColor={colors.bg}
+            paddingX={1}
+            flexBasis={0}
+            flexGrow={1}
+            flexShrink={1}
+            overflow="hidden"
+        >
+            <Text bold color={colors.title}>Tuner</Text>
+            <Text wrap="truncate">Freq    <Text color={colors.freq} bold>{freqDisplay(d.freq)}</Text></Text>
+            <Text wrap="truncate">BW      {bwDisplay(d.bw)}</Text>
+            <Text wrap="truncate">Antenna {ant}</Text>
+            <Text wrap="truncate">iMS     {d.ims ? 'on' : 'off'}</Text>
+            <Text wrap="truncate">EQ      {d.eq ? 'on' : 'off'}</Text>
         </Box>
     );
 }

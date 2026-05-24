@@ -75,6 +75,20 @@ export const AGC_OPTIONS = [
     { value: 2, label: 'Low' },
 ];
 
+// RT+ content-type labels (RDS spec). Indexed by contentType (1-40).
+export const RT_PLUS_LABELS = {
+    1: 'Title', 2: 'Album', 3: 'Track', 4: 'Artist', 5: 'Composition',
+    6: 'Movement', 7: 'Conductor', 8: 'Composer', 9: 'Band', 10: 'Comment',
+    11: 'Genre', 12: 'News', 13: 'Local News', 14: 'Stocks', 15: 'Sport',
+    16: 'Lottery', 17: 'Horoscope', 18: 'Diversion', 19: 'Health',
+    20: 'Event', 21: 'Scene', 22: 'Cinema', 23: 'Stupidity',
+    24: 'Date/Time', 25: 'Weather', 26: 'Traffic', 27: 'Alarm',
+    28: 'Ad', 29: 'URL', 30: 'Other',
+    31: 'Short Name', 32: 'Long Name', 33: 'Now', 34: 'Next',
+    35: 'Part', 36: 'Host', 37: 'Staff', 38: 'Freq', 39: 'Homepage',
+    40: 'Sub-ch',
+};
+
 export const PTY_NAMES = [
     'No PTY', 'News', 'Current Affairs', 'Info', 'Sport', 'Education',
     'Drama', 'Culture', 'Science', 'Varied', 'Pop M', 'Rock M',

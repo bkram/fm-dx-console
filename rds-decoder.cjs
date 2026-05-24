@@ -825,7 +825,10 @@ function createRdsDecoder() {
         getTmcData,
         getRtPlusData,
         getStableFlags,
-        getBer
+        getBer,
+        // Force a full reset of accumulated state — used after a tune so
+        // PS / Long PS / PTYN from the previous station don't linger.
+        resetState,
     };
 }
 

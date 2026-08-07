@@ -15,7 +15,7 @@
   "dependencies": {
     "axios": "^1.18.0",
     "cheerio": "^1.0.0-rc.12",
-    "electron": "^42.0.1",
+    "electron": "^42.5.1",
     "ink": "^7.0.3",
     "ink-spinner": "^5.0.0",
     "ink-text-input": "^6.0.0",

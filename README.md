@@ -92,7 +92,7 @@ Add `--auto-play` to begin audio playback immediately after connecting.
 > so the app falls back to the picker. Use `npx tsx src/cli.jsx --url …`
 > if you want to skip the separator.
 
-While running, press **`m`** to swap to a different server without leaving the
+While running, press **`m`** or **Esc** to swap to a different server without leaving the
 TUI. The recent-server selector opens, with public-directory and manual-URL
 options, and selecting a server switches the connection.
 
@@ -100,38 +100,20 @@ Run `npm start -- --help` to show all available options.
 
 ### FMDX App
 
-The FMDX App is an Electron-based interface styled like a small audio player. It
-uses a dark theme inspired by the look of **XDR-GTK** so it blends in with
-modern GTK desktops. It displays the tuned frequency to three decimals. The
-value can be edited and will
-only update from the tuner when the input field is not focused. Material icons
-are used for the tuning controls. Buttons let you tune in 1 MHz, 0.1 MHz and 0.01
-MHz steps, toggle iMS/EQ, cycle antennas and control audio
-playback. Tuner updates are received over a WebSocket so the fields refresh
-automatically. Pressing **Enter** in the frequency field tunes to the value and
-shows the rounded frequency again. The interface now places the Tuner and RDS
-panels side by side, as well as the Station and Status panels, while the
-spectrum display is slightly smaller. Keyboard shortcuts from the console client
-are also supported. The window starts larger so all details fit comfortably and
-the Station section always lists its field names (Name, Location, etc.) even if
-data is missing. Server details show the tuner name followed by the description
-on separate lines. RDS information lists the PS and PI codes along with
-flags and the Programme Type shown as `number/name` (displaying `0/None` when
-no PTY is available). If Decoder Information bits are present, the panel also
-shows whether Dynamic PTY, Artificial Head or Compression are enabled and if
-the broadcast is stereo. Characters in the PS and RadioText turn grey when
-errors are reported. A drop-down next to the signal meter lets you display
-strength in dBf, dBµV or dBm. The frequency field accepts only numeric input and the
-shortcut **t** focuses it without inserting the letter. Launch it with:
+The Electron interface uses the same receiver, settings and recent-server history as the CLI.
+Starting without `--url` opens the selector; choose a recent server, browse the
+public directory or enter a URL. **Esc** and **m** reopen the selector while connected.
 
-The status section shows the current user count, ping time and whether audio is
-playing on separate lines.
-The **Spectrum Scan** button sweeps the band from 83 to 108 MHz in 0.05 MHz steps
-and updates the spectrum display in real time. Frequencies not yet scanned start
-at 0 dBf so the graph covers the full range while the sweep runs. Audio playback
-is paused during the scan and resumes when finished. Once the sweep completes
-the tuner returns to the original frequency. Clicking a point on the graph tunes
-directly to that frequency.
+Both interfaces provide tuning, bandwidth selection, AGC for Si47xx tuners,
+forced stereo, iMS/EQ, antenna selection, volume, raw commands and server details.
+The GUI displays decoded advanced RDS, RT-A/RT-B and RT+ alongside station data.
+Signal units and the last 25 successful connections are shared through
+`~/.fm-dx-console.json`. Control and RDS connections recover automatically.
+
+The GUI decodes streamed MP3 audio in Chromium; CLI audio uses ffplay/ffmpeg.
+The optional SpectrumGraphPlugin supplies the GUI spectrum. Clicking
+or dragging on the spectrum tunes the receiver. Frequency entry accepts MHz,
+comma decimals, shorthand (`985`) and kHz (`98500`) with the same validation as the CLI.
 
 ```bash
 npm run electron -- --url http://fm-dx-server:[port]/
@@ -143,8 +125,8 @@ Electron uses its default sandbox. When required by your environment, pass
 `--no-sandbox` explicitly.
 
 The server URL can also be changed at runtime using the field above the
-controls. Changing the address automatically restarts the audio connection so it
-uses the new backend.
+controls. Changing the address stops the old audio stream and switches the receiver.
+Use Play to start audio on the new server, or launch with `--auto-play`.
 
 ## Help (console version)
 
@@ -166,7 +148,8 @@ General Controls
     'p' play audio
     't' set frequency
     'C' send command
-    'Esc' quit
+    'Esc' choose server / back
+    'Ctrl+C' quit (CLI)
     'h' toggle help
     's' toggle server info
     'm' switch server (recent / public / manual)
@@ -214,7 +197,10 @@ The [release workflow](.github/workflows/release.yml) builds both clients on
 Windows, Linux, macOS Intel and macOS Apple Silicon. Branch pushes and manual
 runs retain downloadable workflow artifacts without publishing a release.
 Linux GUI smoke tests run under Xvfb; each desktop smoke test launches the
-packaged window and checks its version, preload bridge and fonts.
+packaged application against a local HTTP/WebSocket tuner. It checks renderer
+startup, history, tuning commands, controls, the packaged RDS worker, decoded
+MP3 audio, server switching and cleanup, as well as fonts and version.
+Use `npm run smoke:gui -- --source` to run the same checks before packaging.
 
 To publish, update `package.json`, `package-lock.json` and `CHANGELOG`, commit
 the changes, then push a matching `v<version>` tag. The workflow verifies the
@@ -223,6 +209,21 @@ version, runs tests/lint/audit, builds and tests every package, and verifies all
 then publishes the complete GitHub Release. Published releases are never
 overwritten by reruns. GUI code signing and automatic updates are not configured.
 
+## Shared architecture
+
+`src/lib/receiver.js` is the application API for both frontends. It owns the
+connection lifecycle, successful-server history, validated `action(type, value)`
+commands and optional spectrum plugin. `connection.js` owns the HTTP/WebSocket
+transports, command queue, reconnects and RDS worker. The Electron main process
+adapts receiver events to validated IPC; the terminal subscribes directly.
+
+Browser-safe modules provide URL/frequency validation, tuner profiles, server
+filtering, shortcut intentions and station/RDS/display models. Keep new receiver
+behavior there so both clients gain it together. Ink layout and DOM/SVG rendering
+remain presentation adapters. Node worker audio and Chromium MediaSource audio
+have separate output adapters because they use different playback runtimes.
+Neither playback adapter implements tuner commands or connection history.
+
 ## Project layout
 
 ```text
@@ -230,9 +231,9 @@ src/
   cli.jsx          Console entry point
   App.jsx          Console UI
   components/      Console panels and selectors
-  lib/             Connection, configuration and input logic
+  lib/             Shared receiver, actions, settings, shortcuts and display models
   shared/          Tuner metadata and RDS decoder used by both clients
-  audio/           Console audio playback
+  audio/           Node playback and reusable Chromium audio adapter
   workers/         Audio and RDS worker entry points
   desktop/         Electron main/preload, renderer, HTML and font assets
 scripts/           Test runner and desktop launch helpers

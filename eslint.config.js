@@ -13,7 +13,7 @@ export default [
         },
     },
     {
-        files: ['src/desktop/renderer.js'],
+        files: ['src/desktop/renderer.js', 'src/audio/browser-player.js'],
         languageOptions: { globals: globals.browser },
     },
 ];

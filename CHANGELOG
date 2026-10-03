@@ -1,5 +1,16 @@
 # Changelog
 
+## FM-DX Console 1.62.0
+- Share the receiver lifecycle, validated tuner actions, history, settings and server filtering between CLI and GUI.
+- Share shortcut definitions, tuner profiles, signal conversions, station fields and broadcast/RDS display models.
+- Keep transport independent of presentation, with reusable Node-worker and Chromium audio output adapters.
+- Fix Electron's renderer startup collision that prevented connecting.
+- Add GUI recent-server selection, reconnect handling, bandwidth/AGC, forced stereo, volume and raw-command controls.
+- Make Esc return to the startup server selector in both interfaces.
+- Handle string-valued tuner flags correctly and retain zero-valued station fields.
+- Bound Chromium audio queues and prune old buffered audio between appends.
+- Exercise connections, tuning, RDS workers, decoded MP3 audio and switching in packaged GUI smoke tests.
+
 ## FM-DX Console 1.61.0
 - Package CLI archives with a checksum-verified Node runtime and compiled JSX; no npm installation required.
 - Build desktop DMG/ZIP, Windows installer and Linux AppImage/DEB packages using GitHub Actions.

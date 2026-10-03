@@ -8,10 +8,16 @@ files:
   - package.json
   - src/desktop/**/*
   - src/shared/**/*
+  - src/lib/**/*
+  - src/audio/browser-player.js
+  - src/workers/rds.cjs
   - LICENSE
   - README.md
   - CHANGELOG
 asar: true
+asarUnpack:
+  - src/workers/rds.cjs
+  - src/shared/rds-decoder.cjs
 npmRebuild: false
 artifactName: fm-dx-console-gui-${version}-${os}-${arch}.${ext}
 publish: null

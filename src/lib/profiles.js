@@ -63,9 +63,16 @@ export const TUNER_PROFILES = {
     ],
 };
 
+export function tunerProfileKey(type) {
+    const key = String(type || '').toLowerCase();
+    if (/si47/.test(key)) return 'si47xx';
+    if (/xdr|f1hd|s10hd/.test(key)) return 'xdr';
+    if (/sdr|rtl|airspy/.test(key)) return 'sdr';
+    return 'tef';
+}
+
 export function bandwidthProfile(type) {
-    const key = (type || '').toString().toLowerCase();
-    return TUNER_PROFILES[key] || TUNER_PROFILES.tef;
+    return TUNER_PROFILES[tunerProfileKey(type)];
 }
 
 export const AGC_OPTIONS = [
@@ -96,5 +103,5 @@ export const PTY_NAMES = [
     'Weather', 'Finance', 'Children\'s Programmes', 'Social Affairs',
     'Religion', 'Phone-in', 'Travel', 'Leisure', 'Jazz Music',
     'Country Music', 'National Music', 'Oldies Music', 'Folk Music',
-    'Documentary', 'Alarm Test',
+    'Documentary', 'Alarm Test', 'Alarm',
 ];

@@ -90,6 +90,7 @@ export function createConfigStore(filename = configPath, onError = () => {}) {
 }
 
 const store = createConfigStore(configPath, (error) => process.stderr.write(`Could not save settings: ${error.message}\n`));
+export const defaultSettings = store;
 export const loadConfig = store.load;
 export const saveConfig = store.save;
 export const flushConfig = store.flush;

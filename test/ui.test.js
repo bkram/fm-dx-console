@@ -108,7 +108,7 @@ test('startup opens selector and only successful connections enter history', asy
     await delay(200);
     assert.deepEqual(records, [url]);
     assert.equal(config.recentServers[0].name, 'Local test');
-    await ui.key('m');
+    await ui.key('\u001b'); // Escape returns to the same startup selector.
     assert.match(ui.output(), /Local test/);
     await ui.key('\u001b[F'); // Manual URL
     await ui.key('\r');

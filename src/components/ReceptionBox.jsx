@@ -1,6 +1,8 @@
+import { flagEnabled } from '../lib/display.js';
 import React from 'react';
 import { Box, Text } from 'ink';
 import { colors } from '../theme.js';
+import { convertSignal, unitLabel } from '../lib/display.js';
 
 function bar(value, max, width) {
     if (max <= 0) return ' '.repeat(width);
@@ -14,25 +16,13 @@ function bar(value, max, width) {
 //
 //   dBf  → dBµV : -11.25 (75Ω)
 //   dBf  → dBm  : -120
-function convertSig(dBf, unit) {
-    if (unit === 'dBuV') return dBf - 11.25;
-    if (unit === 'dBm') return dBf - 120;
-    return dBf;
-}
-
-function unitLabel(unit) {
-    if (unit === 'dBuV') return 'dBµV';
-    if (unit === 'dBm') return 'dBm';
-    return 'dBf';
-}
-
 export default function ReceptionBox({ data, unit = 'dBf', width = 36 }) {
     const d = data || {};
     const sigDbf = Number(d.sig) || 0;
-    const sigDisplay = convertSig(sigDbf, unit);
+    const sigDisplay = convertSignal(sigDbf, unit);
     const max = 130;
     const w = Math.max(10, width - 18);
-    const stereoLabel = d.st
+    const stereoLabel = flagEnabled(d.st)
         ? (d.stForced == '1' ? 'stereo (F)' : 'stereo')
         : 'mono';
 

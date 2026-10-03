@@ -6,6 +6,7 @@ import { EventEmitter } from 'node:events';
 import { Worker } from 'node:worker_threads';
 import WebSocket from 'ws';
 import { createRequire } from 'node:module';
+import { flagEnabled } from './display.js';
 import { normalizeUrl, endpointUrl } from './urls.js';
 export { normalizeUrl, isValidURL } from './urls.js';
 
@@ -29,17 +30,15 @@ function closeSocket(socket) {
 }
 
 export class Connection extends EventEmitter {
-    constructor({ url, userAgent, debug } = {}) {
+    constructor({ url, userAgent, debug, rdsWorkerPath } = {}) {
         super();
         this.userAgent = userAgent || 'fm-dx-console';
         this.debug = !!debug;
+        this.rdsWorkerPath = rdsWorkerPath;
         this.url = '';
         this.ws = null;
         this.rdsWs = null;
         this.rdsWorker = null;
-        this.audioWorker = null;
-        this.audioPlaying = false;
-        this.volume = 100;
         this.data = null;            // last jsonData from /text
         this.rdsAdvanced = null;     // last advanced RDS payload
         this.tunerInfo = {
@@ -124,15 +123,6 @@ export class Connection extends EventEmitter {
         }
         this._teardownMain();
         this._teardownRds();
-        if (this.audioWorker) {
-            const worker = this.audioWorker;
-            this.audioWorker = null;
-            worker.postMessage({ type: 'shutdown' });
-            const deadline = setTimeout(() => { worker.terminate().catch(() => {}); }, 2000);
-            deadline.unref();
-            worker.once('exit', () => clearTimeout(deadline));
-        }
-        this.audioPlaying = false;
         for (const h of [...this._intervals]) this._clearInterval(h);
     }
 
@@ -252,7 +242,7 @@ export class Connection extends EventEmitter {
             this._scheduleRdsReconnect();
         };
         // Spawn RDS worker
-        const workerPath = new URL('../workers/rds.cjs', import.meta.url);
+        const workerPath = this.rdsWorkerPath || new URL('../workers/rds.cjs', import.meta.url);
         try {
             const worker = new Worker(workerPath);
             this.rdsWorker = worker;
@@ -398,8 +388,9 @@ export class Connection extends EventEmitter {
     }
 
     tuneDelta(deltaKHz) {
-        if (!this.data || !this.data.freq) return;
-        this.enqueue(`T${Math.round(this.data.freq * 1000) + deltaKHz}`);
+        if (!this.data || !Number.isFinite(Number(this.data.freq)) || !Number.isFinite(deltaKHz)) return;
+        const next = Math.max(64000, Math.min(108000, Math.round(this.data.freq * 1000) + deltaKHz));
+        this.enqueue(`T${next}`);
         this._resetRdsState();
     }
 
@@ -443,7 +434,7 @@ export class Connection extends EventEmitter {
 
     toggleForcedStereo() {
         if (!this.data) return;
-        const next = this.data.stForced == '1' ? '0' : '1';
+        const next = flagEnabled(this.data.stForced) ? '0' : '1';
         this.enqueue(`B${next}`);
         this.data.stForced = next;
         this.emit('data', this.data);
@@ -451,8 +442,8 @@ export class Connection extends EventEmitter {
 
     toggleEq() {
         if (!this.data) return;
-        const eq = this.data.eq ? 0 : 1;
-        const ims = this.data.ims ? 1 : 0;
+        const eq = flagEnabled(this.data.eq) ? 0 : 1;
+        const ims = flagEnabled(this.data.ims) ? 1 : 0;
         this.enqueue(`G${eq}${ims}`);
         this.data.eq = eq;
         this.emit('data', this.data);
@@ -460,8 +451,8 @@ export class Connection extends EventEmitter {
 
     toggleIms() {
         if (!this.data) return;
-        const eq = this.data.eq ? 1 : 0;
-        const ims = this.data.ims ? 0 : 1;
+        const eq = flagEnabled(this.data.eq) ? 1 : 0;
+        const ims = flagEnabled(this.data.ims) ? 0 : 1;
         this.enqueue(`G${eq}${ims}`);
         this.data.ims = ims;
         this.emit('data', this.data);
@@ -471,74 +462,5 @@ export class Connection extends EventEmitter {
         if (s) this.enqueue(String(s));
     }
 
-    startAudio() {
-        if (this._userDisconnected || !this.url) return;
-        if (this.audioWorker) {
-            this.audioWorker.postMessage({ type: 'start' });
-            this.audioPlaying = true;
-            this.emit('audio', this.audioPlaying);
-            return;
-        }
-        const workerPath = new URL('../workers/audio.cjs', import.meta.url);
-        try {
-            const worker = new Worker(workerPath, {
-                workerData: {
-                    url: endpointUrl(this.url, 'audio', true),
-                    userAgent: this.userAgent,
-                    volume: this.volume,
-                },
-            });
-            this.audioWorker = worker;
-            worker.on('error', (err) => this.log('audio worker error:', err.message));
-            worker.on('message', (msg) => {
-                if (this.audioWorker !== worker || !msg) return;
-                if (msg.type === 'level') {
-                    this.emit('level', { L: msg.L || 0, R: msg.R || 0 });
-                } else if (msg.type === 'audio') {
-                    this.audioPlaying = !!msg.playing;
-                    this.emit('audio', this.audioPlaying);
-                } else if (msg.type === 'log') {
-                    this.log(`[audio ${msg.source}]`, msg.text);
-                }
-            });
-            worker.on('exit', () => {
-                if (this.audioWorker !== worker) return;
-                this.audioWorker = null;
-                this.audioPlaying = false;
-                this.emit('audio', false);
-                this.emit('level', { L: 0, R: 0 });
-            });
-            this.audioWorker.postMessage({ type: 'start' });
-            this.audioPlaying = true;
-            this.emit('audio', true);
-        } catch (err) {
-            this.log('audio worker failed to start:', err.message);
-        }
-    }
 
-    stopAudio() {
-        if (this.audioWorker) this.audioWorker.postMessage({ type: 'stop' });
-        this.audioPlaying = false;
-        this.emit('audio', false);
-    }
-
-    toggleAudio() {
-        if (this.audioPlaying) this.stopAudio();
-        else this.startAudio();
-    }
-
-    setVolume(v) {
-        if (!Number.isFinite(v)) return;
-        const clamped = Math.max(0, Math.min(100, Math.round(v)));
-        if (clamped === this.volume) return;
-        this.volume = clamped;
-        if (this.audioWorker) {
-            this.audioWorker.postMessage({ type: 'setVolume', value: clamped });
-        }
-        this.emit('volume', clamped);
-    }
-
-    changeVolume(delta) {
-        this.setVolume(this.volume + delta);
-    }
 }

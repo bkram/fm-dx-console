@@ -3,7 +3,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-const files = (await fs.readdir('dist/releases')).filter((name) => name.startsWith('fm-dx-console-cli-'));
+const { version } = JSON.parse(await fs.readFile('package.json', 'utf8'));
+const platform = process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : process.platform;
+const files = (await fs.readdir('dist/releases')).filter(name => name.startsWith(`fm-dx-console-cli-${version}-${platform}-${process.arch}.`));
 if (files.length !== 1) throw new Error(`Expected one CLI archive, found ${files.length}`);
 const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'fm dx cli smoke-'));
 function run(command, args, options = {}) {
@@ -32,8 +34,9 @@ try {
         import { pathToFileURL } from 'node:url';
         import path from 'node:path';
         const app = process.argv[1];
-        const { Connection } = await import(pathToFileURL(path.join(app, 'src/lib/connection.js')));
-        if (typeof Connection !== 'function') throw new Error('Missing Connection module');
+        const { Receiver } = await import(pathToFileURL(path.join(app, 'src/lib/receiver.js')));
+        const { TerminalAudio } = await import(pathToFileURL(path.join(app, 'src/lib/terminal-audio.js')));
+        if (typeof Receiver.prototype.action !== 'function' || typeof TerminalAudio !== 'function') throw new Error('Missing application modules');
         const rds = new Worker(path.join(app, 'src/workers/rds.cjs'));
         await new Promise((resolve, reject) => {
             rds.once('error', reject);

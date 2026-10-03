@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
-import { Connection } from './lib/connection.js';
+import { TerminalAudio } from './lib/terminal-audio.js';
+import { Receiver } from './lib/receiver.js';
 import { bandwidthProfile, AGC_OPTIONS } from './lib/profiles.js';
 import useTerminalSize, { MIN_COLS, MIN_ROWS } from './lib/useTerminalSize.js';
 import { colors } from './theme.js';
-import { loadConfig, saveConfig, recordServer, updateServerName } from './lib/config.js';
+import { defaultSettings } from './lib/config.js';
 import { parseFrequency } from './lib/frequency.js';
 import { normalizeUrl } from './lib/urls.js';
+import { shortcutFor } from './lib/shortcuts.js';
+import { nextSignalUnit } from './lib/display.js';
 import RecentServers from './components/RecentServers.jsx';
 
 import ServerPicker from './components/ServerPicker.jsx';
@@ -22,8 +25,6 @@ import RtBox from './components/RtBox.jsx';
 import ReceptionBox from './components/ReceptionBox.jsx';
 import AudioBox from './components/AudioBox.jsx';
 import TooSmall from './components/TooSmall.jsx';
-
-const defaultSettings = { load: loadConfig, save: saveConfig, record: recordServer, updateName: updateServerName };
 
 // Float the modal at the centre of the screen. The main UI stays visible
 // around it — only the cells inside the modal's own box are repainted
@@ -47,6 +48,7 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
     const tooSmall = cols < MIN_COLS || rows < MIN_ROWS;
     const [url, setUrl] = useState(initialUrl || null);
     const [conn, setConn] = useState(null);
+    const [audio, setAudio] = useState(null);
     const [data, setData] = useState(null);
     const [tunerInfo, setTunerInfo] = useState({ tunerName: '', tunerDesc: '', tunerType: '', antNames: ['Default'], activeAnt: 0 });
     const [rdsAdv, setRdsAdv] = useState(null);
@@ -56,12 +58,17 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
     const [levels, setLevels] = useState({ L: 0, R: 0 });
     const [holds, setHolds] = useState({ L: 0, R: 0 });
     const [signalUnit, setSignalUnit] = useState(initialSignalUnit || 'dBf');
+    const [actionError, setActionError] = useState('');
+    const runAction = (type, value) => {
+        try { conn.action(type, value); setActionError(''); return true; }
+        catch (error) { setActionError(error.message); return false; }
+    };
     const [reconnect, setReconnect] = useState(null);  // { attempt, delayMs } or null
     const [modal, setModal] = useState(initialUrl ? null : 'recent');
 
     const cycleSignalUnit = () => {
         setSignalUnit((u) => {
-            const next = u === 'dBf' ? 'dBuV' : u === 'dBuV' ? 'dBm' : 'dBf';
+            const next = nextSignalUnit(u);
             settings.save({ signalUnit: next });
             return next;
         });
@@ -78,12 +85,11 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
         setLevels({ L: 0, R: 0 });
         setHolds({ L: 0, R: 0 });
         setReconnect(null);
-        const c = new Connection({ userAgent, debug });
-        let connected = false;
+        const c = new Receiver({ userAgent, debug, settings });
+        const a = new TerminalAudio({ getUrl: () => c.audioUrl(), userAgent, debug });
         const onData = (d) => setData({ ...d });
         const onTuner = (t) => {
             setTunerInfo({ ...t });
-            if (connected && t.tunerName) settings.updateName(url, t.tunerName);
         };
         const onRds = (r) => setRdsAdv(r);
         const onPing = (p) => setPingTime(p);
@@ -95,35 +101,33 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
         };
         const onOpen = () => {
             setReconnect(null);
-            if (!connected) {
-                settings.record({ url, name: c.tunerInfo.tunerName });
-                connected = true;
-            }
-            if (autoPlay && !c.audioPlaying) c.startAudio();
+            if (autoPlay && !a.audioPlaying) a.startAudio();
         };
         const onReconnecting = (info) => setReconnect(info);
         c.on('data', onData);
         c.on('tunerinfo', onTuner);
         c.on('rds-advanced', onRds);
         c.on('ping', onPing);
-        c.on('audio', onAudio);
-        c.on('volume', onVolume);
-        c.on('level', onLevel);
+        a.on('audio', onAudio);
+        a.on('volume', onVolume);
+        a.on('level', onLevel);
         c.on('open', onOpen);
         c.on('reconnecting', onReconnecting);
         setConn(c);
-        setVolume(c.volume);
+        setAudio(a);
+        setVolume(a.volume);
         c.connect(url);
         return () => {
             c.off('data', onData);
             c.off('tunerinfo', onTuner);
             c.off('rds-advanced', onRds);
             c.off('ping', onPing);
-            c.off('audio', onAudio);
-            c.off('volume', onVolume);
-            c.off('level', onLevel);
+            a.off('audio', onAudio);
+            a.off('volume', onVolume);
+            a.off('level', onLevel);
             c.off('open', onOpen);
             c.off('reconnecting', onReconnecting);
+            a.shutdown();
             c.disconnect();
         };
     }, [url, userAgent, debug, autoPlay, settings]);
@@ -157,36 +161,19 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
         if (modal) return;       // modal-only key handling
         if (!conn) return;
 
-        // ESC at the top level exits. Inside a modal it falls back one level
-        // (each modal handles its own escape → setModal(null) via onClose).
-        if (key.escape || (key.ctrl && input === 'c')) { exit(); return; }
-        if (key.leftArrow) { conn.tuneDelta(-100); return; }
-        if (key.rightArrow) { conn.tuneDelta(+100); return; }
-        if (key.upArrow) { conn.tuneDelta(+10); return; }
-        if (key.downArrow) { conn.tuneDelta(-10); return; }
-
-        switch (input) {
-            case 'x': conn.tuneDelta(+1000); return;
-            case 'z': conn.tuneDelta(-1000); return;
-            case 'r': case 'R': conn.tuneToCurrent(); return;
-            case 't': case 'T': setModal('freq'); return;
-            case 'C': setModal('cmd'); return;
-            case 'h': case 'H': setModal('help'); return;
-            case 'p': case 'P': conn.toggleAudio(); return;
-            case '[': conn.toggleIms(); return;
-            case ']': conn.toggleEq(); return;
-            case 'y': case 'Y': conn.cycleAntenna(); return;
-            case 's': case 'S': setModal('server'); conn.refreshTunerInfo(); return;
-            case 'a': case 'A': setModal('rdsAdv'); return;
-            case 'b': case 'B': setModal('bandwidth'); return;
-            case 'g': case 'G': setModal('agc'); return;
-            case 'f': case 'F': conn.toggleForcedStereo(); return;
-            case 'm': case 'M': setModal('recent'); return;
-            case '+': case '=': conn.changeVolume(+5); return;
-            case '-': case '_': conn.changeVolume(-5); return;
-            case '0': conn.setVolume(0); return;
-            case 'u': case 'U': cycleSignalUnit(); return;
-        }
+        if (key.ctrl && input === 'c') { exit(); return; }
+        const name = key.escape ? 'Escape' : key.leftArrow ? 'ArrowLeft' : key.rightArrow ? 'ArrowRight'
+            : key.upArrow ? 'ArrowUp' : key.downArrow ? 'ArrowDown' : input;
+        const shortcut = shortcutFor(name);
+        if (!shortcut) return;
+        if (shortcut.action) runAction(shortcut.action, shortcut.value);
+        else if (shortcut.modal) {
+            setModal(shortcut.modal);
+            if (shortcut.modal === 'server') conn.refreshTunerInfo();
+        } else if (shortcut.audio) audio?.toggleAudio();
+        else if (shortcut.volume) audio?.changeVolume(shortcut.volume);
+        else if (shortcut.mute) audio?.setVolume(0);
+        else if (shortcut.signalUnit) cycleSignalUnit();
     });
 
     // --- Size gate ---
@@ -254,7 +241,7 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
                 title={`Bandwidth (${tunerInfo.tunerType || 'tef'})`}
                 items={items}
                 initialIndex={initialIndex}
-                onSelect={(it) => { conn.setBandwidth(it); setModal(null); }}
+                onSelect={(it) => { runAction('bandwidth', it.value); setModal(null); }}
                 onCancel={() => setModal(null)}
                 width={34}
             />
@@ -268,7 +255,7 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
                 title="AGC"
                 items={AGC_OPTIONS}
                 initialIndex={initialIndex}
-                onSelect={(it) => { conn.setAgc(it.value); setModal(null); }}
+                onSelect={(it) => { runAction('agc', it.value); setModal(null); }}
                 onCancel={() => setModal(null)}
                 width={28}
             />
@@ -284,7 +271,7 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
                 onSubmit={(v) => {
                     const f = parseFrequency(v);
                     if (f === null) return 'Enter a frequency from 64 to 108 MHz.';
-                    conn.tune(f);
+                    if (!runAction('tune', f)) return 'Connect to a server first.';
                     setModal(null);
                 }}
                 onCancel={() => setModal(null)}
@@ -297,7 +284,7 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
             <TextPrompt
                 label="Send raw command"
                 hint="e.g. T98500, Z1, G10, B0"
-                onSubmit={(v) => { conn.sendRaw(v.trim()); setModal(null); }}
+                onSubmit={(v) => { if (runAction('raw', v.trim())) setModal(null); else return 'Cannot send command. Connect first and enter a valid command.'; }}
                 onCancel={() => setModal(null)}
             />
         );
@@ -342,7 +329,7 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
             </Box>
             <Box backgroundColor={colors.barBg} paddingX={1}>
                 <Text color={colors.barFg}>
-                    {url}   ·   press 'h' for help
+                    {actionError || `${url}   ·   press 'h' for help`}
                 </Text>
             </Box>
             {overlayNode && (

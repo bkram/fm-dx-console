@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>FM DX Console</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src ws: wss:; media-src 'self' blob:">
   <style>
     @font-face {
       font-family: 'Material Icons';
@@ -853,6 +854,17 @@
       .lcd-info { grid-template-columns: repeat(2, 1fr); }
       .topbar { flex-wrap: wrap; }
     }
+    dialog { color: var(--text); background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: 12px; width: min(680px, 90vw); max-height: 90vh; padding: 24px; }
+    dialog::backdrop { background: rgba(0,0,0,.65); }
+    dialog label { display: block; margin: 12px 0; }
+    dialog input:not([type="checkbox"]), dialog select { width: 100%; padding: 8px; box-sizing: border-box; }
+    dialog select { margin-top: 12px; }
+    dialog pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .dialog-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .controls-row { flex-wrap: wrap; }
+    .controls-row label { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; }
+    #volume-control { width: 90px; }
+    #server-error:not(:empty), #selector-error:not(:empty) { color: var(--error, #e85454); }
   </style>
 </head>
 <body>
@@ -871,7 +883,8 @@
         <option value="">Select server...</option>
       </select>
       <input id="url-input" class="url-input" type="text" placeholder="http://192.168.1.100:8100">
-      <button id="url-btn" class="connect-btn" onclick="window.handleConnectBtnClick()">Connect</button>
+      <button id="url-btn" class="connect-btn">Connect</button>
+      <button id="choose-server-btn" class="softkey" title="Choose server (m / Esc)">Servers</button>
     </div>
     <div id="server-error" class="server-error"></div>
 
@@ -975,6 +988,12 @@
         <button id="ims-btn" class="softkey" title="Toggle iMS [">iMS</button>
         <button id="eq-btn" class="softkey" title="Toggle EQ ]">EQ</button>
         <button id="ant-btn" class="softkey" title="Cycle Antenna (y)">Ant</button>
+        <label>Bandwidth <select id="bandwidth-select" title="Bandwidth (b)"></select></label>
+        <label>AGC <select id="agc-select" title="AGC (g)"></select></label>
+        <button id="stereo-btn" class="softkey" title="Forced stereo (f)">Forced stereo</button>
+        <label>Volume <input id="volume-control" type="range" min="0" max="100" value="100"><output id="volume-value">100%</output></label>
+        <button id="command-btn" class="softkey" title="Raw command (C)">Command</button>
+        <button id="server-info-btn" class="softkey" title="Server info (s)">Info</button>
         <button id="spectrum-btn" class="softkey" title="Spectrum">Spectrum</button>
       </div>
     </div>
@@ -993,9 +1012,9 @@
           </div>
           <div class="signal-bar"><div id="signal-fill" class="signal-fill" style="width:0%"></div></div>
           <select id="signal-unit-select" class="signal-unit-select">
-            <option value="dbf">dBf</option>
-            <option value="dbuv">dBµV</option>
-            <option value="dbm">dBm</option>
+            <option value="dBf">dBf</option>
+            <option value="dBuV">dBµV</option>
+            <option value="dBm">dBm</option>
           </select>
         </div>
 
@@ -1016,12 +1035,36 @@
     <span id="ps-led" hidden></span>
 
     <div class="footer">
-      <span id="version">v1.53</span>
+      <span id="version"></span>
       <span>Press <kbd style="font-family:var(--font-mono);font-size:10px;padding:1px 5px;border:1px solid var(--border-strong);border-bottom-width:2px;border-radius:3px;background:var(--surface-2);color:var(--text);">h</kbd> for shortcuts</span>
       <span>FM DX Console</span>
     </div>
   </div>
 
-  <script src="renderer.js"></script>
+  <dialog id="server-dialog" aria-labelledby="server-dialog-title">
+    <h2 id="server-dialog-title">Choose a server</h2>
+    <p id="server-list-label">Last 25 connected servers · newest first</p>
+    <div class="dialog-actions">
+      <button id="recent-servers-btn">Recent servers</button>
+      <button id="public-servers-btn">Browse public servers</button>
+      <label><input type="checkbox" id="online-only" checked>Online only</label>
+    </div>
+    <label>Filter <input id="server-query" type="search" placeholder="Name, URL, city or country"></label>
+    <select id="history-list" size="8" aria-label="Servers"></select>
+    <p id="selector-error" role="status"></p>
+    <div class="dialog-actions"><button id="connect-selected-btn">Connect selected server</button></div>
+    <label>Server URL <input id="manual-server-url" type="text" placeholder="http://server:port/"></label>
+    <div class="dialog-actions"><button id="connect-manual-btn">Connect URL</button><button id="close-selector-btn">Back</button></div>
+  </dialog>
+  <dialog id="command-dialog" aria-labelledby="command-title">
+    <h2 id="command-title">Send command</h2>
+    <form method="dialog"><label>Command <input id="command-input" maxlength="1024" required></label>
+      <button id="send-command-btn" type="button">Send</button><button>Back</button></form>
+  </dialog>
+  <dialog id="info-dialog" aria-labelledby="info-title">
+    <h2 id="info-title">Server information</h2><pre id="server-info"></pre>
+    <form method="dialog"><button>Back</button></form>
+  </dialog>
+  <script type="module" src="renderer.js"></script>
 </body>
 </html>

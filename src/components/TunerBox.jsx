@@ -1,21 +1,8 @@
+import { flagEnabled } from '../lib/display.js';
 import React from 'react';
 import { Box, Text } from 'ink';
 import { colors } from '../theme.js';
-
-function freqDisplay(freq) {
-    if (freq === undefined || freq === null) return '—';
-    const n = Number(freq);
-    if (Number.isNaN(n)) return String(freq);
-    return n.toFixed(3) + ' MHz';
-}
-
-function bwDisplay(bw) {
-    if (bw === undefined || bw === null || bw === '') return '—';
-    const n = Number(bw);
-    if (Number.isNaN(n)) return String(bw);
-    if (n === 0) return 'Auto';
-    return `${Math.round(n / 1000)} kHz`;
-}
+import { formatFrequency, formatBandwidth } from '../lib/display.js';
 
 // Tuner: pure RF/receiver settings. Audio playback, signal quality, and
 // broadcast metadata live in their own panels.
@@ -37,11 +24,11 @@ export default function TunerBox({ data, tunerInfo }) {
             overflow="hidden"
         >
             <Text bold color={colors.title}>Tuner</Text>
-            <Text wrap="truncate">Freq    <Text color={colors.freq} bold>{freqDisplay(d.freq)}</Text></Text>
-            <Text wrap="truncate">BW      {bwDisplay(d.bw)}</Text>
+            <Text wrap="truncate">Freq    <Text color={colors.freq} bold>{formatFrequency(d.freq)} MHz</Text></Text>
+            <Text wrap="truncate">BW      {formatBandwidth(d.bw)}</Text>
             <Text wrap="truncate">Antenna {ant}</Text>
-            <Text wrap="truncate">iMS     {d.ims ? 'on' : 'off'}</Text>
-            <Text wrap="truncate">EQ      {d.eq ? 'on' : 'off'}</Text>
+            <Text wrap="truncate">iMS     {flagEnabled(d.ims) ? 'on' : 'off'}</Text>
+            <Text wrap="truncate">EQ      {flagEnabled(d.eq) ? 'on' : 'off'}</Text>
         </Box>
     );
 }

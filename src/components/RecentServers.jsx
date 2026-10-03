@@ -1,14 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { colors } from '../theme.js';
+import { filterRecentServers } from '../lib/server-catalog.js';
 import useTerminalSize from '../lib/useTerminalSize.js';
 
 export default function RecentServers({ servers, onPick, onBrowse, onManual, onCancel }) {
     const { cols, rows } = useTerminalSize();
     const [query, setQuery] = useState('');
     const [selected, setSelected] = useState(0);
-    const matches = useMemo(() => servers.filter((entry) =>
-        `${entry.name} ${entry.url}`.toLowerCase().includes(query.toLowerCase())), [servers, query]);
+    const matches = useMemo(() => filterRecentServers(servers, query), [servers, query]);
     const items = [
         ...matches.map((entry) => ({ label: entry.name ? `${entry.name} · ${entry.url}` : entry.url, action: () => onPick(entry.url) })),
         { label: 'Browse public servers', action: onBrowse },

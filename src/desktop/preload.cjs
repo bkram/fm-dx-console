@@ -1,19 +1,23 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+const listen = channel => callback => {
+  const listener = (_event, value) => callback(value);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+};
 contextBridge.exposeInMainWorld('electronAPI', {
-  onInitArgs: (cb) => ipcRenderer.on('init-args', (_e, args) => cb(args)),
-  onServerListData: (cb) => ipcRenderer.on('server-list-data', (_e, data) => cb(data)),
-  onRdsAdvanced: (cb) => ipcRenderer.on('rds-advanced', (_e, data) => cb(data)),
+  getInitialState: () => ipcRenderer.invoke('get-initial-state'),
+  onInitArgs: listen('init-args'), onSettings: listen('settings'),
+  onTunerInfo: listen('tuner-info'), onPing: listen('ping'), onRdsAdvanced: listen('rds-advanced'),
   getAudioStreamUrl: () => ipcRenderer.invoke('get-audio-stream-url'),
-  getTunerInfo: (url) => ipcRenderer.invoke('get-tuner-info', url),
-  onWsData: (cb) => ipcRenderer.on('ws-data', (_e, data) => cb(data)),
-  onWsError: (cb) => ipcRenderer.on('ws-error', (_e, data) => cb(data)),
-  onWsConnected: (cb) => ipcRenderer.on('ws-connected', cb),
-  wsSend: (cmd) => ipcRenderer.send('ws-send', cmd),
-  setUrl: (url) => ipcRenderer.invoke('set-url', url),
+  getTunerInfo: () => ipcRenderer.invoke('get-tuner-info'),
+  onWsData: listen('ws-data'), onWsError: listen('ws-error'),
+  onWsConnected: listen('ws-connected'), onReconnecting: listen('ws-reconnecting'),
+  tunerAction: (type, value) => ipcRenderer.invoke('tuner-action', type, value),
+  setUrl: value => ipcRenderer.invoke('set-url', value),
+  saveSignalUnit: unit => ipcRenderer.invoke('save-signal-unit', unit),
   getSpectrumData: () => ipcRenderer.invoke('get-spectrum-data'),
   startSpectrumScan: () => ipcRenderer.invoke('start-spectrum-scan'),
   getServerList: () => ipcRenderer.invoke('get-server-list'),
-  disconnect: () => ipcRenderer.invoke('disconnect'),
-  onDisconnected: (cb) => ipcRenderer.on('disconnected', cb)
+  disconnect: () => ipcRenderer.invoke('disconnect'), onDisconnected: listen('disconnected')
 });

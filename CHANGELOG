@@ -1,5 +1,23 @@
 # Changelog
 
+## FM-DX Console 1.61.0
+- Package CLI archives with a checksum-verified Node runtime and compiled JSX; no npm installation required.
+- Build desktop DMG/ZIP, Windows installer and Linux AppImage/DEB packages using GitHub Actions.
+- Publish complete releases only after tests, lint, audit and packaged CLI/GUI smoke checks pass.
+- Include release checksums and distinguish installers from GitHub source downloads.
+- Fix packaged Electron command-line argument parsing.
+- Organize desktop, shared modules, audio and workers under src; move launch helpers into scripts.
+- Remove unused legacy audio/antenna helpers, retired Blessed demos and the outdated 1.50 screenshot.
+- Choose from the last 25 connected servers at startup or with the m shortcut.
+- Keep public-directory browsing and manual URL entry available in the selector.
+- Fix disconnect crashes, RDS reconnects, delayed audio exits and invalid frequency input.
+- Preserve URL path/query case and discard stale server metadata and commands on switching.
+- Validate and atomically persist configuration, with migration of saved last-server settings.
+- Remove the unused Android project and build artifacts.
+- Update dependencies, require Node.js 22.13 or newer and recommend Node.js 24 LTS.
+- Repair Electron CommonJS entry points and enable its default sandbox.
+- Add regression tests, linting and a reproducible npm lockfile.
+
 ## FM-DX Console 1.52
 - Larger pop-up for server information matching the help window
 - Redraw screen after closing server info to remove artifacts

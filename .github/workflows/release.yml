@@ -1,0 +1,120 @@
+name: Release
+
+on:
+  push:
+    branches: ['main', 'work/**']
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm audit --audit-level=high
+      - name: Verify tagged release version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: npm run release:check
+
+  build:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x64
+          - os: windows-latest
+            target: windows-x64
+          - os: macos-15-intel
+            target: macos-x64
+          - os: macos-latest
+            target: macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run package:cli
+      - run: npm run smoke:cli
+      - name: Package desktop application
+        run: npm run package:gui
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Test desktop package on Linux
+        if: runner.os == 'Linux'
+        # Hosted Ubuntu runners restrict Chromium's sandbox namespaces.
+        run: xvfb-run --auto-servernum npm run smoke:gui -- --no-sandbox
+      - name: Test desktop package on Windows and macOS
+        if: runner.os != 'Linux'
+        run: npm run smoke:gui
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: packages-${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+          path: |
+            dist/releases/*.tar.gz
+            dist/releases/*.zip
+            dist/gui/*.dmg
+            dist/gui/*.zip
+            dist/gui/*.exe
+            dist/gui/*.AppImage
+            dist/gui/*.deb
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: packages-*
+          path: dist/downloads
+          merge-multiple: true
+      - name: Gather packages and generate checksums
+        shell: bash
+        run: |
+          mkdir -p dist/releases
+          find dist/downloads -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.dmg' -o -name '*.exe' -o -name '*.AppImage' -o -name '*.deb' \) -exec mv {} dist/releases/ \;
+          node scripts/release-checksums.js
+          node scripts/release-assets.js
+          node scripts/release-notes.js
+      - name: Publish complete GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --draft --title "FM DX Console ${RELEASE_TAG#v}" --notes-file dist/release-notes.md
+          fi
+          gh release upload "$RELEASE_TAG" dist/releases/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --latest --notes-file dist/release-notes.md

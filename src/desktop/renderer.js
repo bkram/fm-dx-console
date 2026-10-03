@@ -1,3 +1,5 @@
+const electronAPI = window.electronAPI;
+
 let currentData;
 let audioPlaying = false;
 let antNames = [];
@@ -921,7 +923,7 @@ document.getElementById('eq-btn').onclick = () => {
   sendFilterCmd();
 };
 
-document.getElementById('ant-btn').onclick = (e) => {
+document.getElementById('ant-btn').onclick = () => {
   if (!currentData) return;
   const currentAnt = parseInt(currentData.ant, 10) || 0;
   const antCount = Math.max(antNames.length, 1);

@@ -4,7 +4,10 @@ import { Connection } from './lib/connection.js';
 import { bandwidthProfile, AGC_OPTIONS } from './lib/profiles.js';
 import useTerminalSize, { MIN_COLS, MIN_ROWS } from './lib/useTerminalSize.js';
 import { colors } from './theme.js';
-import { saveConfig } from './lib/config.js';
+import { loadConfig, saveConfig, recordServer, updateServerName } from './lib/config.js';
+import { parseFrequency } from './lib/frequency.js';
+import { normalizeUrl } from './lib/urls.js';
+import RecentServers from './components/RecentServers.jsx';
 
 import ServerPicker from './components/ServerPicker.jsx';
 import SelectList from './components/SelectList.jsx';
@@ -20,16 +23,7 @@ import ReceptionBox from './components/ReceptionBox.jsx';
 import AudioBox from './components/AudioBox.jsx';
 import TooSmall from './components/TooSmall.jsx';
 
-function convertToFrequency(input) {
-    if (input === null || input === undefined) return null;
-    const s = String(input).trim().replace(',', '.');
-    if (s === '') return null;
-    let n = parseFloat(s);
-    if (Number.isNaN(n)) return null;
-    while (n >= 100) n /= 10;
-    if (n < 76) n *= 10;
-    return Math.round(n * 10) / 10;
-}
+const defaultSettings = { load: loadConfig, save: saveConfig, record: recordServer, updateName: updateServerName };
 
 // Float the modal at the centre of the screen. The main UI stays visible
 // around it — only the cells inside the modal's own box are repainted
@@ -47,7 +41,7 @@ function ModalOverlay({ cols, rows, width, height, children }) {
     );
 }
 
-export default function App({ initialUrl, userAgent, debug, autoPlay, initialSignalUnit }) {
+export default function App({ initialUrl, userAgent, debug, autoPlay, initialSignalUnit, settings = defaultSettings }) {
     const { exit } = useApp();
     const { cols, rows } = useTerminalSize();
     const tooSmall = cols < MIN_COLS || rows < MIN_ROWS;
@@ -63,12 +57,12 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
     const [holds, setHolds] = useState({ L: 0, R: 0 });
     const [signalUnit, setSignalUnit] = useState(initialSignalUnit || 'dBf');
     const [reconnect, setReconnect] = useState(null);  // { attempt, delayMs } or null
-    const [modal, setModal] = useState(initialUrl ? null : 'picker');
+    const [modal, setModal] = useState(initialUrl ? null : 'recent');
 
     const cycleSignalUnit = () => {
         setSignalUnit((u) => {
             const next = u === 'dBf' ? 'dBuV' : u === 'dBuV' ? 'dBm' : 'dBf';
-            saveConfig({ signalUnit: next });
+            settings.save({ signalUnit: next });
             return next;
         });
     };
@@ -76,10 +70,21 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
     // Create / replace connection when url changes
     useEffect(() => {
         if (!url) return;
-        saveConfig({ lastUrl: url });
-        const c = new Connection({ url, userAgent, debug });
+        setData(null);
+        setRdsAdv(null);
+        setPingTime(null);
+        setTunerInfo({ tunerName: '', tunerDesc: '', tunerType: '', antNames: ['Default'], activeAnt: 0 });
+        setAudioPlaying(false);
+        setLevels({ L: 0, R: 0 });
+        setHolds({ L: 0, R: 0 });
+        setReconnect(null);
+        const c = new Connection({ userAgent, debug });
+        let connected = false;
         const onData = (d) => setData({ ...d });
-        const onTuner = (t) => setTunerInfo({ ...t });
+        const onTuner = (t) => {
+            setTunerInfo({ ...t });
+            if (connected && t.tunerName) settings.updateName(url, t.tunerName);
+        };
         const onRds = (r) => setRdsAdv(r);
         const onPing = (p) => setPingTime(p);
         const onAudio = (a) => setAudioPlaying(a);
@@ -90,7 +95,11 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
         };
         const onOpen = () => {
             setReconnect(null);
-            if (autoPlay) c.startAudio();
+            if (!connected) {
+                settings.record({ url, name: c.tunerInfo.tunerName });
+                connected = true;
+            }
+            if (autoPlay && !c.audioPlaying) c.startAudio();
         };
         const onReconnecting = (info) => setReconnect(info);
         c.on('data', onData);
@@ -104,6 +113,7 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
         c.on('reconnecting', onReconnecting);
         setConn(c);
         setVolume(c.volume);
+        c.connect(url);
         return () => {
             c.off('data', onData);
             c.off('tunerinfo', onTuner);
@@ -116,20 +126,25 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
             c.off('reconnecting', onReconnecting);
             c.disconnect();
         };
-    }, [url, userAgent, debug, autoPlay]);
+    }, [url, userAgent, debug, autoPlay, settings]);
 
     // PPM-style ballistics: fast rise (immediate on incoming sample),
     // slow fall. Bar decays ~8%/100 ms; peak indicator ~3%/100 ms.
+    // Return the previous reference when nothing changed so React skips the
+    // re-render (otherwise this interval would force a redraw 10×/sec while
+    // levels are already at zero).
     useEffect(() => {
         const h = setInterval(() => {
-            setLevels((prev) => ({
-                L: prev.L > 0.001 ? prev.L * 0.92 : 0,
-                R: prev.R > 0.001 ? prev.R * 0.92 : 0,
-            }));
-            setHolds((prev) => ({
-                L: prev.L > 0.001 ? prev.L * 0.97 : 0,
-                R: prev.R > 0.001 ? prev.R * 0.97 : 0,
-            }));
+            setLevels((prev) => {
+                const L = prev.L > 0.001 ? prev.L * 0.92 : 0;
+                const R = prev.R > 0.001 ? prev.R * 0.92 : 0;
+                return L === prev.L && R === prev.R ? prev : { L, R };
+            });
+            setHolds((prev) => {
+                const L = prev.L > 0.001 ? prev.L * 0.97 : 0;
+                const R = prev.R > 0.001 ? prev.R * 0.97 : 0;
+                return L === prev.L && R === prev.R ? prev : { L, R };
+            });
         }, 100);
         return () => clearInterval(h);
     }, []);
@@ -166,7 +181,7 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
             case 'b': case 'B': setModal('bandwidth'); return;
             case 'g': case 'G': setModal('agc'); return;
             case 'f': case 'F': conn.toggleForcedStereo(); return;
-            case 'm': case 'M': setModal('picker'); return;
+            case 'm': case 'M': setModal('recent'); return;
             case '+': case '=': conn.changeVolume(+5); return;
             case '-': case '_': conn.changeVolume(-5); return;
             case '0': conn.setVolume(0); return;
@@ -178,14 +193,30 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
     if (tooSmall) return <TooSmall cols={cols} rows={rows} />;
 
     // --- Full-screen takeover modals (no background UI is appropriate) ---
+    const pickServer = (newUrl) => {
+        const canonical = normalizeUrl(newUrl);
+        setUrl(canonical);
+        setModal(null);
+    };
+    if (modal === 'recent') {
+        return <RecentServers servers={settings.load().recentServers} onPick={pickServer}
+            onBrowse={() => setModal('picker')} onManual={() => setModal('url')}
+            onCancel={() => { if (!url) exit(); else setModal(null); }} />;
+    }
+    if (modal === 'url') {
+        return <Box padding={1}><TextPrompt label="Server URL" hint="e.g. https://your-server/"
+            onSubmit={(value) => {
+                try { pickServer(value); } catch { return 'Enter a valid http:// or https:// URL.'; }
+            }} onCancel={() => setModal('recent')} /></Box>;
+    }
+
     if (modal === 'picker') {
         return (
             <ServerPicker
                 userAgent={userAgent}
-                onPick={(newUrl) => { setModal(null); setUrl(newUrl); }}
+                onPick={pickServer}
                 onCancel={() => {
-                    if (!url) exit();
-                    else setModal(null);
+                    setModal('recent');
                 }}
             />
         );
@@ -251,8 +282,9 @@ export default function App({ initialUrl, userAgent, debug, autoPlay, initialSig
                 hint="e.g. 98.5"
                 placeholder="MHz"
                 onSubmit={(v) => {
-                    const f = convertToFrequency(v);
-                    if (f) conn.tune(f);
+                    const f = parseFrequency(v);
+                    if (f === null) return 'Enter a frequency from 64 to 108 MHz.';
+                    conn.tune(f);
                     setModal(null);
                 }}
                 onCancel={() => setModal(null)}

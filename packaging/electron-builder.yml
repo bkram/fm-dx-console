@@ -1,0 +1,32 @@
+appId: org.bkram.fmdxconsole
+productName: FM DX Console
+executableName: fm-dx-console-gui
+directories:
+  output: dist/gui
+  buildResources: packaging
+files:
+  - package.json
+  - src/desktop/**/*
+  - src/shared/**/*
+  - LICENSE
+  - README.md
+  - CHANGELOG
+asar: true
+npmRebuild: false
+artifactName: fm-dx-console-gui-${version}-${os}-${arch}.${ext}
+publish: null
+mac:
+  category: public.app-category.music
+  target: [dmg, zip]
+  identity: null
+win:
+  target: [nsis]
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+linux:
+  category: AudioVideo
+  target: [AppImage, deb]
+  maintainer: Mark de Bruijn <mrdebruijn@gmail.com>

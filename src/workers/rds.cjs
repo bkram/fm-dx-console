@@ -1,5 +1,5 @@
-const { parentPort, workerData } = require('worker_threads');
-const { createRdsDecoder } = require('./rds-decoder.cjs');
+const { parentPort } = require('worker_threads');
+const { createRdsDecoder } = require('../shared/rds-decoder.cjs');
 
 const decoder = createRdsDecoder();
 

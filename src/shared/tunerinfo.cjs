@@ -14,7 +14,7 @@ const axios = require('axios');
  * @returns {Object} An object containing tuner name, description,
  * antenna names and the currently active antenna index when available.
  */
-async function getTunerInfo(url) {
+async function getTunerInfo(url, { signal } = {}) {
     let baseUrl;
     try {
         baseUrl = new URL(url);
@@ -22,7 +22,10 @@ async function getTunerInfo(url) {
         console.error('Invalid URL:', err.message);
         return { tunerName: '', tunerDesc: '', antNames: ['Default'], activeAnt: 0 };
     }
-    const staticUrl = new URL('static_data', baseUrl).toString();
+    baseUrl.pathname = baseUrl.pathname.replace(/\/+$/, '') + '/';
+    const staticEndpoint = new URL(baseUrl);
+    staticEndpoint.pathname += 'static_data';
+    const staticUrl = staticEndpoint.toString();
 
     let tunerName = '';
     let tunerDesc = '';
@@ -31,7 +34,7 @@ async function getTunerInfo(url) {
     let antNames = [];
 
     try {
-        const res = await axios.get(staticUrl);
+        const res = await axios.get(staticUrl, { timeout: 10000, signal });
         const data = res.data || {};
         tunerName = data.tunerName || '';
         tunerDesc = data.tunerDesc || '';
@@ -50,7 +53,7 @@ async function getTunerInfo(url) {
     }
 
     try {
-        const response = await axios.get(url);
+        const response = await axios.get(url, { timeout: 10000, signal });
         const html = response.data;
         const $ = cheerio.load(html);
 
@@ -87,8 +90,8 @@ async function getTunerInfo(url) {
             }
         }
     } catch (error) {
-        console.error('tunerinfo error:', error.message);
-        return { tunerName: '', tunerDesc: '', tunerType: '', antNames: ['Default'], activeAnt: 0 };
+        if (signal?.aborted) throw error;
+        // Static metadata remains useful when the HTML page is unavailable.
     }
 
     if (antNames.length === 0) {
@@ -105,12 +108,12 @@ async function getTunerInfo(url) {
  * @returns {number} The ping time in milliseconds.
  * @throws {Error} If fetching ping time fails.
  */
-async function getPingTime(url) {
+async function getPingTime(url, { signal } = {}) {
     let pingUrl;
     try {
         pingUrl = new URL(url);
     } catch (err) {
-        throw new Error('Invalid URL: ' + err.message);
+        throw new Error('Invalid URL: ' + err.message, { cause: err });
     }
     if (!pingUrl.pathname.endsWith('/')) {
         pingUrl.pathname += '/';
@@ -121,9 +124,9 @@ async function getPingTime(url) {
     const headers = {};
 
     try {
-        await axios.get(pingUrl.toString(), { headers });
+        await axios.get(pingUrl.toString(), { headers, timeout: 4000, signal });
     } catch (error) {
-        throw new Error('Failed to fetch ping: ' + error.message);
+        throw new Error('Failed to fetch ping: ' + error.message, { cause: error });
     }
     const endTime = Date.now();
     const pingTime = endTime - startTime;

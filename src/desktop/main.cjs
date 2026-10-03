@@ -1,28 +1,34 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const minimist = require('minimist');
-const { getTunerInfo } = require('./tunerinfo');
-const { createRdsDecoder } = require('./rds-decoder');
+const { getTunerInfo } = require('../shared/tunerinfo.cjs');
+const { createRdsDecoder } = require('../shared/rds-decoder.cjs');
 const WebSocket = require('ws');
 const axios = require('axios');
 
 // Parse command line arguments early so sandbox flags are handled before Electron initializes.
-const argv = minimist(process.argv.slice(2), {
+const argv = minimist(process.argv.slice(app.isPackaged ? 1 : 2), {
   string: ['url'],
-  boolean: ['dev', 'no-sandbox', 'help']
+  boolean: ['dev', 'sandbox', 'help'],
+  default: { sandbox: true }
 });
 
 // Normalize URL if provided
 if (argv.url) {
-  argv.url = argv.url.toLowerCase().replace(/[#?]/g, '');
+  try {
+    const url = new URL(argv.url.trim());
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Use http:// or https://');
+    url.hash = '';
+    argv.url = url.toString();
+  } catch (error) { console.error('Invalid URL:', error.message); process.exit(1); }
 }
 
 if (argv.help) {
-  console.log('Usage: npm run electron -- [--no-sandbox] [--dev] [--url <fm-dx>]');
+  console.log('Usage: fm-dx-console-gui [--no-sandbox] [--dev] [--url <fm-dx>]');
   process.exit(0);
 }
 
-if (argv['no-sandbox']) {
+if (!argv.sandbox) {
   app.commandLine.appendSwitch('no-sandbox');
 }
 
@@ -39,17 +45,20 @@ let pluginWs;
 let rdsWs;
 let rdsDecoder = createRdsDecoder();
 
-function formatWebSocketURL(url) {
-  if (!url) return '';
-  url = url.trim();
-  if (url.endsWith('/')) url = url.slice(0, -1);
-  if (url.startsWith('http://')) {
-    return url.replace('http://', 'ws://');
-  }
-  if (url.startsWith('https://')) {
-    return url.replace('https://', 'wss://');
-  }
-  return url;
+function normalizeServerUrl(value) {
+  if (!value) return '';
+  const url = new URL(value.trim());
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Use http:// or https://');
+  url.hash = '';
+  url.pathname = url.pathname.replace(/\/+$/, '') + '/';
+  return url.toString();
+}
+
+function socketEndpoint(value, endpoint) {
+  const url = new URL(normalizeServerUrl(value));
+  url.pathname += endpoint;
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return url.toString();
 }
 
 async function resolveUrl(url) {
@@ -71,7 +80,7 @@ function createWindow() {
     autoHideMenuBar: true,
     backgroundColor: '#f4f4f5',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       devTools: true
@@ -96,8 +105,25 @@ function createWindow() {
     }
   }
 
-  win.loadFile('index.html');
+  win.loadFile(path.join(__dirname, 'index.html'));
   win.webContents.once('did-finish-load', async () => {
+    // Release CI launches the actual packaged window, validates the preload and
+    // local assets, then exits without contacting a server or changing settings.
+    if (process.env.FM_DX_SMOKE_REPORT) {
+      try {
+        const state = await win.webContents.executeJavaScript(`(async () => {
+          await Promise.all([...document.fonts].map(font => font.load()));
+          await document.fonts.ready;
+          return { title: document.title, api: typeof window.electronAPI,
+            controls: document.querySelectorAll('button').length,
+            fonts: document.fonts.size === 3 && [...document.fonts].every(font => font.status === 'loaded') };
+        })()`);
+        require('node:fs').writeFileSync(process.env.FM_DX_SMOKE_REPORT,
+          JSON.stringify({ ...state, version: app.getVersion() }));
+        app.exit(0);
+      } catch (error) { console.error('GUI smoke test:', error); app.exit(1); }
+      return;
+    }
     console.log('Page loaded, fetching server list...');
     sendToRenderer('init-args', { url: currentUrl, version: app.getVersion(), dev: argv.dev });
     try {
@@ -118,7 +144,7 @@ function createWindow() {
   function connectWebSocket(url) {
     if (ws) ws.close();
     if (!url) return;
-    const wsAddr = `${formatWebSocketURL(url)}/text`;
+    const wsAddr = socketEndpoint(url, 'text');
     const opts = { headers: { 'User-Agent': `${userAgent} (control)` } };
     ws = new WebSocket(wsAddr, opts);
     ws.on('open', () => {
@@ -136,7 +162,7 @@ function createWindow() {
   function connectPluginWebSocket(url) {
     if (pluginWs) pluginWs.close();
     if (!url) return;
-    const wsAddr = `${formatWebSocketURL(url)}/data_plugins`;
+    const wsAddr = socketEndpoint(url, 'data_plugins');
     const opts = { headers: { 'User-Agent': `${userAgent} (plugin)` } };
     pluginWs = new WebSocket(wsAddr, opts);
     pluginWs.on('error', (err) => {
@@ -190,7 +216,7 @@ function createWindow() {
   function connectRdsWebSocket(url) {
     if (rdsWs) rdsWs.close();
     if (!url) return;
-    const wsAddr = `${formatWebSocketURL(url)}/rds`;
+    const wsAddr = socketEndpoint(url, 'rds');
     const opts = { headers: { 'User-Agent': `${userAgent} (rds)` } };
     rdsWs = new WebSocket(wsAddr, opts);
     rdsWs.on('message', (data) => {
@@ -204,7 +230,7 @@ function createWindow() {
 
   ipcMain.handle('get-audio-stream-url', () => {
     if (!currentUrl) return null;
-    return `${formatWebSocketURL(currentUrl)}/audio`;
+    return socketEndpoint(currentUrl, 'audio');
   });
 
   ipcMain.handle('get-tuner-info', async (_e, url) => {
@@ -217,7 +243,7 @@ function createWindow() {
 
   ipcMain.handle('set-url', async (_e, url) => {
     console.log('set-url called with:', url);
-    const normalizedUrl = url ? url.toLowerCase().replace(/[#?]/g, '').trim() : '';
+    const normalizedUrl = normalizeServerUrl(url);
     console.log('Normalized URL:', normalizedUrl);
     currentUrl = await resolveUrl(normalizedUrl);
     console.log('Resolved URL:', currentUrl);

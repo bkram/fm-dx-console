@@ -1,35 +1,33 @@
 #!/usr/bin/env tsx
 import process from 'node:process';
-import minimist from 'minimist';
+import fs from 'node:fs';
+import { parseOptions } from './lib/cli-options.js';
 import { render } from 'ink';
 import React from 'react';
 import App from './App.jsx';
-import { isValidURL, normalizeUrl } from './lib/connection.js';
-import { loadConfig, configPath } from './lib/config.js';
+import { loadConfig, configPath, flushConfig } from './lib/config.js';
 
-const VERSION = '1.60';
+const VERSION = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 const USER_AGENT = `fm-dx-console/${VERSION}`;
-
-const argv = minimist(process.argv.slice(2), {
-    string: ['url'],
-    boolean: ['debug', 'auto-play', 'help', 'no-resume'],
-});
+let argv;
+try { argv = parseOptions(process.argv.slice(2)); }
+catch (error) { console.error(error.message); process.exit(1); }
 
 if (argv.help) {
     console.log(`Usage: fm-dx-console [--url <fm-dx>] [--debug] [--auto-play] [--no-resume]
 
   --url <addr>   Connect directly to an fm-dx-webserver URL.
-                 Omit to resume the last server, or open the picker if none.
+                 Omit to choose from the last 25 connected servers.
   --auto-play    Start audio immediately after connecting.
-  --no-resume    Ignore the saved last server and always open the picker.
+  --no-resume    Compatibility option: startup already opens the selector.
   --debug        Verbose logging to stderr.
 
 Settings persisted at ${configPath}:
-  - last server URL
+  - last 25 connected servers
   - signal unit (dBf / dBµV / dBm)
 
 Inside the TUI:
-  'm'  switch server (browse public list)
+  'm'  switch server (recent / public / manual)
   'b'  bandwidth selector
   'g'  AGC selector (Si47xx)
   'f'  toggle forced stereo
@@ -42,17 +40,7 @@ Inside the TUI:
 
 const config = loadConfig();
 
-let initialUrl = null;
-if (argv.url) {
-    const u = normalizeUrl(argv.url);
-    if (!isValidURL(u)) {
-        console.error('Invalid URL provided.');
-        process.exit(1);
-    }
-    initialUrl = u;
-} else if (!argv['no-resume'] && config.lastUrl && isValidURL(config.lastUrl)) {
-    initialUrl = config.lastUrl;
-}
+const initialUrl = argv.initialUrl;
 
 const { waitUntilExit } = render(
     React.createElement(App, {
@@ -66,5 +54,5 @@ const { waitUntilExit } = render(
 
 waitUntilExit().catch((err) => {
     console.error(err);
-    process.exit(1);
-});
+    process.exitCode = 1;
+}).finally(() => flushConfig());

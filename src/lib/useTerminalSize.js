@@ -11,7 +11,11 @@ export default function useTerminalSize() {
         rows: stdout.rows || MIN_ROWS,
     });
     useEffect(() => {
-        const onResize = () => setSize({ cols: stdout.columns, rows: stdout.rows });
+        const onResize = () => {
+            const cols = stdout.columns || MIN_COLS;
+            const rows = stdout.rows || MIN_ROWS;
+            setSize((prev) => (prev.cols === cols && prev.rows === rows ? prev : { cols, rows }));
+        };
         stdout.on('resize', onResize);
         return () => stdout.off('resize', onResize);
     }, [stdout]);

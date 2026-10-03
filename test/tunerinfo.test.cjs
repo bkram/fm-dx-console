@@ -52,7 +52,7 @@ Module._load = function(request, parent, isMain) {
   return originalLoad(request, parent, isMain);
 };
 
-const { getPingTime, getTunerInfo } = require('../tunerinfo.cjs');
+const { getPingTime, getTunerInfo } = require('../src/shared/tunerinfo.cjs');
 
 (async () => {
   axiosBehavior = () => ({ status: 200 });

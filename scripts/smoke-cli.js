@@ -18,7 +18,8 @@ try {
     const bundle = path.join(temporary, name);
     const launcher = path.join(bundle, process.platform === 'win32' ? 'fm-dx-console.cmd' : 'fm-dx-console');
     const help = process.platform === 'win32'
-        ? run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `""${launcher}" --help"`])
+        ? run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `""${launcher}" --help"`],
+            { windowsVerbatimArguments: true })
         : run(launcher, ['--help']);
     if (!help.includes('Usage: fm-dx-console') || !help.includes('25 connected servers')) {
         throw new Error('Packaged launcher did not show CLI help');

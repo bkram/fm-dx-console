@@ -1,6 +1,7 @@
 # Changelog
 
-## FM-DX Console 1.62.0
+## FM-DX Console 1.7.0
+- Rename the unreleased 1.62.0 build to 1.7.0 for the shared CLI/GUI overhaul; this release follows 1.61.0 chronologically.
 - Share the receiver lifecycle, validated tuner actions, history, settings and server filtering between CLI and GUI.
 - Share shortcut definitions, tuner profiles, signal conversions, station fields and broadcast/RDS display models.
 - Keep transport independent of presentation, with reusable Node-worker and Chromium audio output adapters.

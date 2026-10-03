@@ -21,7 +21,7 @@ Source-code ZIP/TAR downloads are for development; use the named release assets 
 | Windows x64 | `cli-…-windows-x64.zip` | `gui-…-win-x64.exe` installer |
 | macOS Intel | `cli-…-macos-x64.tar.gz` | `gui-…-mac-x64.dmg` or `.zip` |
 | macOS Apple Silicon | `cli-…-macos-arm64.tar.gz` | `gui-…-mac-arm64.dmg` or `.zip` |
-| Linux x64 | `cli-…-linux-x64.tar.gz` | `gui-…-linux-x64.AppImage` or `.deb` |
+| Linux x64 | `cli-…-linux-x64.tar.gz` | `gui-…-linux-x86_64.AppImage` or `gui-…-linux-amd64.deb` |
 
 **CLI:** extract the entire archive, open a terminal in its directory and run
 `./fm-dx-console` (Windows: `fm-dx-console.cmd`). Node.js and compiled application

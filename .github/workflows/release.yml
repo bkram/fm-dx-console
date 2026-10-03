@@ -65,6 +65,8 @@ jobs:
       - name: Test desktop package on Windows and macOS
         if: runner.os != 'Linux'
         run: npm run smoke:gui
+      - name: Verify platform package filenames
+        run: node scripts/release-assets.js ${{ matrix.target }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: packages-${{ matrix.target }}
